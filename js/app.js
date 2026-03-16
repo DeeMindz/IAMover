@@ -185,6 +185,52 @@ async function verifySessionInBackground() {
 
 document.addEventListener('DOMContentLoaded', initApp);
 
+/* ─── PostMessage Bridge for Preview Iframe ───────────────────────── */
+// Listen for messages from preview iframe to call API (avoids CORS)
+window.addEventListener('message', async function (e) {
+  // Security: verify origin in production
+  if (!e.data || !e.data.type) return;
+
+  // Handle conversation creation
+  if (e.data.type === 'IAM_CONV_CREATE') {
+    try {
+      const res = await fetch('/api/conversation/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bot_id: e.data.bot_id,
+          user_identifier: 'preview_' + Math.random().toString(36).substr(2, 8)
+        })
+      });
+      const data = await res.json();
+      e.source.postMessage({ type: 'IAM_CONV_CREATED', conv_id: data.conversation_id }, '*');
+    } catch (err) { }
+  }
+
+  // Handle bot response request
+  if (e.data.type === 'IAM_BOT_REQUEST') {
+    const { message, bot_id, conv_id } = e.data;
+    try {
+      const res = await fetch('/api/bot/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, bot_id, conversation_id: conv_id })
+      });
+      const data = await res.json();
+      e.source.postMessage({
+        type: 'IAM_BOT_RESPONSE',
+        response: data.response,
+        conv_id: data.conversation_id
+      }, '*');
+    } catch (err) {
+      e.source.postMessage({
+        type: 'IAM_BOT_RESPONSE',
+        response: 'Error: ' + err.message
+      }, '*');
+    }
+  }
+});
+
 function setupEventListeners() {
   // Add some initial inline styling so the bot features start hidden if we launch on home
   $$('.nav-item[data-bot-feature="true"]').forEach(n => n.style.display = 'none');
@@ -1748,10 +1794,13 @@ function renderLivePreview(bot) {
   </div>
 
 <script>
+  let isSending = false;
+
   function openChat() {
     document.getElementById('launcher').classList.add('hidden');
     document.getElementById('greeting-popup').classList.add('hidden');
     document.getElementById('chat-window').classList.remove('hidden');
+    window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
   }
   function closeChat() {
     document.getElementById('chat-window').classList.add('hidden');
@@ -1760,7 +1809,9 @@ function renderLivePreview(bot) {
   function sendMsg() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || isSending) return;
+    isSending = true;
+
     const msgs = document.getElementById('chat-messages');
     const userMsg = document.createElement('div');
     userMsg.className = 'msg user';
@@ -1777,36 +1828,36 @@ function renderLivePreview(bot) {
     msgs.appendChild(typing);
     msgs.scrollTop = msgs.scrollHeight;
 
-    // Call the API for a real AI response
-    fetch('/api/bot/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        bot_id: '${bot.id}',
-        conversation_id: window._previewConvId || null,
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      const typing = document.getElementById('typing-indicator');
-      if (typing) typing.remove();
-      const reply = document.createElement('div');
-      reply.className = 'msg bot';
-      reply.textContent = data.response || 'No response received';
-      msgs.appendChild(reply);
-      msgs.scrollTop = msgs.scrollHeight;
-    })
-    .catch(err => {
-      const typing = document.getElementById('typing-indicator');
-      if (typing) typing.remove();
-      const reply = document.createElement('div');
-      reply.className = 'msg bot';
-      reply.textContent = 'Error: ' + err.message;
-      msgs.appendChild(reply);
-      msgs.scrollTop = msgs.scrollHeight;
-    });
+    // Send to parent window to make the API call - avoids CORS
+    window.parent.postMessage({
+      type: 'IAM_BOT_REQUEST',
+      message: text,
+      bot_id: '${bot.id}',
+      conv_id: window._previewConvId || null
+    }, '*');
   }
+
+  // Listen for response from parent
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+
+    if (e.data.type === 'IAM_CONV_CREATED') {
+      window._previewConvId = e.data.conv_id;
+    }
+
+    if (e.data.type === 'IAM_BOT_RESPONSE') {
+      const msgs = document.getElementById('chat-messages');
+      const t = document.getElementById('typing-indicator');
+      if (t) t.remove();
+      const botMsg = document.createElement('div');
+      botMsg.className = 'msg bot';
+      botMsg.textContent = e.data.response || 'Sorry, no response received.';
+      msgs.appendChild(botMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+      if (e.data.conv_id) window._previewConvId = e.data.conv_id;
+      isSending = false;
+    }
+  });
   function handleKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
   }
@@ -1916,6 +1967,10 @@ function renderLivePreview(bot) {
 </body>
 <script>
   let fpSending = false;
+
+  // Create conversation on load
+  window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
+
   function fpSendMsg() {
     const input = document.getElementById('fp-chat-input');
     const text = input.value.trim();
@@ -1937,36 +1992,36 @@ function renderLivePreview(bot) {
     msgs.appendChild(typing);
     msgs.scrollTop = msgs.scrollHeight;
 
-    fetch('/api/bot/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        bot_id: '${bot.id}',
-        conversation_id: window._fpConvId || null,
-      })
-    })
-    .then(r => r.json())
-    .then(data => {
-      const t = document.getElementById('fp-typing');
-      if (t) t.remove();
-      const botMsg = document.createElement('div');
-      botMsg.className = 'msg bot';
-      botMsg.textContent = data.response || 'Sorry, no response received.';
-      msgs.appendChild(botMsg);
-      msgs.scrollTop = msgs.scrollHeight;
-    })
-    .catch(() => {
-      const t = document.getElementById('fp-typing');
-      if (t) t.remove();
-      const botMsg = document.createElement('div');
-      botMsg.className = 'msg bot';
-      botMsg.textContent = 'Connection error. Please try again.';
-      msgs.appendChild(botMsg);
-      msgs.scrollTop = msgs.scrollHeight;
-    })
-    .finally(() => { fpSending = false; });
+    // Send to parent window to make the API call - avoids CORS
+    window.parent.postMessage({
+      type: 'IAM_BOT_REQUEST',
+      message: text,
+      bot_id: '${bot.id}',
+      conv_id: window._fpConvId || null
+    }, '*');
   }
+
+  // Listen for response from parent
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+
+    if (e.data.type === 'IAM_CONV_CREATED') {
+      window._fpConvId = e.data.conv_id;
+    }
+
+    if (e.data.type === 'IAM_BOT_RESPONSE') {
+      const msgs = document.querySelector('.chat-messages');
+      const t = document.getElementById('fp-typing');
+      if (t) t.remove();
+      const botMsg = document.createElement('div');
+      botMsg.className = 'msg bot';
+      botMsg.textContent = e.data.response || 'Sorry, no response received.';
+      msgs.appendChild(botMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+      if (e.data.conv_id) window._fpConvId = e.data.conv_id;
+      fpSending = false;
+    }
+  });
 </script>
 </html>`;
 
