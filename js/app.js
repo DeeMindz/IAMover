@@ -123,6 +123,9 @@ const AppState = {
   hitlActive: false,
 };
 
+// Expose AppState globally for inline onclick handlers
+window.AppState = AppState;
+
 /* ─── Initialization & Auth Guard ────────────────────────────────── */
 async function initApp() {
   // Step 1: Load cached data FIRST — renders instantly from localStorage
@@ -1119,7 +1122,20 @@ async function renderKnowledge() {
   const grid = document.getElementById('kb-grid');
   if (!grid) return;
 
-  const kbs = Store.get('knowledge_bases') || [];
+  let kbs = Store.get('knowledge_bases') || [];
+
+  // If cache is empty, fetch immediately — don't wait for background sync
+  if (kbs.length === 0) {
+    try {
+      const { data, error } = await supabase.from('knowledge_bases').select('*');
+      if (!error && data) {
+        kbs = data;
+        Store.set('knowledge_bases', kbs);
+      }
+    } catch (e) {
+      console.error('KB fetch failed:', e);
+    }
+  }
 
   // Update summary stats — counts only, no limits
   const totalCountEl = document.getElementById('kb-total-count');

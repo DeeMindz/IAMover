@@ -561,6 +561,7 @@ img {
 }
 
 @media (max-width: 768px) {
+
   .grid-2,
   .grid-3,
   .grid-4 {
@@ -813,6 +814,30 @@ textarea.form-control {
 
 select.form-control {
   cursor: pointer;
+}
+
+/* Model dropdown optgroup styling */
+select.form-control optgroup {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  padding: 4px 0;
+}
+
+select.form-control option {
+  font-weight: 400;
+  font-size: 13px;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+select.form-control option:checked {
+  background: var(--accent);
+  color: #fff;
 }
 
 .form-hint {
@@ -1071,12 +1096,12 @@ td {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.toggle input:checked + .toggle-track {
+.toggle input:checked+.toggle-track {
   background: var(--accent);
   border-color: var(--accent);
 }
 
-.toggle input:checked + .toggle-track .toggle-thumb {
+.toggle input:checked+.toggle-track .toggle-thumb {
   transform: translateX(18px);
   background: #fff;
 }
