@@ -5,6 +5,13 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Structured logger for Vercel function logs
+const log = {
+    info: (msg, data) => console.log(JSON.stringify({ level: 'info', message: msg, ...data })),
+    warn: (msg, data) => console.warn(JSON.stringify({ level: 'warn', message: msg, ...data })),
+    error: (msg, data) => console.error(JSON.stringify({ level: 'error', message: msg, ...data }))
+};
+
 // Model maps for consistent model IDs
 const GEMINI_MODEL_MAP = {
     // Gemini 2.5
@@ -54,13 +61,17 @@ const OPENAI_MODEL_MAP = {
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
+        log.warn('Invalid method', { method: req.method });
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
         const { message, bot_id, system_vars, conversation_history = [] } = req.body;
 
+        log.info('Incoming request', { bot_id, messageLength: message?.length });
+
         if (!message || !bot_id) {
+            log.warn('Missing required fields', { message: !!message, bot_id: !!bot_id });
             return res.status(400).json({ error: 'Missing message or bot_id' });
         }
 
@@ -72,8 +83,11 @@ export default async function handler(req, res) {
             .single();
 
         if (botError || !bot) {
+            log.error('Bot not found', { bot_id, error: botError?.message });
             return res.status(404).json({ error: 'Bot not found' });
         }
+
+        log.info('Bot found', { bot_id, model: bot.model, hasKB: !!bot.knowledge_bases?.length });
 
         // Build system prompt from bot config
         let systemPrompt = bot.system_prompt || 'You are a helpful AI assistant.';
@@ -197,9 +211,10 @@ export default async function handler(req, res) {
             responseText = `Unknown model: ${botModel}. Please select a supported model.`;
         }
 
+        log.info('Sending response', { bot_id, model: botModel, responseLength: responseText.length });
         return res.status(200).json({ response: responseText });
     } catch (error) {
-        console.error('Error:', error);
+        log.error('Request failed', { bot_id: req.body?.bot_id, error: error.message, stack: error.stack });
         return res.status(500).json({ error: 'Internal server error: ' + error.message });
     }
 }

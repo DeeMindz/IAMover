@@ -1738,14 +1738,44 @@ function renderLivePreview(bot) {
     msgs.appendChild(userMsg);
     input.value = '';
     msgs.scrollTop = msgs.scrollHeight;
-    // Simulate bot reply
-    setTimeout(() => {
-      const botMsg = document.createElement('div');
-      botMsg.className = 'msg bot';
-      botMsg.textContent = 'Thanks for your message! This is a live preview — connect your bot to see real responses.';
-      msgs.appendChild(botMsg);
+
+    // Show typing indicator
+    const botMsg = document.createElement('div');
+    botMsg.className = 'msg bot';
+    botMsg.textContent = '...';
+    botMsg.id = 'typing-indicator';
+    msgs.appendChild(botMsg);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Call the API for a real AI response
+    fetch('/api/bot/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        bot_id: AppState.currentBot?.id,
+        conversation_history: []
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      const typing = document.getElementById('typing-indicator');
+      if (typing) typing.remove();
+      const reply = document.createElement('div');
+      reply.className = 'msg bot';
+      reply.textContent = data.response || 'No response received';
+      msgs.appendChild(reply);
       msgs.scrollTop = msgs.scrollHeight;
-    }, 800);
+    })
+    .catch(err => {
+      const typing = document.getElementById('typing-indicator');
+      if (typing) typing.remove();
+      const reply = document.createElement('div');
+      reply.className = 'msg bot';
+      reply.textContent = 'Error: ' + err.message;
+      msgs.appendChild(reply);
+      msgs.scrollTop = msgs.scrollHeight;
+    });
   }
   function handleKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
