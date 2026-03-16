@@ -1908,11 +1908,66 @@ function renderLivePreview(bot) {
       <div class="msg bot">${greeting}</div>
     </div>
     <div class="chat-input-area">
-      <input class="chat-input" placeholder="Type a message…" />
-      <button class="send-btn">↑</button>
+      <input class="chat-input" id="fp-chat-input" placeholder="Type a message…"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fpSendMsg()}" />
+      <button class="send-btn" onclick="fpSendMsg()">↑</button>
     </div>
   </div>
 </body>
+<script>
+  let fpSending = false;
+  function fpSendMsg() {
+    const input = document.getElementById('fp-chat-input');
+    const text = input.value.trim();
+    if (!text || fpSending) return;
+    fpSending = true;
+
+    const msgs = document.querySelector('.chat-messages');
+    const userMsg = document.createElement('div');
+    userMsg.className = 'msg user';
+    userMsg.textContent = text;
+    msgs.appendChild(userMsg);
+    input.value = '';
+    msgs.scrollTop = msgs.scrollHeight;
+
+    const typing = document.createElement('div');
+    typing.className = 'typing-dots';
+    typing.id = 'fp-typing';
+    typing.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(typing);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    fetch('/api/bot/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        bot_id: '${bot.id}',
+        conversation_id: window._fpConvId || null,
+      })
+    })
+    .then(r => r.json())
+    .then(data => {
+      const t = document.getElementById('fp-typing');
+      if (t) t.remove();
+      const botMsg = document.createElement('div');
+      botMsg.className = 'msg bot';
+      botMsg.textContent = data.response || 'Sorry, no response received.';
+      msgs.appendChild(botMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+    })
+    .catch(() => {
+      const t = document.getElementById('fp-typing');
+      if (t) t.remove();
+      const botMsg = document.createElement('div');
+      botMsg.className = 'msg bot';
+      botMsg.textContent = 'Connection error. Please try again.';
+      msgs.appendChild(botMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+    })
+    .finally(() => { fpSending = false; });
+  }
+</script>
 </html>`;
 
   const html = isWidgetMode ? widgetPreviewHTML : fullPageHTML;
