@@ -468,7 +468,7 @@ transition: opacity 0.2s;
     // Call backend API to get bot response
     async function getBotResponse(message, botId, systemVars) {
       try {
-        const response = await fetch('https://your-api-endpoint.com/api/bot/respond', {
+        const response = await fetch('/api/bot/respond', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

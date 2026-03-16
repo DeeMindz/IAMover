@@ -1,24 +1,19 @@
+# Environment variables — never commit these
+.env
+.env.local
+.env.production
+
 # Dependencies
 node_modules/
 
-# Environment files
-.env
-.env.local
-.env.*.local
+# Vercel build output
+.vercel/
+.next/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
-
-# Build output
-dist/
-build/
+npm-debug.log*
