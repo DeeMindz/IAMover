@@ -1,0 +1,1416 @@
+r
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IAM Platform — AI Chatbot Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+
+  <!-- ─── Toast Container ─────────────────────────────────────────── -->
+  <div id="toast-container"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════════════════════ -->
+  <div class="app-shell">
+
+    <!-- ─── Sidebar ──────────────────────────────────────────────── -->
+    <nav class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark"
+          style="width:44px; height:44px; background:var(--accent); border-radius:10px; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:800; font-size:14px; color:#fff; flex-shrink:0;">
+          IAM</div>
+        <div>
+          <div style="font-family:var(--font-display); font-weight:800; font-size:16px; line-height:1.2;">IAM Platform
+          </div>
+          <div id="sidebar-workspace-name" style="font-size:11px; color:var(--text-muted); font-weight:500;">My
+            Workspace</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-label">HOME</div>
+        <div class="nav-item active" data-page="home" onclick="navigate('home')">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+          <span id="nav-home-text">Bots & Agents</span>
+        </div>
+        <div class="nav-item" data-page="analytics" onclick="navigate('analytics')">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          Analytics
+        </div>
+        <div class="nav-item" data-page="settings" onclick="navigate('settings')">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Settings
+        </div>
+      </div>
+
+      <div class="sidebar-section" id="sidebar-section-bot-tools" style="display:none;">
+        <div class="sidebar-section-label">BOT TOOLS</div>
+        <div class="nav-item" data-page="bot-config" data-bot-feature="true" onclick="navigate('bot-config')">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          Overview
+        </div>
+        <div class="nav-item" data-page="conversations" data-bot-feature="true" onclick="handleConversationsNav()">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          Conversations
+        </div>
+        <div class="nav-item" data-page="knowledge" data-bot-feature="true" onclick="navigate('knowledge')">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          Knowledge Bases
+        </div>
+        <div class="nav-item" data-page="leads" data-bot-feature="true" onclick="navigate('leads')">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Leads
+        </div>
+        <div class="nav-item" data-page="integrations" data-bot-feature="true" onclick="navigate('integrations')">
+          <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          Integrations
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="usage-block">
+          <div class="usage-label">
+            <span>Bots</span>
+            <span id="bots-used" style="color:var(--text-primary);font-weight:600;">0 bots</span>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-fill ok" id="bots-bar" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="usage-block">
+          <div class="usage-label">
+            <span>Messages</span>
+            <span id="messages-used" style="color:var(--text-primary);font-weight:600;">—</span>
+          </div>
+          <div class="usage-bar">
+            <div class="usage-fill ok" id="messages-bar" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="sync-indicator"
+          style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0;border-top:1px solid var(--border);margin-top:8px;">
+          Loading…</div>
+      </div>
+    </nav>
+
+    <!-- ─── Main Content ──────────────────────────────────────────── -->
+    <div class="main-content">
+
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="breadcrumb" id="breadcrumb">
+          <span class="breadcrumb-current">Home</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-btn notif-dot" title="Notifications" onclick="showToast('No new notifications', 'info')">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+          </button>
+          <button class="icon-btn" title="Help" onclick="showToast('Help center coming soon!', 'info')">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" />
+            </svg>
+          </button>
+          <div class="avatar" id="user-avatar" onclick="toggleUserMenu()" style="cursor:pointer;">D</div>
+          <div class="user-menu" id="user-menu" style="display:none;">
+            <div class="user-menu-header">
+              <div id="user-menu-name" style="font-weight:700;">User Name</div>
+              <div id="user-menu-email" style="font-size:12px;color:var(--text-muted);">user@email.com</div>
+            </div>
+            <div class="divider" style="margin:8px 0;"></div>
+            <div class="user-menu-item" onclick="navigate('settings');toggleUserMenu()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px;">
+                <path
+                  d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              Settings
+            </div>
+            <div class="divider" style="margin:8px 0;"></div>
+            <div class="user-menu-item danger" onclick="handleSignOut()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px;">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              Sign Out
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ═══════════════════════════ PAGE: HOME ═════════════════════════ -->
+      <div class="page-content" id="page-home">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Your Bots</div>
+            <div class="page-subtitle">Manage, monitor and configure your AI chatbots</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-create-bot')">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+            Create Bot
+          </button>
+        </div>
+
+        <div class="grid-3" id="bots-grid">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: ANALYTICS ═══════════════════ -->
+      <div class="page-content hidden" id="page-analytics">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Analytics</div>
+            <div class="page-subtitle">Track performance across all your bots</div>
+          </div>
+          <div class="tabs" id="analytics-bot-tabs">
+            <div class="tab-btn active" onclick="switchAnalyticTab('all')">All Bots</div>
+            <!-- Dynamic bot tabs injected here -->
+          </div>
+        </div>
+
+        <!-- KPI row -->
+        <div class="grid-4 mb-6">
+          <div class="stat-card">
+            <div class="stat-label">Total Messages</div>
+            <div class="stat-value text-accent" id="stat-messages">0</div>
+            <div class="stat-delta"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Conversations</div>
+            <div class="stat-value" id="stat-sessions">0</div>
+            <div class="stat-delta"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Leads</div>
+            <div class="stat-value" id="stat-users">0</div>
+            <div class="stat-delta"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Bots</div>
+            <div class="stat-value text-accent" id="stat-errors">0</div>
+            <div class="stat-delta"></div>
+          </div>
+        </div>
+
+        <!-- Charts row 1 -->
+        <div class="grid-2 mb-6">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Messages · Last 30 Days</div>
+              <span class="badge badge-purple">Daily</span>
+            </div>
+            <div class="card-body" style="padding-bottom:14px;">
+              <div id="chart-messages" style="height:100px;width:100%;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Sessions · Last 30 Days</div>
+              <span class="badge badge-green">Daily</span>
+            </div>
+            <div class="card-body" style="padding-bottom:14px;">
+              <div id="chart-sessions" style="height:100px;width:100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts row 2 -->
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Hourly Distribution</div>
+            </div>
+            <div class="card-body" style="padding-bottom:14px;">
+              <div id="chart-hourly" style="height:80px;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Messages by Bot</div>
+            </div>
+            <div class="card-body" style="display:flex;align-items:center;gap:16px;">
+              <div id="chart-bot-dist"></div>
+              <div id="chart-bot-legend" style="font-size:12px;display:flex;flex-direction:column;gap:8px;">
+                <!-- Rendered dynamically by JS -->
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Weekly Users</div>
+            </div>
+            <div class="card-body" style="padding-bottom:14px;">
+              <div id="chart-users" style="height:80px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: CONVERSATIONS ═══════════════ -->
+      <div class="page-content hidden" id="page-conversations">
+        <div
+          style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg-elevated);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-ghost btn-sm" onclick="navigate('home')" style="padding:4px 8px;">← Back to
+              Bots</button>
+            <div style="width:1px;height:24px;background:var(--border);"></div>
+            <div id="conv-bot-name"
+              style="font-family:var(--font-display);font-weight:700;font-size:16px;display:flex;align-items:center;">
+              Bot Name</div>
+          </div>
+        </div>
+        <div class="conv-layout">
+          <!-- Conversation List -->
+          <div class="conv-list">
+            <div class="conv-list-header">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-family:var(--font-display);font-weight:700;font-size:16px;">Conversations</span>
+              </div>
+              <div class="search-bar">
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg>
+                <input type="text" placeholder="Search conversations…" />
+              </div>
+            </div>
+            <div id="conv-list-items"></div>
+          </div>
+
+          <!-- Chat Detail -->
+          <div class="chat-window">
+            <!-- Chat header -->
+            <div class="chat-header">
+              <div>
+                <div style="font-weight:700;font-size:14px;" id="conv-detail-name">Select a conversation</div>
+                <div style="font-size:12px;color:var(--text-muted);" id="conv-detail-status"></div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button id="btn-takeover" class="btn btn-secondary btn-sm" onclick="interceptConversation()"
+                  style="display:none;">
+                  👤 Take Over
+                </button>
+                <button class="icon-btn" title="Export">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- HITL Banner (hidden by default) -->
+            <div id="hitl-banner" class="hitl-banner" style="display:none;"></div>
+
+            <!-- Messages -->
+            <div class="chat-messages" id="conv-messages"></div>
+
+            <!-- Agent input (shown during HITL) -->
+            <div class="chat-input-bar" id="chat-input-area" style="display:none;">
+              <textarea class="chat-input" id="agent-input" rows="1" placeholder="Type a message as agent…"></textarea>
+              <button class="btn btn-primary" onclick="sendAgentMessage()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: KNOWLEDGE ════════════════════ -->
+      <div class="page-content hidden" id="page-knowledge">
+        <div class="page-header" style="flex-direction:column; align-items:flex-start; gap:16px;">
+          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+            <div>
+              <div class="page-title">Knowledge Bases</div>
+              <div class="page-subtitle">Upload documents and train your AI</div>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-create-kb')">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+              </svg>
+              New Knowledge Base
+            </button>
+          </div>
+        </div>
+
+        <!-- KB Summary Stats — dynamic, no hardcoded limits -->
+        <div class="grid-2 mb-6">
+          <div class="card card-body" style="padding:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-weight:600;">📚 Knowledge Bases</span>
+              <span class="badge badge-purple" id="kb-total-count">0</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);" id="kb-total-files">0 files across all knowledge bases
+            </div>
+          </div>
+          <div class="card card-body" style="padding:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-weight:600;">📎 Total Files</span>
+              <span class="badge badge-green" id="kb-file-count">0</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);">PDF, DOCX, TXT, CSV, URLs and rich text</div>
+          </div>
+        </div>
+
+        <div class="grid-3" id="kb-grid">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: KB DETAIL ══════════════════════ -->
+      <div class="page-content hidden" id="page-kb-detail">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-ghost btn-sm" onclick="navigate('knowledge')" style="padding:4px 8px;">←
+              Back</button>
+            <div style="width:1px;height:24px;background:var(--border);"></div>
+            <div>
+              <div class="page-title" id="kb-detail-name">Knowledge Base</div>
+              <div class="page-subtitle" id="kb-detail-subtitle">Manage files and content</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="renameCurrentKB()">✏️ Rename</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCurrentKB()">🗑 Delete KB</button>
+          </div>
+        </div>
+
+        <!-- Content tabs -->
+        <div class="tabs mb-6" style="width:fit-content;">
+          <div class="tab-btn active" id="kd-tab-files" onclick="switchKBDetailTab('files')">📎 File Upload</div>
+          <div class="tab-btn" id="kd-tab-text" onclick="switchKBDetailTab('text')">📝 Rich Text</div>
+          <div class="tab-btn" id="kd-tab-sitemap" onclick="switchKBDetailTab('sitemap')">🗺 Sitemap / URL</div>
+        </div>
+
+        <!-- File Upload Tab -->
+        <div id="kb-detail-tab-files">
+          <div class="upload-zone" id="kb-detail-upload-zone"
+            onclick="document.getElementById('kb-detail-file-input').click()" style="margin-bottom:20px;">
+            <div class="upload-icon">📎</div>
+            <div class="upload-title">Drop files here or click to upload</div>
+            <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX · up to 50 MB each</div>
+          </div>
+          <input type="file" id="kb-detail-file-input" multiple style="display:none;"
+            onchange="uploadKBDetailFiles(this)" />
+
+          <div id="kb-detail-files-list">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Rich Text Tab -->
+        <div id="kb-detail-tab-text" style="display:none;">
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Content Title</label>
+                <input class="form-control" id="kb-text-title" placeholder="e.g. Pricing FAQ" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Content</label>
+                <textarea class="form-control" id="kb-text-content" rows="10"
+                  placeholder="Paste or type your content here…"></textarea>
+              </div>
+              <button class="btn btn-primary" onclick="saveKBRichText()">Add Content</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sitemap / URL Tab -->
+        <div id="kb-detail-tab-sitemap" style="display:none;">
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Website URL or Sitemap URL</label>
+                <input class="form-control" id="kb-sitemap-url"
+                  placeholder="https://yoursite.com or https://yoursite.com/sitemap.xml" />
+                <div class="form-hint">We'll crawl the website and add all pages as knowledge</div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Max Pages</label>
+                  <select class="form-control" id="kb-sitemap-maxpages">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="250">250</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Crawl Depth</label>
+                  <select class="form-control" id="kb-sitemap-depth">
+                    <option value="1">1</option>
+                    <option value="2" selected>2</option>
+                    <option value="3">3</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="startKBCrawl()">Start Crawl</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: LEADS ════════════════════════ -->
+      <div class="page-content hidden" id="page-leads">
+        <div class="page-header" style="flex-direction:column; align-items:flex-start; gap:16px;">
+          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+            <div>
+              <div class="page-title">Leads</div>
+              <div class="page-subtitle">User information captured by your bots</div>
+            </div>
+            <button class="btn btn-secondary" onclick="exportLeads()">↓ Export CSV</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Contact</th>
+                <th>Company</th>
+                <th>Phone</th>
+                <th>Bot</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="leads-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: INTEGRATIONS ════════════════ -->
+      <div class="page-content hidden" id="page-integrations">
+        <div class="page-header" style="flex-direction:column; align-items:flex-start; gap:16px;">
+          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+            <div>
+              <div class="page-title">Integrations</div>
+              <div class="page-subtitle">Connect your bots to external services</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <!-- Integration cards -->
+          <div class="card">
+            <div class="card-body" style="padding:20px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:10px;">📧</div>
+              <div style="font-weight:700;margin-bottom:4px;">Email (SMTP)</div>
+              <div class="text-sm text-muted" style="margin-bottom:14px;">Send email notifications and leads</div>
+              <span class="badge badge-gray">Not connected</span>
+              <button class="btn btn-primary btn-sm w-full" style="margin-top:12px;">Connect</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body" style="padding:20px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:10px;">💬</div>
+              <div style="font-weight:700;margin-bottom:4px;">Slack</div>
+              <div class="text-sm text-muted" style="margin-bottom:14px;">Get live notifications in Slack</div>
+              <span class="badge badge-green">Connected</span>
+              <button class="btn btn-secondary btn-sm w-full" style="margin-top:12px;">Manage</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body" style="padding:20px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:10px;">🔗</div>
+              <div style="font-weight:700;margin-bottom:4px;">Webhook</div>
+              <div class="text-sm text-muted" style="margin-bottom:14px;">Post events to any HTTP endpoint</div>
+              <span class="badge badge-gray">Not connected</span>
+              <button class="btn btn-primary btn-sm w-full" style="margin-top:12px;">Connect</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body" style="padding:20px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:10px;">📊</div>
+              <div style="font-weight:700;margin-bottom:4px;">Google Sheets</div>
+              <div class="text-sm text-muted" style="margin-bottom:14px;">Export leads to Google Sheets automatically
+              </div>
+              <span class="badge badge-gray">Not connected</span>
+              <button class="btn btn-primary btn-sm w-full" style="margin-top:12px;">Connect</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body" style="padding:20px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:10px;">📱</div>
+              <div style="font-weight:700;margin-bottom:4px;">WhatsApp</div>
+              <div class="text-sm text-muted" style="margin-bottom:14px;">Deploy bot on WhatsApp Business</div>
+              <span class="badge badge-gray">Not connected</span>
+              <button class="btn btn-primary btn-sm w-full" style="margin-top:12px;">Connect</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body" style="padding:20px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:10px;">🤝</div>
+              <div style="font-weight:700;margin-bottom:4px;">Zapier</div>
+              <div class="text-sm text-muted" style="margin-bottom:14px;">Connect to 5,000+ apps via Zapier</div>
+              <span class="badge badge-gray">Not connected</span>
+              <button class="btn btn-primary btn-sm w-full" style="margin-top:12px;">Connect</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: SETTINGS ════════════════════ -->
+      <div class="page-content hidden" id="page-settings">
+        <div class="page-header">
+          <div class="page-title">Settings</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:24px;">
+          <div class="grid-2 mb-6">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Workspace</div>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label class="form-label">Profile Name</label>
+                  <input class="form-control" id="settings-profile-name" placeholder="Your Name" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Workspace Name</label>
+                  <input class="form-control" id="settings-workspace-name" placeholder="Workspace Name" />
+                </div>
+                <button class="btn btn-primary" onclick="saveWorkspaceSettings()">Save Changes</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">API Keys</div>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label class="form-label">IAM Platform API Key</label>
+                  <div style="display:flex;gap:8px;">
+                    <input class="form-control" type="password" id="api-key-display" placeholder="No key generated yet"
+                      readonly />
+                    <button class="btn btn-secondary" onclick="copyApiKey()">Copy</button>
+                    <button class="btn btn-primary" onclick="generateApiKey()">Generate</button>
+                  </div>
+                  <div class="form-hint">Use this key to authenticate API requests from your backend</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Team Members</div>
+            </div>
+            <div class="card-body">
+              <div
+                style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+                <div class="avatar" id="owner-avatar">D</div>
+                <div>
+                  <div style="font-weight:600;" id="owner-email">owner@example.com</div>
+                  <div class="text-sm text-muted" id="owner-role">Owner</div>
+                </div>
+                <span class="badge badge-purple" style="margin-left:auto;">Owner</span>
+              </div>
+              <div style="margin-top:14px;">
+                <button class="btn btn-secondary" onclick="openModal('modal-invite')">
+                  + Invite Member
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="border-color:rgba(255,77,106,0.2);">
+            <div class="card-header" style="border-color:rgba(255,77,106,0.15);">
+              <div class="card-title text-danger">Danger Zone</div>
+            </div>
+            <div class="card-body">
+              <button class="btn btn-danger" onclick="showToast('Contact support to delete workspace', 'error')">Delete
+                Workspace</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════ PAGE: BOT CONFIG ══════════════════ -->
+      <div class="page-content hidden" id="page-bot-config">
+        <div class="page-header" style="flex-direction:column; align-items:flex-start; gap:16px;">
+          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+            <div>
+              <div class="page-title" id="bot-config-name">Bot Config</div>
+              <div class="page-subtitle">Configure bot settings and behavior</div>
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-secondary" onclick="navigate('home')">← Back</button>
+              <button class="btn btn-secondary" onclick="openBotPreview()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  style="margin-right:6px;">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                Preview
+              </button>
+              <button class="btn btn-primary" onclick="saveBotConfig()">Save Changes</button>
+            </div>
+          </div>
+
+          <div class="config-layout">
+            <!-- Config Nav -->
+            <div class="config-nav">
+              <div class="config-nav-item active" data-section="overview" onclick="showConfigSection('overview')">
+                Overview
+              </div>
+              <div class="config-nav-item" data-section="ai" onclick="showConfigSection('ai')">AI & Prompts</div>
+              <div class="config-nav-item" data-section="knowledge" onclick="showConfigSection('knowledge')">Knowledge
+              </div>
+              <div class="config-nav-item" data-section="variables" onclick="showConfigSection('variables')">Variables
+              </div>
+              <div class="config-nav-item" data-section="design" onclick="showConfigSection('design')">Appearance</div>
+              <div class="config-nav-item" data-section="embed" onclick="showConfigSection('embed')">Embed</div>
+            </div>
+
+            <!-- Config Sections -->
+            <!-- Overview -->
+            <div class="config-section active card" id="config-overview">
+              <div class="card-header">
+                <div class="card-title">Bot Overview</div>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label class="form-label">Bot Name</label>
+                  <input class="form-control" id="cfg-bot-name" placeholder="My Awesome Bot" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">LLM Model</label>
+                  <select class="form-control" id="cfg-model">
+                    <optgroup label="OpenAI">
+                      <option value="gpt-4o">GPT-4o</option>
+                      <option value="gpt-4o-mini">GPT-4o Mini (Fast)</option>
+                      <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                    </optgroup>
+                    <optgroup label="Google Gemini">
+                      <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                      <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                    </optgroup>
+                    <optgroup label="Anthropic">
+                      <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Recommended)</option>
+                      <option value="claude-3-5-haiku">Claude 3.5 Haiku (Fast)</option>
+                      <option value="claude-3-opus">Claude 3 Opus (Most Capable)</option>
+                    </optgroup>
+                    <optgroup label="Meta">
+                      <option value="llama-3.1-70b">Llama 3.1 70B</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Greeting Message</label>
+                  <input class="form-control" id="cfg-greeting" placeholder="Hi! How can I help you today?" />
+                  <div class="form-hint">First message the bot sends to users</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Status</label>
+                  <div class="toggle-wrap">
+                    <label class="toggle">
+                      <input type="checkbox" id="cfg-live" checked />
+                      <div class="toggle-track">
+                        <div class="toggle-thumb"></div>
+                      </div>
+                    </label>
+                    <span class="toggle-label">Published (Live)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI & Prompts -->
+            <div class="config-section card hidden" id="config-ai">
+              <div class="card-header">
+                <div class="card-title">AI Training & Behavior</div>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label class="form-label">System Prompt</label>
+                  <textarea class="form-control" id="cfg-prompt" rows="6"
+                    placeholder="You are a helpful AI assistant. Current context: {{page_title}} ({{page_url}}), Language: {{browser_language}}, Timezone: {{user_timezone}}"></textarea>
+                  <div class="form-hint">Use {{variable_name}} for system variables: current_timestamp, page_url,
+                    browser_language, page_title, user_timezone, user_platform, user_origin</div>
+                </div>
+                <div class="form-hint">Define your bot's personality, role, and instructions</div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div style="margin-bottom:16px;">
+                <div style="font-family:var(--font-display);font-weight:700;margin-bottom:4px;">🛡 Anti-Hallucination
+                </div>
+                <div class="text-sm text-muted" style="margin-bottom:12px;">Prevent the bot from making up information
+                  it doesn't know</div>
+                <div class="toggle-wrap">
+                  <label class="toggle">
+                    <input type="checkbox" id="cfg-anti-hall" checked />
+                    <div class="toggle-track">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                  </label>
+                  <span class="toggle-label">Enable anti-hallucination mode</span>
+                </div>
+              </div>
+
+              <div class="card" style="background:var(--bg-elevated);padding:16px;border-radius:10px;">
+                <div style="font-weight:600;margin-bottom:10px;">When Anti-Hallucination is ON:</div>
+                <div style="font-size:13px;color:var(--text-secondary);display:flex;flex-direction:column;gap:8px;">
+                  <div>✅ Bot only answers using knowledge base content</div>
+                  <div>✅ Bot says "I don't know" instead of guessing</div>
+                  <div>✅ Bot cites sources from knowledge base</div>
+                  <div>✅ Confidence threshold enforced on all responses</div>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="form-group">
+                <label class="form-label">Fallback Message</label>
+                <input class="form-control"
+                  value="I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?" />
+                <div class="form-hint">Shown when the bot cannot answer confidently</div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Max Response Length</label>
+                  <select class="form-control">
+                    <option>Short (1-2 sentences)</option>
+                    <option selected>Medium (1 paragraph)</option>
+                    <option>Long (multiple paragraphs)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Response Temperature</label>
+                  <select class="form-control">
+                    <option>0.1 — Very precise</option>
+                    <option selected>0.5 — Balanced</option>
+                    <option>0.8 — Creative</option>
+                    <option>1.0 — Very creative</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Knowledge Base -->
+          <div class="config-section card hidden" id="config-knowledge">
+            <div class="card-header">
+              <div class="card-title">Knowledge Base</div>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Attached Knowledge Bases</label>
+                <div id="bot-attached-kbs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+                  <!-- Rendered dynamically by renderAttachedKBs() -->
+                  <div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No knowledge bases attached yet.
+                  </div>
+                </div>
+                <button class="btn btn-secondary" onclick="openAttachKBModal()">+ Attach Knowledge Base</button>
+              </div>
+
+              <div class="divider"></div>
+
+              <div>
+                <div class="form-label" style="margin-bottom:12px;">Quick Add Content</div>
+                <div class="tabs mb-4">
+                  <div class="tab-btn active" onclick="switchKBTab(this,'files')">📎 Files</div>
+                  <div class="tab-btn" onclick="switchKBTab(this,'text')">📝 Rich Text</div>
+                  <div class="tab-btn" onclick="switchKBTab(this,'sitemap')">🗺 Sitemap</div>
+                </div>
+
+                <div id="kb-tab-files">
+                  <div class="upload-zone" onclick="document.getElementById('file-upload').click()">
+                    <div class="upload-icon">📎</div>
+                    <div class="upload-title">Drop files here or click to upload</div>
+                    <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX up to 50MB each</div>
+                  </div>
+                  <input type="file" id="file-upload" multiple style="display:none;"
+                    onchange="handleFileUpload(this)" />
+                </div>
+
+                <div id="kb-tab-text" style="display:none;">
+                  <div class="form-group">
+                    <label class="form-label">Content Title</label>
+                    <input class="form-control" placeholder="e.g. Pricing FAQ" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Content</label>
+                    <textarea class="form-control" rows="8" placeholder="Paste or type your content here…"></textarea>
+                  </div>
+                  <button class="btn btn-primary" onclick="showToast('Content added to knowledge base','success')">Add
+                    Content</button>
+                </div>
+
+                <div id="kb-tab-sitemap" style="display:none;">
+                  <div class="form-group">
+                    <label class="form-label">Website URL or Sitemap URL</label>
+                    <input class="form-control"
+                      placeholder="https://yoursite.com or https://yoursite.com/sitemap.xml" />
+                    <div class="form-hint">We'll crawl your website and add pages to the knowledge base</div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Max Pages</label>
+                      <select class="form-control">
+                        <option>25</option>
+                        <option selected>50</option>
+                        <option>100</option>
+                        <option>250</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Crawl Depth</label>
+                      <select class="form-control">
+                        <option>1</option>
+                        <option selected>2</option>
+                        <option>3</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary"
+                    onclick="showToast('Crawl started — this may take a few minutes','info')">Start Crawl</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Variables -->
+          <div class="config-section card hidden" id="config-variables">
+            <div class="card-header">
+              <div class="card-title">Lead Capture Variables</div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div
+                style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid var(--border);">
+                <div class="tabs tabs-full" id="var-filter-tabs" style="margin-bottom:0; border:none;">
+                  <div class="tab-btn active" onclick="filterVariables('all')">All variables</div>
+                  <div class="tab-btn" onclick="filterVariables('system')">System</div>
+                  <div class="tab-btn" onclick="filterVariables('custom')">Custom</div>
+                </div>
+              </div>
+
+              <div class="table-wrap" style="margin:0; border-radius:0; border-top:none;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:200px;">Name</th>
+                      <th>Description</th>
+                      <th style="width:110px;">Type</th>
+                      <th style="width:90px;">Required</th>
+                      <th style="width:110px; text-align:right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="variables-table-body">
+                    <!-- Rendered by JS -->
+                  </tbody>
+                  <tfoot>
+                    <tr style="background:var(--bg-elevated); border-top:2px solid var(--border);">
+                      <td style="padding:10px 12px;">
+                        <input id="new-var-name" class="form-control" placeholder="variable_name"
+                          style="font-size:12px;padding:6px 10px;height:32px;" />
+                      </td>
+                      <td style="padding:10px 12px;">
+                        <input id="new-var-desc" class="form-control" placeholder="Description (optional)"
+                          style="font-size:12px;padding:6px 10px;height:32px;" />
+                      </td>
+                      <td style="padding:10px 12px;">
+                        <select id="new-var-type" class="form-control"
+                          style="font-size:12px;padding:6px 10px;height:32px;">
+                          <option value="text">Text</option>
+                          <option value="number">Number</option>
+                          <option value="boolean">Boolean</option>
+                          <option value="object">Object</option>
+                        </select>
+                      </td>
+                      <td style="padding:10px 12px;text-align:center;">
+                        <label class="toggle" style="margin:0;">
+                          <input type="checkbox" id="new-var-required" />
+                          <div class="toggle-track">
+                            <div class="toggle-thumb"></div>
+                          </div>
+                        </label>
+                      </td>
+                      <td style="padding:10px 12px;text-align:right;">
+                        <button id="var-add-btn" class="btn btn-primary btn-sm" onclick="addVariable()"
+                          style="height:32px;padding:0 14px;font-size:12px;">+ Add</button>
+                        <button id="var-cancel-edit-btn" class="btn btn-ghost btn-sm" onclick="cancelEditVariable()"
+                          style="display:none;height:32px;padding:0 10px;font-size:12px;margin-left:4px;">&#215;</button>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Appearance -->
+          <div class="config-section card hidden" id="config-design">
+            <div class="card-header">
+              <div class="card-title">Bot Appearance</div>
+            </div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Primary Color</label>
+                  <div style="display:flex;gap:10px;align-items:center;">
+                    <input type="color" class="color-swatch" id="cfg-primary-color" value="#6c63ff" />
+                    <input class="form-control" id="cfg-primary-color-hex" value="#6c63ff" style="flex:1;"
+                      oninput="document.getElementById('cfg-primary-color').value=this.value" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Widget Position</label>
+                  <select class="form-control" id="cfg-widget-position">
+                    <option value="bottom-right">Bottom Right</option>
+                    <option value="bottom-left">Bottom Left</option>
+                    <option value="top-right">Top Right</option>
+                    <option value="top-left">Top Left</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Bot Display Name</label>
+                <input class="form-control" id="cfg-display-name" placeholder="Support Assistant" />
+                <div class="form-hint">Shown in the chat header visible to users</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Avatar / Logo URL</label>
+                <input class="form-control" id="cfg-avatar-url" placeholder="https://yoursite.com/bot-avatar.png" />
+                <div class="form-hint">Leave empty to use bot initials</div>
+              </div>
+              <div class="divider"></div>
+              <div class="form-label"
+                style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+                <span>Live Preview</span>
+                <button class="btn btn-ghost btn-sm" id="expand-preview-btn" onclick="togglePreviewExpand()"
+                  style="padding:4px 8px;font-size:12px;">⛶ Expand</button>
+              </div>
+              <div id="preview-container-wrapper"
+                style="background:#0a0a0f;border-radius:12px;overflow:hidden;height:380px;position:relative;transition:height 0.3s ease;">
+                <iframe id="preview-iframe-inline" style="width:100%;height:100%;border:none;"></iframe>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:8px;">
+                <button class="btn btn-primary btn-sm" id="btn-widget-view"
+                  onclick="setPreviewMode('widget');renderLivePreview(AppState.currentBot);">🔘 Widget View</button>
+                <button class="btn btn-secondary btn-sm" id="btn-fullpage-view"
+                  onclick="setPreviewMode('embed');renderLivePreview(AppState.currentBot);">⬛ Full Page View</button>
+                <button class="btn btn-primary btn-sm" onclick="openBotPreview()" style="margin-left:auto;">⛶ Full
+                  Preview</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Embed -->
+          <div class="config-section card hidden" id="config-embed">
+            <div class="card-header">
+              <div class="card-title">Embed Your Bot</div>
+            </div>
+            <div class="card-body">
+              <div class="tabs mb-4">
+                <div class="tab-btn active" onclick="switchEmbedTab(this,'widget')">🔘 Widget Bubble</div>
+                <div class="tab-btn" onclick="switchEmbedTab(this,'inpage')">⬛ Inline Embed</div>
+              </div>
+
+              <div id="embed-tab-widget">
+                <div class="text-sm text-muted mb-4">Add a floating chat bubble to any page. Paste this snippet
+                  before
+                  the closing <code style="color:var(--accent);">&lt;/body&gt;</code> tag.</div>
+                <div class="code-block">
+                  <div class="code-header">
+                    <span class="code-lang">HTML</span>
+                    <button class="btn btn-secondary btn-sm" onclick="copySnippet('widget-snippet')">📋
+                      Copy</button>
+                  </div>
+                  <pre class="code-content" id="widget-snippet"></pre>
+                </div>
+              </div>
+
+              <div id="embed-tab-inpage" style="display:none;">
+                <div class="text-sm text-muted mb-4">Embed the chat inline inside any page element.</div>
+                <div class="code-block">
+                  <div class="code-header">
+                    <span class="code-lang">HTML</span>
+                    <button class="btn btn-secondary btn-sm" onclick="copySnippet('inpage-snippet')">📋
+                      Copy</button>
+                  </div>
+                  <pre class="code-content" id="inpage-snippet"></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+  </div><!-- /app-shell -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════════════════════════════ -->
+
+  <!-- Create Bot Modal -->
+  <div class="modal-overlay" id="modal-create-bot">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Create New Bot</div>
+        <button class="icon-btn" onclick="closeModal('modal-create-bot')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Bot Name</label>
+          <input class="form-control" id="new-bot-name" placeholder="e.g. Support Assistant" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">LLM Model</label>
+          <select class="form-control" id="new-bot-model">
+            <optgroup label="OpenAI">
+              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-4o-mini">GPT-4o Mini (Fast)</option>
+              <option value="o1">o1 (Deep Reasoning)</option>
+              <option value="o1-mini">o1-mini</option>
+              <option value="gpt-5-preview">GPT-5 Preview (Early Access)</option>
+            </optgroup>
+            <optgroup label="Google Gemini">
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+              <option value="gemini-2.0-pro">Gemini 2.0 Pro</option>
+            </optgroup>
+            <optgroup label="Anthropic">
+              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Recommended)</option>
+              <option value="claude-3-5-haiku">Claude 3.5 Haiku (Fast)</option>
+              <option value="claude-3-opus">Claude 3 Opus (Most Capable)</option>
+            </optgroup>
+            <optgroup label="Meta">
+              <option value="llama-3.1-70b">Llama 3.1 70B</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Use Case</label>
+          <select class="form-control">
+            <option>Customer Support</option>
+            <option>Sales & Lead Gen</option>
+            <option>Onboarding</option>
+            <option>FAQ / Knowledge Base</option>
+            <option>Internal Assistant</option>
+            <option>Custom</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-create-bot')">Cancel</button>
+        <button class="btn btn-primary" onclick="createBot()">Create Bot →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create KB Modal -->
+  <div class="modal-overlay" id="modal-create-kb">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New Knowledge Base</div>
+        <button class="icon-btn" onclick="closeModal('modal-create-kb')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Knowledge Base Name</label>
+          <input class="form-control" id="new-kb-name" placeholder="e.g. Product Documentation" />
+          <div class="form-hint">Give it a clear name — you can add files on the next screen</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description <span
+              style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <textarea class="form-control" id="new-kb-description" placeholder="What will this knowledge base contain?"
+            rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-create-kb')">Cancel</button>
+        <button class="btn btn-primary" onclick="addKnowledgeBase()">Create & Add Content →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invite Member Modal -->
+  <div class="modal-overlay" id="modal-invite">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Invite Team Member</div>
+        <button class="icon-btn" onclick="closeModal('modal-invite')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-control" type="email" placeholder="colleague@company.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-control">
+            <option>Admin</option>
+            <option>Editor</option>
+            <option>Viewer</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-invite')">Cancel</button>
+        <button class="btn btn-primary"
+          onclick="closeModal('modal-invite');showToast('Invitation sent!','success')">Send Invite</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attach KB Modal -->
+  <div class="modal-overlay" id="modal-attach-kb">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Attach Knowledge Base</div>
+        <button class="icon-btn" onclick="closeModal('modal-attach-kb')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="attach-kb-list" style="display:flex;flex-direction:column;gap:8px;">
+          <!-- Rendered by openAttachKBModal() -->
+        </div>
+        <div class="divider"></div>
+        <button class="btn btn-secondary w-full" onclick="closeModal('modal-attach-kb');openModal('modal-create-kb')">
+          + Create New Knowledge Base
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-attach-kb')">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename KB Modal -->
+  <div class="modal-overlay" id="modal-rename-kb">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Rename Knowledge Base</div>
+        <button class="icon-btn" onclick="closeModal('modal-rename-kb')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">New Name</label>
+          <input class="form-control" id="rename-kb-input" placeholder="Knowledge base name" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-rename-kb')">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmRenameKB()">Save Name</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════
+     PANELS (Side Drawers)
+═══════════════════════════════════════════════════════════════════ -->
+
+  <!-- ─── Modal: Preview Bot ────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-preview-bot">
+    <div class="modal">
+      <div class="modal-header" style="justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <h2 class="modal-title">Live Preview</h2>
+          <div class="tabs" style="height:32px; padding:2px; background:var(--bg-elevated); border-radius:8px;">
+            <button class="tab-btn active" id="preview-tab-widget" onclick="setPreviewMode('widget')"
+              style="font-size:11px; padding:0 12px; height:28px;">🔘 Widget</button>
+            <button class="tab-btn" id="preview-tab-embed" onclick="setPreviewMode('embed')"
+              style="font-size:11px; padding:0 12px; height:28px;">⬛ Full Page</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-preview-bot')">✕</button>
+      </div>
+      <div class="modal-body"
+        style="padding:0; background:#050505; display:flex; align-items:center; justify-content:center; position:relative; height:540px; overflow:hidden;">
+        <iframe id="preview-iframe" style="width:100%; height:100%; border:none;"
+          sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+      <div class="modal-footer"
+        style="padding:12px 24px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; color:var(--text-muted);">This is how your bot will look to users.</span>
+        <button class="btn btn-secondary" onclick="sharePreviewLink()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            style="margin-right:6px;">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+            <polyline points="16 6 12 2 8 6"></polyline>
+            <line x1="12" y1="2" x2="12" y2="15"></line>
+          </svg>
+          Share Link
+        </button>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- Embed Panel -->
+  <div class="panel-overlay" id="panel-embed">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">⟨/⟩ Embed Bot</div>
+        <button class="icon-btn" onclick="closePanel('panel-embed')">✕</button>
+      </div>
+      <div class="panel-body">
+        <div class="tabs mb-4">
+          <div class="tab-btn active" onclick="switchEmbedTab(this,'widget-p')">🔘 Widget</div>
+          <div class="tab-btn" onclick="switchEmbedTab(this,'inpage-p')">⬛ Inline</div>
+        </div>
+        <div id="embed-tab-widget-p">
+          <div class="text-sm text-muted mb-4">Paste before closing <code
+              style="color:var(--accent);">&lt;/body&gt;</code></div>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">HTML</span>
+              <button class="btn btn-secondary btn-sm" onclick="copySnippet('widget-snippet')">📋 Copy</button>
+            </div>
+            <pre class="code-content" id="widget-snippet-p" style="font-size:11px;"></pre>
+          </div>
+        </div>
+        <div id="embed-tab-inpage-p" style="display:none;">
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">HTML</span>
+              <button class="btn btn-secondary btn-sm" onclick="copySnippet('inpage-snippet')">📋 Copy</button>
+            </div>
+            <pre class="code-content" id="inpage-snippet-p" style="font-size:11px;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KB Panel -->
+  <div class="panel-overlay" id="panel-kb">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title" id="kb-panel-title">Knowledge Base</div>
+        <button class="icon-btn" onclick="closePanel('panel-kb')">✕</button>
+      </div>
+      <div class="panel-body">
+        <div class="upload-zone" onclick="document.getElementById('kb-panel-file-upload').click()">
+          <div class="upload-icon">📎</div>
+          <div class="upload-title">Upload Files</div>
+          <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX</div>
+        </div>
+        <input type="file" id="kb-panel-file-upload" multiple style="display:none;"
+          onchange="handleKBFileUpload(this)" />
+        <div class="divider"></div>
+        <div id="kb-panel-files">
+          <!-- Rendered dynamically by openKB() -->
+          <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;">No files yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+  <script type="module" src="js/supabase.js"></script>
+  <script type="module" src="js/charts.js"></script>
+  <script type="module" src="js/app.js"></script>
+  <script>
+    // Tab switchers
+    function switchAnalyticTab(btn, tab) {
+      btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function switchKBTab(btn, tab) {
+      btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      ['files', 'text', 'sitemap'].forEach(t => {
+        const el = document.getElementById(`kb-tab-${t}`);
+        if (el) el.style.display = t === tab ? 'block' : 'none';
+      });
+    }
+
+    function endHITL() {
+      window.endHITL();
+    }
+
+    function handleConversationsNav() {
+      if (AppState.currentBot) {
+        navigate('conversations', { botId: AppState.currentBot.id, botName: AppState.currentBot.name });
+      } else {
+        showToast('Please select a bot first to view its conversations', 'error');
+        navigate('home');
+      }
+    }
+
+    function switchEmbedTab(btn, tab) {
+      btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const container = btn.closest('.card-body') || btn.closest('.panel-body');
+      if (container) {
+        container.querySelectorAll('[id^="embed-tab-"]').forEach(el => el.style.display = 'none');
+        const target = container.querySelector('#embed-tab-' + tab);
+        if (target) target.style.display = 'block';
+      }
+    }
+
+    function handleFileUpload(input) {
+      const files = [...input.files];
+      if (files.length) showToast(`${files.length} file(s) added to knowledge base`, 'success');
+    }
+
+    function exportLeads() {
+      const rows = [['Name', 'Email', 'Company', 'Phone', 'Bot', 'Date', 'Status']];
+      AppState.leads.forEach(l => rows.push([l.name, l.email, l.company, l.phone, l.bot, l.date, l.status]));
+      const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `leads_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+    }
+  </script>
+</body>
+
+</html>

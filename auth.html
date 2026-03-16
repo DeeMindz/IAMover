@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth | IAM Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg-base);
+      margin: 0;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 40px;
+      box-shadow: var(--shadow-xl);
+    }
+    .auth-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .auth-logo img {
+      height: 48px;
+    }
+    .auth-logo span {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .auth-tabs {
+      display: flex;
+      background: var(--bg-base);
+      padding: 4px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+    }
+    .auth-tab {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      transition: all 0.2s;
+    }
+    .auth-tab.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      box-shadow: var(--shadow-sm);
+    }
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+    .form-control { width: 100%; }
+    .auth-btn { width: 100%; margin-top: 12px; height: 44px; font-size: 15px; }
+    .auth-footer { margin-top: 20px; text-align: center; font-size: 13px; }
+    .auth-error {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 77, 106, 0.1);
+      border: 1px solid rgba(255, 77, 106, 0.2);
+      color: var(--danger);
+      font-size: 13px;
+      display: none;
+    }
+    .auth-success {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      background: rgba(0, 229, 160, 0.1);
+      border: 1px solid rgba(0, 229, 160, 0.2);
+      color: var(--success);
+      font-size: 13px;
+      display: none;
+    }
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(13, 14, 18, 0.7);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      border-radius: var(--radius-xl);
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(108, 99, 255, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="auth-card" style="position: relative;">
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+    </div>
+
+    <div class="auth-logo">
+      <img src="assets/IAM_logo_blue.svg" alt="IAM Platform">
+      <span>IAM Platform</span>
+    </div>
+
+    <div class="auth-tabs" id="auth-tabs">
+      <div class="auth-tab active" data-tab="signin">Sign In</div>
+      <div class="auth-tab" data-tab="signup">Sign Up</div>
+    </div>
+
+    <!-- Sign In Form -->
+    <div id="signin-section">
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="signin-email" class="form-control" placeholder="dee@example.com">
+      </div>
+      <div class="form-group">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <label class="form-label">Password</label>
+          <a href="#" class="text-sm text-accent" style="margin-bottom:6px; font-size:12px;">Forgot password?</a>
+        </div>
+        <input type="password" id="signin-password" class="form-control" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary auth-btn" onclick="handleSignIn()">Sign In</button>
+    </div>
+
+    <!-- Sign Up Form -->
+    <div id="signup-section" style="display: none;">
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" id="signup-name" class="form-control" placeholder="Dee Founder">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" id="signup-email" class="form-control" placeholder="dee@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="signup-password" class="form-control" placeholder="••••••••">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm Password</label>
+        <input type="password" id="signup-confirm" class="form-control" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary auth-btn" onclick="handleSignUp()">Create Account</button>
+    </div>
+
+    <div id="auth-message" class="auth-error"></div>
+    <div id="auth-success" class="auth-success"></div>
+  </div>
+
+  <script type="module">
+    import { Auth } from './js/supabase.js'
+
+    // Tab Switching
+    document.getElementById('auth-tabs').addEventListener('click', (e) => {
+      const tab = e.target.closest('.auth-tab');
+      if (!tab) return;
+      
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      const isSignIn = tab.dataset.tab === 'signin';
+      document.getElementById('signin-section').style.display = isSignIn ? 'block' : 'none';
+      document.getElementById('signup-section').style.display = isSignIn ? 'none' : 'block';
+      hideMessage();
+    });
+
+    function showLoading(show) {
+      document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('auth-message');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('auth-success').style.display = 'none';
+    }
+
+    function showSuccess(msg) {
+      const el = document.getElementById('auth-success');
+      el.textContent = msg;
+      el.style.display = 'block';
+      document.getElementById('auth-message').style.display = 'none';
+    }
+
+    function hideMessage() {
+      document.getElementById('auth-message').style.display = 'none';
+      document.getElementById('auth-success').style.display = 'none';
+    }
+
+    async function handleSignIn() {
+      const email = document.getElementById('signin-email').value.trim();
+      const password = document.getElementById('signin-password').value;
+      
+      if (!email || !password) {
+        showError('Please enter both email and password');
+        return;
+      }
+
+      try {
+        showLoading(true);
+        hideMessage();
+        await Auth.signIn(email, password);
+        window.location.href = 'index.html';
+      } catch (err) {
+        showError(err.message || 'Failed to sign in');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    async function handleSignUp() {
+      const name = document.getElementById('signup-name').value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      const password = document.getElementById('signup-password').value;
+      const confirm = document.getElementById('signup-confirm').value;
+
+      if (!name || !email || !password) {
+        showError('Please fill in all fields');
+        return;
+      }
+      
+      if (password.length < 6) {
+        showError('Password must be at least 6 characters');
+        return;
+      }
+
+      if (password !== confirm) {
+        showError('Passwords do not match');
+        return;
+      }
+
+      try {
+        showLoading(true);
+        hideMessage();
+        await Auth.signUp(email, password, name);
+        showSuccess('Account created! Signing you in...');
+        
+        // Auto sign in
+        setTimeout(async () => {
+          await Auth.signIn(email, password);
+          window.location.href = 'index.html';
+        }, 1500);
+      } catch (err) {
+        showError(err.message || 'Failed to create account');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // Expose to window for onclick handlers (inline module workaround)
+    window.handleSignIn = handleSignIn;
+    window.handleSignUp = handleSignUp;
+  </script>
+</body>
+</html>
