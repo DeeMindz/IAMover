@@ -1654,6 +1654,36 @@ function renderLivePreview(bot) {
     background:${primaryColor}; color:#fff;
     border-bottom-right-radius:4px; align-self:flex-end;
   }
+  .typing-dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 0;
+    align-self: flex-start;
+  }
+  .typing-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    animation: wave 1.3s ease-in-out infinite;
+  }
+  .typing-dots span:nth-child(1) {
+    background: #c0c0c0;
+    animation-delay: 0s;
+  }
+  .typing-dots span:nth-child(2) {
+    background: #808080;
+    animation-delay: 0.18s;
+  }
+  .typing-dots span:nth-child(3) {
+    background: #303030;
+    animation-delay: 0.36s;
+  }
+  @keyframes wave {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+    30% { transform: translateY(-8px); opacity: 1; }
+  }
   .chat-input-area {
     padding:10px 12px; border-top:1px solid #eee;
     display:flex; gap:8px; align-items:center; background:#fff;
@@ -1740,11 +1770,11 @@ function renderLivePreview(bot) {
     msgs.scrollTop = msgs.scrollHeight;
 
     // Show typing indicator
-    const botMsg = document.createElement('div');
-    botMsg.className = 'msg bot';
-    botMsg.textContent = '...';
-    botMsg.id = 'typing-indicator';
-    msgs.appendChild(botMsg);
+    const typing = document.createElement('div');
+    typing.className = 'typing-dots';
+    typing.id = 'typing-indicator';
+    typing.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(typing);
     msgs.scrollTop = msgs.scrollHeight;
 
     // Call the API for a real AI response
@@ -1753,8 +1783,8 @@ function renderLivePreview(bot) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: text,
-        bot_id: AppState.currentBot?.id,
-        conversation_history: []
+        bot_id: '${bot.id}',
+        conversation_id: window._previewConvId || null,
       })
     })
     .then(res => res.json())
@@ -1826,6 +1856,36 @@ function renderLivePreview(bot) {
   .msg { max-width:75%; padding:11px 16px; border-radius:18px; font-size:14px; line-height:1.55; }
   .msg.bot { background:#fff; border:1px solid #eee; border-bottom-left-radius:4px; align-self:flex-start; color:#333; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
   .msg.user { background:${primaryColor}; color:#fff; border-bottom-right-radius:4px; align-self:flex-end; }
+  .typing-dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 0;
+    align-self: flex-start;
+  }
+  .typing-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    animation: wave 1.3s ease-in-out infinite;
+  }
+  .typing-dots span:nth-child(1) {
+    background: #c0c0c0;
+    animation-delay: 0s;
+  }
+  .typing-dots span:nth-child(2) {
+    background: #808080;
+    animation-delay: 0.18s;
+  }
+  .typing-dots span:nth-child(3) {
+    background: #303030;
+    animation-delay: 0.36s;
+  }
+  @keyframes wave {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+    30% { transform: translateY(-8px); opacity: 1; }
+  }
   .chat-input-area {
     padding:14px 16px; border-top:1px solid #eee;
     display:flex; gap:10px; align-items:center; background:#fff; flex-shrink:0;
