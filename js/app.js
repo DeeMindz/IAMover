@@ -233,7 +233,11 @@ function loadFromLocalStorage() {
 
   if (bots) AppState.bots = bots;
   if (leads) AppState.leads = leads;
-  if (kbs) AppState.knowledgeBases = kbs;
+  // Sync both key forms so Store.get('knowledge_bases') and AppState.knowledgeBases both work
+  if (kbs) {
+    AppState.knowledgeBases = kbs;
+    AppState['knowledge_bases'] = kbs;
+  }
 }
 
 async function loadUserProfile() {
@@ -820,7 +824,7 @@ function renderHome() {
           <div class="bot-actions" onclick="event.stopPropagation()">
             <button class="btn btn-secondary btn-sm" onclick="navigate('bot-config', {botId:'${bot.id}', botName:'${bot.name}'})">⚙️ Config</button>
             <button class="btn btn-secondary btn-sm" onclick="navigate('conversations', {botId:'${bot.id}', botName:'${bot.name}'})">💬 Chats</button>
-            <button class="btn btn-primary btn-sm" onclick="openPanel('panel-embed'); AppState.currentBot = AppState.bots.find(b=>b.id==='${bot.id}'); renderEmbedPanel();">⟨/⟩ Embed</button>
+            <button class="btn btn-primary btn-sm" onclick="openEmbedForBot('${bot.id}')">⟨/⟩ Embed</button>
             <button class="btn btn-danger btn-sm" onclick="confirmDeleteBot('${bot.id}', '${bot.name}')">🗑</button>
           </div>
         </div>
@@ -1122,16 +1126,14 @@ async function renderKnowledge() {
   const grid = document.getElementById('kb-grid');
   if (!grid) return;
 
-  let kbs = Store.get('knowledge_bases') || [];
+  // Check both key forms — Store uses 'knowledge_bases', localStorage uses 'knowledgeBases'
+  let kbs = Store.get('knowledge_bases') || AppState.knowledgeBases || [];
 
-  // If cache is empty, fetch immediately — don't wait for background sync
+  // If still empty, fetch immediately — don't wait for background sync
   if (kbs.length === 0) {
     try {
-      const { data, error } = await supabase.from('knowledge_bases').select('*');
-      if (!error && data) {
-        kbs = data;
-        Store.set('knowledge_bases', kbs);
-      }
+      kbs = await KnowledgeBases.getAll();
+      Store.set('knowledge_bases', kbs);
     } catch (e) {
       console.error('KB fetch failed:', e);
     }
@@ -1708,8 +1710,6 @@ function renderLivePreview(bot) {
     </div>
     <div class="chat-messages" id="chat-messages">
       <div class="msg bot">${greeting}</div>
-      <div class="msg user">Hi, I have a question</div>
-      <div class="msg bot">Of course! I'm happy to help. What would you like to know?</div>
     </div>
     <div class="chat-input-area">
       <input class="chat-input" id="chat-input" placeholder="Type a message…" onkeydown="handleKey(event)" />
@@ -1816,10 +1816,6 @@ function renderLivePreview(bot) {
     </div>
     <div class="chat-messages">
       <div class="msg bot">${greeting}</div>
-      <div class="msg user">Hi, I have a question about pricing</div>
-      <div class="msg bot">Of course! I'd be happy to help with pricing. What would you like to know?</div>
-      <div class="msg user">What's included in the Pro plan?</div>
-      <div class="msg bot">The Pro plan includes unlimited messages, advanced analytics, and HITL support.</div>
     </div>
     <div class="chat-input-area">
       <input class="chat-input" placeholder="Type a message…" />
@@ -2059,7 +2055,7 @@ function showConfigSection(section) {
   if (navItem) navItem.classList.add('active');
 
   // Render preview when appearance section is shown
-  if (section === 'appearance' && AppState.currentBot) {
+  if (section === 'design' && AppState.currentBot) {
     // Ensure default mode is widget
     currentPreviewMode = 'widget';
 
@@ -2345,6 +2341,17 @@ async function deleteLead(id) {
 }
 
 /* ─── Final Global Exposures ─────────────────────────────────────── */
+
+// Safe wrapper for embed button on bot cards — avoids AppState inline access
+function openEmbedForBot(botId) {
+  const bot = AppState.bots.find(b => b.id === botId);
+  if (!bot) return;
+  AppState.currentBot = bot;
+  renderEmbedPanel();
+  openPanel('panel-embed');
+}
+window.openEmbedForBot = openEmbedForBot;
+window.renderConversations = renderConversations;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.openPanel = openPanel;

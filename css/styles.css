@@ -814,9 +814,11 @@ textarea.form-control {
 
 select.form-control {
   cursor: pointer;
+  appearance: auto;
+  -webkit-appearance: auto;
 }
 
-/* Model dropdown optgroup styling */
+/* Model dropdown — always opens downward, clean optgroup labels */
 select.form-control optgroup {
   font-weight: 700;
   font-size: 11px;
@@ -838,6 +840,15 @@ select.form-control option {
 select.form-control option:checked {
   background: var(--accent);
   color: #fff;
+}
+
+/* Wrap model selects to control dropdown anchor point */
+.model-select-wrap {
+  position: relative;
+}
+.model-select-wrap select {
+  position: relative;
+  z-index: 10;
 }
 
 .form-hint {
