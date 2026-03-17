@@ -80,6 +80,16 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'LLM API key not configured' });
     }
 
+    // Debug: log env var status
+    console.log(JSON.stringify({
+        level: 'INFO',
+        step: 'startup',
+        hasUrl: !!process.env.SUPABASE_URL,
+        hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        keyLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0,
+        hasGeminiKey: !!process.env.GEMINI_API_KEY,
+    }));
+
     if (req.method !== 'POST') {
         log.warn('Invalid method', { method: req.method });
         return res.status(405).json({ error: 'Method not allowed' });

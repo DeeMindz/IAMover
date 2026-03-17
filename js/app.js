@@ -185,6 +185,17 @@ async function verifySessionInBackground() {
 
 document.addEventListener('DOMContentLoaded', initApp);
 
+/* ─── Persistent Visitor ID — managed by parent window ───────────────── */
+// iframe cannot access localStorage so parent manages visitor ID
+function getOrCreateVisitorId() {
+  let vid = localStorage.getItem('iam_visitor_id');
+  if (!vid) {
+    vid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('iam_visitor_id', vid);
+  }
+  return vid;
+}
+
 /* ─── PostMessage Bridge for Preview Iframe ───────────────────────── */
 // Listen for messages from preview iframe to call API (avoids CORS)
 window.addEventListener('message', async function (e) {
@@ -197,13 +208,15 @@ window.addEventListener('message', async function (e) {
   if (e.data.type === 'IAM_CONV_CREATE') {
     console.log('[IAM Bridge] Creating conversation for bot:', e.data.bot_id);
     try {
+      // Parent window manages visitor ID — iframe cannot access localStorage
+      const visitor_id = getOrCreateVisitorId();
+
       const res = await fetch('/api/conversation/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bot_id: e.data.bot_id,
-          user_id: e.data.user_id || null,
-          // System variables captured from the parent page
+          user_id: visitor_id,
           page_url: window.location.href,
           referrer_url: document.referrer || null,
           page_title: document.title || null,
@@ -1837,29 +1850,17 @@ function renderLivePreview(bot) {
 <script>
   let isSending = false;
 
-  // Persistent anonymous visitor ID — stored in browser localStorage
-  // Has nothing to do with authentication
-  // Same visitor gets the same ID on every return visit
-  function getVisitorId() {
-    let vid = localStorage.getItem('iam_visitor_id');
-    if (!vid) {
-      vid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('iam_visitor_id', vid);
-    }
-    return vid;
-  }
-
   function openChat() {
     document.getElementById('launcher').classList.add('hidden');
     document.getElementById('greeting-popup').classList.add('hidden');
     document.getElementById('chat-window').classList.remove('hidden');
 
     // Create conversation only if not already created
+    // Parent window will attach visitor ID from localStorage
     if (!window._previewConvId) {
       window.parent.postMessage({ 
-        type:    'IAM_CONV_CREATE', 
-        bot_id:  '${bot.id}',
-        user_id: getVisitorId(),
+        type:   'IAM_CONV_CREATE', 
+        bot_id: '${bot.id}',
       }, '*');
     }
   }
@@ -2029,22 +2030,12 @@ function renderLivePreview(bot) {
 <script>
   let fpSending = false;
 
-  // Persistent anonymous visitor ID — stored in browser localStorage
-  function getVisitorId() {
-    let vid = localStorage.getItem('iam_visitor_id');
-    if (!vid) {
-      vid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('iam_visitor_id', vid);
-    }
-    return vid;
-  }
-
   // Create conversation on load (only if not already created)
+  // Parent window will attach visitor ID from localStorage
   if (!window._fpConvId) {
     window.parent.postMessage({ 
-      type:    'IAM_CONV_CREATE', 
-      bot_id:  '${bot.id}',
-      user_id: getVisitorId(),
+      type:   'IAM_CONV_CREATE', 
+      bot_id: '${bot.id}',
     }, '*');
   }
 
