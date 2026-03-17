@@ -143,6 +143,27 @@ export default async function handler(req, res) {
             }
         }
 
+        // Load conversation history from messages table
+        const conversation_id = req.body.conversation_id;
+        let conversationHistory = [];
+        if (conversation_id) {
+            const { data: messages } = await supabase
+                .from('messages')
+                .select('role, content')
+                .eq('conversation_id', conversation_id)
+                .order('created_at', { ascending: true })
+                .limit(20);
+
+            if (messages) {
+                conversationHistory = messages
+                    .filter(m => m.role === 'user' || m.role === 'bot')
+                    .map(m => ({
+                        role: m.role === 'bot' ? 'assistant' : 'user',
+                        content: m.content
+                    }));
+            }
+        }
+
         // Build system prompt from bot config
         let systemPrompt = bot.system_prompt || 'You are a helpful AI assistant.';
 
