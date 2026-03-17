@@ -16,23 +16,19 @@ const log = {
 
 // Model maps for consistent model IDs
 const GEMINI_MODEL_MAP = {
-    // Gemini 2.0
-    'gemini-2.0-flash': 'gemini-2.0-flash',
-    'gemini-2.0-flash-lite': 'gemini-2.0-flash-lite',
-    'gemini-2.0-flash-thinking': 'gemini-2.0-flash-thinking-exp-01-21',
-    'gemini-2.0-pro': 'gemini-2.0-pro-exp',
+    // Gemini 2.5 (stable — recommended)
+    'gemini-2.5-flash': 'gemini-2.5-flash',
+    'gemini-2.5-flash-lite': 'gemini-2.5-flash-lite',
+    'gemini-2.5-pro': 'gemini-2.5-pro',
 
-    // Gemini 2.5
-    'gemini-2.5-pro': 'gemini-2.5-pro-preview-03-25',
-    'gemini-2.5-flash': 'gemini-2.5-flash-preview-04-17',
-
-    // Gemini 3 (latest)
-    'gemini-3.0-pro': 'gemini-3.0-pro',
-    'gemini-3.0-flash': 'gemini-3.0-flash',
+    // Gemini 3 (preview)
+    'gemini-3-flash-preview': 'gemini-3-flash-preview',
+    'gemini-3.1-pro-preview': 'gemini-3.1-pro-preview',
+    'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite-preview',
 
     // Shortcuts
-    'gemini-flash': 'gemini-2.0-flash',
-    'gemini-latest': 'gemini-3.0-pro',
+    'gemini-flash': 'gemini-2.5-flash',
+    'gemini-latest': 'gemini-3-flash-preview',
 };
 
 const OPENAI_MODEL_MAP = {

@@ -1757,14 +1757,13 @@ function renderLivePreview(bot) {
   .typing-dots {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 14px 0;
+    gap: 3px;
+    padding: 6px 2px;
     align-self: flex-start;
   }
   .typing-dots span {
-    width: 10px;
-    height: 10px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     animation: wave 1.3s ease-in-out infinite;
   }
@@ -1781,8 +1780,8 @@ function renderLivePreview(bot) {
     animation-delay: 0.36s;
   }
   @keyframes wave {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
-    30% { transform: translateY(-8px); opacity: 1; }
+    0%,60%,100% { transform:translateY(0); opacity:0.6; }
+    30% { transform:translateY(-4px); opacity:1; }
   }
   .chat-input-area {
     padding:10px 12px; border-top:1px solid #eee;
@@ -1972,14 +1971,13 @@ function renderLivePreview(bot) {
   .typing-dots {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 14px 0;
+    gap: 3px;
+    padding: 6px 2px;
     align-self: flex-start;
   }
   .typing-dots span {
-    width: 10px;
-    height: 10px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     animation: wave 1.3s ease-in-out infinite;
   }
@@ -1996,8 +1994,8 @@ function renderLivePreview(bot) {
     animation-delay: 0.36s;
   }
   @keyframes wave {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
-    30% { transform: translateY(-8px); opacity: 1; }
+    0%,60%,100% { transform:translateY(0); opacity:0.6; }
+    30% { transform:translateY(-4px); opacity:1; }
   }
   .chat-input-area {
     padding:14px 16px; border-top:1px solid #eee;
