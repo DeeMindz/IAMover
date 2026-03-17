@@ -129,10 +129,16 @@ export default async function handler(req, res) {
             const kbIds = kbLinks.map(k => k.kb_id);
             const { data: files } = await supabase
                 .from('kb_files')
-                .select('name, content, type')
+                .select('name, content, type, storage_path')
                 .in('kb_id', kbIds)
-                .not('content', 'is', null)
                 .limit(20);
+
+            // Log KB files debug info
+            log.info('db', 'KB files fetched', {
+                totalFiles: files?.length || 0,
+                filesWithContent: files?.filter(f => f.content)?.length || 0,
+                fileNames: files?.map(f => f.name) || []
+            });
 
             if (files && files.length > 0) {
                 knowledgeContext = '\n\n--- KNOWLEDGE BASE ---\n' +

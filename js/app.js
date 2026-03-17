@@ -110,6 +110,12 @@ const Cache = {
   }
 };
 
+/* ─── Preview State (persists across widget/fullpage mode switches) ─── */
+const PreviewState = {
+  convId: null,
+  messages: [],  // { role: 'user'|'bot', content: string }[]
+};
+
 /* ─── App State ──────────────────────────────────────────────────── */
 const AppState = {
   currentPage: 'home',
@@ -241,6 +247,10 @@ window.addEventListener('message', async function (e) {
         conv_id: data.conversation_id,
         returning: data.returning
       }, '*');
+      // Save conv ID to PreviewState for persistence across mode switches
+      if (data.conversation_id) {
+        PreviewState.convId = data.conversation_id;
+      }
     } catch (err) {
       console.error('[IAM Bridge] Exception creating conversation:', err);
       e.source.postMessage({ type: 'IAM_CONV_ERROR', error: err.message }, '*');
@@ -251,6 +261,10 @@ window.addEventListener('message', async function (e) {
   if (e.data.type === 'IAM_BOT_REQUEST') {
     const { message, bot_id, conv_id } = e.data;
     console.log('[IAM Bridge] Bot request:', { message, bot_id, conv_id });
+    // Save user message to PreviewState
+    if (message) {
+      PreviewState.messages.push({ role: 'user', content: message });
+    }
     try {
       const res = await fetch('/api/bot/respond', {
         method: 'POST',
@@ -275,6 +289,10 @@ window.addEventListener('message', async function (e) {
         response: data.response,
         conv_id: data.conversation_id
       }, '*');
+      // Save bot response to PreviewState
+      if (data.response) {
+        PreviewState.messages.push({ role: 'bot', content: data.response });
+      }
     } catch (err) {
       console.error('[IAM Bridge] Exception in bot request:', err);
       e.source.postMessage({
@@ -1076,7 +1094,7 @@ async function renderConversations() {
     const lastMsg = c.messages?.[c.messages.length - 1];
     return `
       <div class="conv-item ${c.id === AppState.activeConversation ? 'active' : ''}"
-           onclick="AppState.activeConversation='${c.id}'; renderConversations();">
+           onclick="AppState.activeConversation='${c.id}'; renderConversations(); loadConversationMessages('${c.id}');">
         <div class="conv-avatar" style="background:${color}33; color:${color}">${initials(c.user || 'U')}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -1149,6 +1167,46 @@ function renderConvDetail(id) {
     takeoverBtn.style.display = (id && !AppState.hitlActive) ? 'inline-flex' : 'none';
   }
 }
+
+/* ── LOAD CONVERSATION MESSAGES FROM DB ── */
+async function loadConversationMessages(convId) {
+  const msgsEl = document.getElementById('conv-messages');
+  if (!msgsEl) return;
+
+  msgsEl.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;">Loading messages...</div>';
+
+  try {
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('role, content, created_at')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    if (!messages || messages.length === 0) {
+      msgsEl.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;">No messages yet.</div>';
+      return;
+    }
+
+    // Update the conversation object with fetched messages
+    const conv = AppState.conversations.find(c => c.id === convId);
+    if (conv) {
+      conv.messages = messages.map(m => ({
+        role: m.role,
+        text: m.content,
+        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }));
+    }
+
+    // Re-render the detail view
+    renderConvDetail(convId);
+  } catch (e) {
+    console.error('Failed to load messages:', e);
+    msgsEl.innerHTML = '<div style="padding:20px;color:var(--danger);">Failed to load messages.</div>';
+  }
+}
+window.loadConversationMessages = loadConversationMessages;
 
 /* ── REALTIME SUBSCRIPTIONS ── */
 let activeSubscription = null;
@@ -1906,6 +1964,20 @@ function renderLivePreview(bot) {
       window._previewConvId = e.data.conv_id;
     }
 
+    // Handle loading previous chat history (from mode switch)
+    if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
+      const msgs = document.getElementById('chat-messages');
+      // Clear any greeting message and rebuild from history
+      msgs.innerHTML = '';
+      e.data.messages.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
+        div.textContent = m.content;
+        msgs.appendChild(div);
+      });
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
     if (e.data.type === 'IAM_BOT_RESPONSE') {
       const msgs = document.getElementById('chat-messages');
       const t = document.getElementById('typing-indicator');
@@ -2075,6 +2147,20 @@ function renderLivePreview(bot) {
       window._fpConvId = e.data.conv_id;
     }
 
+    // Handle loading previous chat history (from mode switch)
+    if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
+      const msgs = document.querySelector('.chat-messages');
+      // Clear any greeting message and rebuild from history
+      msgs.innerHTML = '';
+      e.data.messages.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
+        div.textContent = m.content;
+        msgs.appendChild(div);
+      });
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
     if (e.data.type === 'IAM_BOT_RESPONSE') {
       const msgs = document.querySelector('.chat-messages');
       const t = document.getElementById('fp-typing');
@@ -2095,11 +2181,46 @@ function renderLivePreview(bot) {
 
   // Render in modal preview iframe
   const modalIframe = document.getElementById('preview-iframe');
-  if (modalIframe) modalIframe.srcdoc = html;
+  if (modalIframe) {
+    modalIframe.srcdoc = html;
+    // Restore previous chat state after iframe loads
+    modalIframe.onload = () => {
+      if (PreviewState.convId) {
+        modalIframe.contentWindow.postMessage({
+          type: 'IAM_CONV_CREATED',
+          conv_id: PreviewState.convId,
+          returning: true
+        }, '*');
+      }
+      if (PreviewState.messages.length > 0) {
+        modalIframe.contentWindow.postMessage({
+          type: 'IAM_LOAD_HISTORY',
+          messages: PreviewState.messages
+        }, '*');
+      }
+    };
+  }
 
   // Also render in inline appearance preview
   const inlineIframe = document.getElementById('preview-iframe-inline');
-  if (inlineIframe) inlineIframe.srcdoc = html;
+  if (inlineIframe) {
+    inlineIframe.srcdoc = html;
+    inlineIframe.onload = () => {
+      if (PreviewState.convId) {
+        inlineIframe.contentWindow.postMessage({
+          type: 'IAM_CONV_CREATED',
+          conv_id: PreviewState.convId,
+          returning: true
+        }, '*');
+      }
+      if (PreviewState.messages.length > 0) {
+        inlineIframe.contentWindow.postMessage({
+          type: 'IAM_LOAD_HISTORY',
+          messages: PreviewState.messages
+        }, '*');
+      }
+    };
+  }
 }
 window.renderLivePreview = renderLivePreview;
 
