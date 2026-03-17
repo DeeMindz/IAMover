@@ -108,7 +108,7 @@ export default async function handler(req, res) {
         // Get bot configuration
         const { data: bot, error: botError } = await supabase
             .from('bots')
-            .select('*, bot_variables(*), knowledge_bases(*), kb_files(*)')
+            .select('*')
             .eq('id', bot_id)
             .single();
 
@@ -117,30 +117,38 @@ export default async function handler(req, res) {
             return res.status(404).json({ error: 'Bot not found' });
         }
 
-        log.info('Bot found', { bot_id, model: bot.model, hasKB: !!bot.knowledge_bases?.length });
+        log.info('Bot found', { bot_id, model: bot.model });
+
+        // Load knowledge base files via the join tables
+        let knowledgeContext = '';
+        const { data: kbLinks } = await supabase
+            .from('bot_knowledge_bases')
+            .select('kb_id')
+            .eq('bot_id', bot_id);
+
+        if (kbLinks && kbLinks.length > 0) {
+            const kbIds = kbLinks.map(k => k.kb_id);
+            const { data: files } = await supabase
+                .from('kb_files')
+                .select('name, content, type')
+                .in('kb_id', kbIds)
+                .not('content', 'is', null)
+                .limit(20);
+
+            if (files && files.length > 0) {
+                knowledgeContext = '\n\n--- KNOWLEDGE BASE ---\n' +
+                    files.map(f => `[${f.name}]\n${f.content}`).join('\n\n') +
+                    '\n--- END KNOWLEDGE BASE ---';
+                log.info('KB loaded', { fileCount: files.length });
+            }
+        }
 
         // Build system prompt from bot config
         let systemPrompt = bot.system_prompt || 'You are a helpful AI assistant.';
 
-        // Add bot variables to context
-        if (bot.bot_variables && bot.bot_variables.length > 0) {
-            const varContext = bot.bot_variables
-                .map(v => `${v.name}=${v.value}`)
-                .join('\n');
-            if (varContext) {
-                systemPrompt += `\n\nContext variables:\n${varContext}`;
-            }
-        }
-
         // Add knowledge base context if available
-        if (bot.knowledge_bases && bot.knowledge_bases.length > 0) {
-            const kbContext = bot.knowledge_bases
-                .map(kb => kb.content)
-                .filter(c => c)
-                .join('\n\n');
-            if (kbContext) {
-                systemPrompt += `\n\nKnowledge base context:\n${kbContext}`;
-            }
+        if (knowledgeContext) {
+            systemPrompt += knowledgeContext;
         }
 
         const botModel = bot.model;
