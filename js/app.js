@@ -1807,7 +1807,17 @@ function renderLivePreview(bot) {
     background:#fff; border:1px solid #eee;
     border-bottom-left-radius:4px; align-self:flex-start;
     color:#333; box-shadow:0 1px 3px rgba(0,0,0,0.05);
+    white-space: pre-wrap; word-wrap: break-word;
   }
+  .msg.bot pre, .msg.bot code {
+    background: #f5f5f5; border-radius: 4px; padding: 2px 6px; font-size: 12px;
+  }
+  .msg.bot pre { padding: 8px 12px; overflow-x: auto; }
+  .msg.bot ul, .msg.bot ol { margin: 8px 0; padding-left: 20px; }
+  .msg.bot li { margin: 4px 0; }
+  .msg.bot h1, .msg.bot h2, .msg.bot h3 { margin: 12px 0 8px 0; font-size: 14px; }
+  .msg.bot h1 { font-size: 16px; }
+  .msg.bot a { color: #6c63ff; }
   .msg.user {
     background:${primaryColor}; color:#fff;
     border-bottom-right-radius:4px; align-self:flex-end;
@@ -1984,184 +1994,216 @@ function renderLivePreview(bot) {
       if (t) t.remove();
       const botMsg = document.createElement('div');
       botMsg.className = 'msg bot';
-      botMsg.textContent = e.data.response || 'Sorry, no response received.';
+      botMsg.innerHTML = formatMarkdown(escapeHtml(e.data.response)) || 'Sorry, no response received.';
       msgs.appendChild(botMsg);
       msgs.scrollTop = msgs.scrollHeight;
       if (e.data.conv_id) window._previewConvId = e.data.conv_id;
       isSending = false;
     }
   });
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+  // Simple markdown formatter
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
+  function formatMarkdown(text) {
+    if (!text) return '';
+    // Code blocks first (```...```)
+    text = text.replace(/```([\s\S] *?)```/g, '<pre><code>$1</code></pre>');
+    // Inline code (`...`)
+    text = text.replace(/`([^ `]+)` / g, '<code>$1</code>');
+  // Headers
+  text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+  text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+  text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+  // Bold
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Numbered lists
+  text = text.replace(/^(\d+)\.\s+(.*$)/gm, '<li>$2</li>');
+  // Unordered lists
+  text = text.replace(/^[-*]\s+(.*$)/gm, '<li>$1</li>');
+  // Wrap consecutive <li> elements in <ol> or <ul>
+  text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+  // Links
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // Line breaks
+  text = text.replace(/\n/g, '<br>');
+  return text;
+}
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+}
 <\/script>
-</body>
-</html>`;
+</body >
+</html > `;
 
   // Full page / inline embed mode
-  const fullPageHTML = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family:'Plus Jakarta Sans',sans-serif;
-    background:#0a0a0f;
-    height:100vh; display:flex; overflow:hidden;
+  const fullPageHTML = `< !DOCTYPE html >
+  <html>
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+          * {margin:0; padding:0; box-sizing:border-box; }
+          body {
+            font - family:'Plus Jakarta Sans',sans-serif;
+          background:#0a0a0f;
+          height:100vh; display:flex; overflow:hidden;
   }
-  .chat-window {
-    width:100%; height:100vh;
-    background:#fff;
-    display:flex; flex-direction:column; overflow:hidden;
+          .chat-window {
+            width:100%; height:100vh;
+          background:#fff;
+          display:flex; flex-direction:column; overflow:hidden;
   }
-  .chat-header {
-    background:${primaryColor};
-    padding:16px 20px;
-    display:flex; align-items:center; gap:12px;
-    color:#fff; flex-shrink:0;
+          .chat-header {
+            background:${primaryColor};
+          padding:16px 20px;
+          display:flex; align-items:center; gap:12px;
+          color:#fff; flex-shrink:0;
   }
-  .chat-header-avatar {
-    width:40px; height:40px;
-    background:rgba(255,255,255,0.2);
-    border-radius:12px;
-    display:flex; align-items:center; justify-content:center;
-    font-size:20px; flex-shrink:0; overflow:hidden;
+          .chat-header-avatar {
+            width:40px; height:40px;
+          background:rgba(255,255,255,0.2);
+          border-radius:12px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:20px; flex-shrink:0; overflow:hidden;
   }
-  .chat-header-info .name { font-weight:700; font-size:15px; }
-  .chat-header-info .status { font-size:12px; opacity:0.85; margin-top:2px; }
-  .chat-messages {
-    flex:1; padding:20px;
-    display:flex; flex-direction:column; gap:12px;
-    overflow-y:auto; background:#fafafa;
+          .chat-header-info .name {font - weight:700; font-size:15px; }
+          .chat-header-info .status {font - size:12px; opacity:0.85; margin-top:2px; }
+          .chat-messages {
+            flex:1; padding:20px;
+          display:flex; flex-direction:column; gap:12px;
+          overflow-y:auto; background:#fafafa;
   }
-  .msg { max-width:75%; padding:11px 16px; border-radius:18px; font-size:14px; line-height:1.55; }
-  .msg.bot { background:#fff; border:1px solid #eee; border-bottom-left-radius:4px; align-self:flex-start; color:#333; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-  .msg.user { background:${primaryColor}; color:#fff; border-bottom-right-radius:4px; align-self:flex-end; }
-  .typing-dots {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    padding: 6px 2px;
-    align-self: flex-start;
+          .msg {max - width:75%; padding:11px 16px; border-radius:18px; font-size:14px; line-height:1.55; }
+          .msg.bot {background:#fff; border:1px solid #eee; border-bottom-left-radius:4px; align-self:flex-start; color:#333; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+          .msg.user {background:${primaryColor}; color:#fff; border-bottom-right-radius:4px; align-self:flex-end; }
+          .typing-dots {
+            display: flex;
+          align-items: center;
+          gap: 3px;
+          padding: 6px 2px;
+          align-self: flex-start;
   }
-  .typing-dots span {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    animation: wave 1.3s ease-in-out infinite;
+          .typing-dots span {
+            width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          animation: wave 1.3s ease-in-out infinite;
   }
-  .typing-dots span:nth-child(1) {
-    background: #c0c0c0;
-    animation-delay: 0s;
+          .typing-dots span:nth-child(1) {
+            background: #c0c0c0;
+          animation-delay: 0s;
   }
-  .typing-dots span:nth-child(2) {
-    background: #808080;
-    animation-delay: 0.18s;
+          .typing-dots span:nth-child(2) {
+            background: #808080;
+          animation-delay: 0.18s;
   }
-  .typing-dots span:nth-child(3) {
-    background: #303030;
-    animation-delay: 0.36s;
+          .typing-dots span:nth-child(3) {
+            background: #303030;
+          animation-delay: 0.36s;
   }
-  @keyframes wave {
-    0%,60%,100% { transform:translateY(0); opacity:0.6; }
-    30% { transform:translateY(-4px); opacity:1; }
+          @keyframes wave {
+            0 %, 60 %, 100 % { transform: translateY(0); opacity: 0.6; }
+    30% {transform:translateY(-4px); opacity:1; }
   }
-  .chat-input-area {
-    padding:14px 16px; border-top:1px solid #eee;
-    display:flex; gap:10px; align-items:center; background:#fff; flex-shrink:0;
+          .chat-input-area {
+            padding:14px 16px; border-top:1px solid #eee;
+          display:flex; gap:10px; align-items:center; background:#fff; flex-shrink:0;
   }
-  .chat-input { flex:1; border:1px solid #e5e5e5; border-radius:24px; padding:10px 18px; font-size:14px; outline:none; color:#333; background:#f8f8f8; font-family:inherit; }
-  .chat-input:focus { border-color:${primaryColor}; }
-  .send-btn { width:38px; height:38px; background:${primaryColor}; border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; flex-shrink:0; }
-</style>
-</head>
-<body>
-  <div class="chat-window">
-    <div class="chat-header">
-      <div class="chat-header-avatar">${avatarContent}</div>
-      <div class="chat-header-info">
-        <div class="name">${botName}</div>
-        <div class="status">⬤ Online · Ready to help</div>
+          .chat-input {flex:1; border:1px solid #e5e5e5; border-radius:24px; padding:10px 18px; font-size:14px; outline:none; color:#333; background:#f8f8f8; font-family:inherit; }
+          .chat-input:focus {border - color:${primaryColor}; }
+          .send-btn {width:38px; height:38px; background:${primaryColor}; border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; flex-shrink:0; }
+        </style>
+    </head>
+    <body>
+      <div class="chat-window">
+        <div class="chat-header">
+          <div class="chat-header-avatar">${avatarContent}</div>
+          <div class="chat-header-info">
+            <div class="name">${botName}</div>
+            <div class="status">⬤ Online · Ready to help</div>
+          </div>
+        </div>
+        <div class="chat-messages">
+          <div class="msg bot">${greeting}</div>
+        </div>
+        <div class="chat-input-area">
+          <input class="chat-input" id="fp-chat-input" placeholder="Type a message…"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fpSendMsg()}" />
+          <button class="send-btn" onclick="fpSendMsg()">↑</button>
+        </div>
       </div>
-    </div>
-    <div class="chat-messages">
-      <div class="msg bot">${greeting}</div>
-    </div>
-    <div class="chat-input-area">
-      <input class="chat-input" id="fp-chat-input" placeholder="Type a message…"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fpSendMsg()}" />
-      <button class="send-btn" onclick="fpSendMsg()">↑</button>
-    </div>
-  </div>
-</body>
-<script>
-  let fpSending = false;
+    </body>
+    <script>
+      let fpSending = false;
 
-  // Create conversation on load (only if not already created)
-  // Parent window will attach visitor ID from localStorage
-  if (!window._fpConvId) {
-    window.parent.postMessage({ 
-      type:   'IAM_CONV_CREATE', 
-      bot_id: '${bot.id}',
-    }, '*');
+      // Create conversation on load (only if not already created)
+      // Parent window will attach visitor ID from localStorage
+      if (!window._fpConvId) {
+        window.parent.postMessage({
+          type: 'IAM_CONV_CREATE',
+          bot_id: '${bot.id}',
+        }, '*');
   }
 
-  function fpSendMsg() {
+      function fpSendMsg() {
     const input = document.getElementById('fp-chat-input');
-    const text = input.value.trim();
-    if (!text || fpSending) return;
-    fpSending = true;
+      const text = input.value.trim();
+      if (!text || fpSending) return;
+      fpSending = true;
 
-    const msgs = document.querySelector('.chat-messages');
-    const userMsg = document.createElement('div');
-    userMsg.className = 'msg user';
-    userMsg.textContent = text;
-    msgs.appendChild(userMsg);
-    input.value = '';
-    msgs.scrollTop = msgs.scrollHeight;
+      const msgs = document.querySelector('.chat-messages');
+      const userMsg = document.createElement('div');
+      userMsg.className = 'msg user';
+      userMsg.textContent = text;
+      msgs.appendChild(userMsg);
+      input.value = '';
+      msgs.scrollTop = msgs.scrollHeight;
 
-    const typing = document.createElement('div');
-    typing.className = 'typing-dots';
-    typing.id = 'fp-typing';
-    typing.innerHTML = '<span></span><span></span><span></span>';
-    msgs.appendChild(typing);
-    msgs.scrollTop = msgs.scrollHeight;
+      const typing = document.createElement('div');
+      typing.className = 'typing-dots';
+      typing.id = 'fp-typing';
+      typing.innerHTML = '<span></span><span></span><span></span>';
+      msgs.appendChild(typing);
+      msgs.scrollTop = msgs.scrollHeight;
 
-    // Send to parent window to make the API call - avoids CORS
-    window.parent.postMessage({
-      type: 'IAM_BOT_REQUEST',
+      // Send to parent window to make the API call - avoids CORS
+      window.parent.postMessage({
+        type: 'IAM_BOT_REQUEST',
       message: text,
       bot_id: '${bot.id}',
       conv_id: window._fpConvId || null
     }, '*');
   }
 
-  // Listen for response from parent
-  window.addEventListener('message', function(e) {
+      // Listen for response from parent
+      window.addEventListener('message', function(e) {
     if (!e.data) return;
 
-    if (e.data.type === 'IAM_CONV_CREATED') {
-      window._fpConvId = e.data.conv_id;
+      if (e.data.type === 'IAM_CONV_CREATED') {
+        window._fpConvId = e.data.conv_id;
     }
 
-    // Handle loading previous chat history (from mode switch)
-    if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
+      // Handle loading previous chat history (from mode switch)
+      if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
       const msgs = document.querySelector('.chat-messages');
       // Clear any greeting message and rebuild from history
       msgs.innerHTML = '';
       e.data.messages.forEach(m => {
         const div = document.createElement('div');
-        div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-        div.textContent = m.content;
-        msgs.appendChild(div);
+      div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
+      div.textContent = m.content;
+      msgs.appendChild(div);
       });
       msgs.scrollTop = msgs.scrollHeight;
     }
 
-    if (e.data.type === 'IAM_BOT_RESPONSE') {
+      if (e.data.type === 'IAM_BOT_RESPONSE') {
       const msgs = document.querySelector('.chat-messages');
       const t = document.getElementById('fp-typing');
       if (t) t.remove();
@@ -2174,8 +2216,8 @@ function renderLivePreview(bot) {
       fpSending = false;
     }
   });
-</script>
-</html>`;
+    </script>
+  </html>`;
 
   const html = isWidgetMode ? widgetPreviewHTML : fullPageHTML;
 
@@ -2267,7 +2309,7 @@ function sharePreviewLink() {
   const bot = AppState.currentBot;
   if (!bot) return;
 
-  const url = `${window.location.origin}${window.location.pathname.replace('index.html', '')}preview.html?botId=${bot.id}`;
+  const url = `${ window.location.origin }${ window.location.pathname.replace('index.html', '') } preview.html ? botId = ${ bot.id } `;
   navigator.clipboard.writeText(url).then(() => {
     showToast('Preview link copied to clipboard!', 'success');
   }).catch(() => {
@@ -2344,7 +2386,7 @@ async function saveBotConfig() {
 }
 
 function confirmDeleteBot(id, name) {
-  if (confirm(`Delete "${name}"? This cannot be undone.`)) deleteBot(id);
+  if (confirm(`Delete "${name}" ? This cannot be undone.`)) deleteBot(id);
 }
 
 async function deleteBot(id) {
@@ -2435,10 +2477,10 @@ function showConfigSection(section) {
   configSections.forEach(el => el.classList.remove('active'));
   configNavItems.forEach(el => el.classList.remove('active'));
 
-  const target = document.getElementById(`config-${section}`);
+  const target = document.getElementById(`config - ${ section } `);
   if (target) target.classList.add('active');
 
-  const navItem = document.querySelector(`.config-nav-item[data-section="${section}"]`);
+  const navItem = document.querySelector(`.config - nav - item[data - section="${section}"]`);
   if (navItem) navItem.classList.add('active');
 
   // Render preview when appearance section is shown
@@ -2468,23 +2510,23 @@ function renderEmbedCode(bot) {
   const name = bot.theme?.displayName || bot.name || 'Assistant';
   const pos = bot.theme?.position || 'bottom-right';
 
-  const widgetSnippet = `<script>
-  (function(w,d,b){
-    w.IAMConfig = { botId:"${bot.id}", color:"${color}", position:"${pos}" };
-    var s=d.createElement('script'); s.src=b+'/widget.js'; s.async=true;
+  const widgetSnippet = `< script >
+  (function (w, d, b) {
+    w.IAMConfig = { botId: "${bot.id}", color: "${color}", position: "${pos}" };
+    var s = d.createElement('script'); s.src = b + '/widget.js'; s.async = true;
     d.head.appendChild(s);
-  })(window,document,'https://iam-platform.app');
+  })(window, document, 'https://iam-platform.app');
 <\/script>`;
 
-  const inpageSnippet = `<div id="iam-chat" data-bot-id="${bot.id}"></div>
+const inpageSnippet = `<div id="iam-chat" data-bot-id="${bot.id}"></div>
 <script src="https://iam-platform.app/embed.js" async><\/script>`;
 
-  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  setEl('widget-snippet', widgetSnippet);
-  setEl('inpage-snippet', inpageSnippet);
-  // Also fill the panel versions
-  setEl('widget-snippet-p', widgetSnippet);
-  setEl('inpage-snippet-p', inpageSnippet);
+const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+setEl('widget-snippet', widgetSnippet);
+setEl('inpage-snippet', inpageSnippet);
+// Also fill the panel versions
+setEl('widget-snippet-p', widgetSnippet);
+setEl('inpage-snippet-p', inpageSnippet);
 }
 
 function renderEmbedPanel() {
