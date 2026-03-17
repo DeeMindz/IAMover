@@ -155,12 +155,17 @@ export default async function handler(req, res) {
                 .limit(20);
 
             if (messages) {
-                conversationHistory = messages
+                const mapped = messages
                     .filter(m => m.role === 'user' || m.role === 'bot')
                     .map(m => ({
                         role: m.role === 'bot' ? 'assistant' : 'user',
                         content: m.content
                     }));
+
+                // Gemini requires history to start with 'user' role
+                // Find the first user message and trim everything before it
+                const firstUserIndex = mapped.findIndex(m => m.role === 'user');
+                conversationHistory = firstUserIndex > -1 ? mapped.slice(firstUserIndex) : [];
             }
         }
 
@@ -187,8 +192,14 @@ export default async function handler(req, res) {
                 const resolvedModel = GEMINI_MODEL_MAP[botModel] || botModel;
                 const model = genAI.getGenerativeModel({ model: resolvedModel });
 
+                // Ensure history never starts with 'model' role
+                let safeHistory = conversationHistory.filter((_, i) => {
+                    if (i === 0 && conversationHistory[0].role === 'assistant') return false;
+                    return true;
+                });
+
                 const chat = model.startChat({
-                    history: conversationHistory.map(msg => ({
+                    history: safeHistory.map(msg => ({
                         role: msg.role === 'user' ? 'user' : 'model',
                         parts: [{ text: msg.content }]
                     })),
