@@ -19,19 +19,33 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { bot_id, user_id, metadata } = req.body;
+        const { bot_id, user_id, user_identifier, metadata } = req.body;
 
         if (!bot_id) {
             return res.status(400).json({ error: 'Missing bot_id' });
         }
 
+        // Build metadata from request body or use defaults
+        const conversationMetadata = metadata || {
+            page_url: req.body.page_url || null,
+            referrer_url: req.body.referrer_url || null,
+            page_title: req.body.page_title || null,
+            browser_language: req.body.browser_language || null,
+            user_timezone: req.body.user_timezone || null,
+            device_type: req.body.device_type || null,
+            user_platform: req.body.user_platform || null,
+            started_at: new Date().toISOString(),
+        };
+
         const { data: conversation, error } = await supabase
             .from('conversations')
             .insert({
                 bot_id,
-                user_identifier: user_id || 'preview_' + Math.random().toString(36).substr(2, 8),
+                user_id: user_id || null,
+                user_identifier: user_identifier || 'anonymous_' + Math.random().toString(36).substr(2, 8),
                 status: 'active',
-                hitl_active: false
+                hitl_active: false,
+                metadata: conversationMetadata
             })
             .select()
             .single();

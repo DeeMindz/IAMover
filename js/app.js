@@ -202,7 +202,15 @@ window.addEventListener('message', async function (e) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bot_id: e.data.bot_id,
-          user_identifier: 'preview_' + Math.random().toString(36).substr(2, 8)
+          user_identifier: e.data.user_identifier || 'preview_' + Math.random().toString(36).substr(2, 8),
+          // System variables captured from the parent page
+          page_url: window.location.href,
+          referrer_url: document.referrer || null,
+          page_title: document.title || null,
+          browser_language: navigator.language || null,
+          user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+          device_type: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+          user_platform: navigator.platform || null,
         })
       });
       console.log('[IAM Bridge] /api/conversation/create response status:', res.status, res.statusText);
@@ -1829,7 +1837,11 @@ function renderLivePreview(bot) {
     document.getElementById('launcher').classList.add('hidden');
     document.getElementById('greeting-popup').classList.add('hidden');
     document.getElementById('chat-window').classList.remove('hidden');
-    window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
+
+    // Create conversation only if not already created
+    if (!window._previewConvId) {
+      window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}', user_identifier: null }, '*');
+    }
   }
   function closeChat() {
     document.getElementById('chat-window').classList.add('hidden');
@@ -1997,8 +2009,10 @@ function renderLivePreview(bot) {
 <script>
   let fpSending = false;
 
-  // Create conversation on load
-  window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
+  // Create conversation on load (only if not already created)
+  if (!window._fpConvId) {
+    window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}', user_identifier: null }, '*');
+  }
 
   function fpSendMsg() {
     const input = document.getElementById('fp-chat-input');

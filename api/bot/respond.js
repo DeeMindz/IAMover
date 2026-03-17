@@ -83,17 +83,6 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Missing message or bot_id' });
         }
 
-        // Debug: Check Supabase config
-        log.info('debug', 'Supabase config check', {
-            hasUrl: !!process.env.SUPABASE_URL,
-            hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-            hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
-            hasGeminiKey: !!process.env.GEMINI_API_KEY,
-            hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
-            hasOpenAIKey: !!process.env.OPENAI_API_KEY,
-            urlStart: process.env.SUPABASE_URL?.slice(0, 30)
-        });
-
         // Get bot configuration
         const { data: bot, error: botError } = await supabase
             .from('bots')
