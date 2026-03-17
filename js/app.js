@@ -188,11 +188,14 @@ document.addEventListener('DOMContentLoaded', initApp);
 /* ─── PostMessage Bridge for Preview Iframe ───────────────────────── */
 // Listen for messages from preview iframe to call API (avoids CORS)
 window.addEventListener('message', async function (e) {
+  console.log('[IAM Bridge] Received message:', e.data);
+
   // Security: verify origin in production
   if (!e.data || !e.data.type) return;
 
   // Handle conversation creation
   if (e.data.type === 'IAM_CONV_CREATE') {
+    console.log('[IAM Bridge] Creating conversation for bot:', e.data.bot_id);
     try {
       const res = await fetch('/api/conversation/create', {
         method: 'POST',
@@ -202,27 +205,53 @@ window.addEventListener('message', async function (e) {
           user_identifier: 'preview_' + Math.random().toString(36).substr(2, 8)
         })
       });
-      const data = await res.json();
+      console.log('[IAM Bridge] /api/conversation/create response status:', res.status, res.statusText);
+      const text = await res.text();
+      console.log('[IAM Bridge] /api/conversation/create raw response:', text);
+      if (!res.ok) {
+        console.error('[IAM Bridge] API error:', res.status, text);
+        e.source.postMessage({ type: 'IAM_CONV_ERROR', error: 'API error: ' + res.status }, '*');
+        return;
+      }
+      const data = JSON.parse(text);
+      console.log('[IAM Bridge] Created conversation:', data);
       e.source.postMessage({ type: 'IAM_CONV_CREATED', conv_id: data.conversation_id }, '*');
-    } catch (err) { }
+    } catch (err) {
+      console.error('[IAM Bridge] Exception creating conversation:', err);
+      e.source.postMessage({ type: 'IAM_CONV_ERROR', error: err.message }, '*');
+    }
   }
 
   // Handle bot response request
   if (e.data.type === 'IAM_BOT_REQUEST') {
     const { message, bot_id, conv_id } = e.data;
+    console.log('[IAM Bridge] Bot request:', { message, bot_id, conv_id });
     try {
       const res = await fetch('/api/bot/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, bot_id, conversation_id: conv_id })
       });
-      const data = await res.json();
+      console.log('[IAM Bridge] /api/bot/respond response status:', res.status, res.statusText);
+      const text = await res.text();
+      console.log('[IAM Bridge] /api/bot/respond raw response:', text);
+      if (!res.ok) {
+        console.error('[IAM Bridge] API error:', res.status, text);
+        e.source.postMessage({
+          type: 'IAM_BOT_RESPONSE',
+          response: 'API Error: ' + res.status + ' - ' + text
+        }, '*');
+        return;
+      }
+      const data = JSON.parse(text);
+      console.log('[IAM Bridge] Bot response:', data);
       e.source.postMessage({
         type: 'IAM_BOT_RESPONSE',
         response: data.response,
         conv_id: data.conversation_id
       }, '*');
     } catch (err) {
+      console.error('[IAM Bridge] Exception in bot request:', err);
       e.source.postMessage({
         type: 'IAM_BOT_RESPONSE',
         response: 'Error: ' + err.message
