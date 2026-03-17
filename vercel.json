@@ -3,10 +3,18 @@
   "builds": [
     {
       "src": "api/**/*.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node@3"
     },
     {
-      "src": "*.html",
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "preview.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "auth.html",
       "use": "@vercel/static"
     },
     {
@@ -20,6 +28,12 @@
     {
       "src": "assets/**",
       "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     }
   ]
 }
