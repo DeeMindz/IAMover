@@ -60,14 +60,13 @@ const OPENAI_MODEL_MAP = {
 };
 
 export default async function handler(req, res) {
-    // Add CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Add CORS headers - handle null origin from srcdoc iframes
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin === 'null' ? '*' : origin);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'false');
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
     if (req.method !== 'POST') {
         log.warn('Invalid method', { method: req.method });
@@ -83,6 +82,17 @@ export default async function handler(req, res) {
             log.warn('Missing required fields', { message: !!message, bot_id: !!bot_id });
             return res.status(400).json({ error: 'Missing message or bot_id' });
         }
+
+        // Debug: Check Supabase config
+        log.info('debug', 'Supabase config check', {
+            hasUrl: !!process.env.SUPABASE_URL,
+            hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+            hasAnonKey: !!process.env.SUPABASE_ANON_KEY,
+            hasGeminiKey: !!process.env.GEMINI_API_KEY,
+            hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+            hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+            urlStart: process.env.SUPABASE_URL?.slice(0, 30)
+        });
 
         // Get bot configuration
         const { data: bot, error: botError } = await supabase
