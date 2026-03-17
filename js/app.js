@@ -202,7 +202,7 @@ window.addEventListener('message', async function (e) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bot_id: e.data.bot_id,
-          user_identifier: e.data.user_identifier || 'preview_' + Math.random().toString(36).substr(2, 8),
+          user_id: e.data.user_id || null,
           // System variables captured from the parent page
           page_url: window.location.href,
           referrer_url: document.referrer || null,
@@ -223,7 +223,11 @@ window.addEventListener('message', async function (e) {
       }
       const data = JSON.parse(text);
       console.log('[IAM Bridge] Created conversation:', data);
-      e.source.postMessage({ type: 'IAM_CONV_CREATED', conv_id: data.conversation_id }, '*');
+      e.source.postMessage({
+        type: 'IAM_CONV_CREATED',
+        conv_id: data.conversation_id,
+        returning: data.returning
+      }, '*');
     } catch (err) {
       console.error('[IAM Bridge] Exception creating conversation:', err);
       e.source.postMessage({ type: 'IAM_CONV_ERROR', error: err.message }, '*');
@@ -1833,6 +1837,18 @@ function renderLivePreview(bot) {
 <script>
   let isSending = false;
 
+  // Persistent anonymous visitor ID — stored in browser localStorage
+  // Has nothing to do with authentication
+  // Same visitor gets the same ID on every return visit
+  function getVisitorId() {
+    let vid = localStorage.getItem('iam_visitor_id');
+    if (!vid) {
+      vid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('iam_visitor_id', vid);
+    }
+    return vid;
+  }
+
   function openChat() {
     document.getElementById('launcher').classList.add('hidden');
     document.getElementById('greeting-popup').classList.add('hidden');
@@ -1840,7 +1856,11 @@ function renderLivePreview(bot) {
 
     // Create conversation only if not already created
     if (!window._previewConvId) {
-      window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}', user_identifier: null }, '*');
+      window.parent.postMessage({ 
+        type:    'IAM_CONV_CREATE', 
+        bot_id:  '${bot.id}',
+        user_id: getVisitorId(),
+      }, '*');
     }
   }
   function closeChat() {
@@ -2009,9 +2029,23 @@ function renderLivePreview(bot) {
 <script>
   let fpSending = false;
 
+  // Persistent anonymous visitor ID — stored in browser localStorage
+  function getVisitorId() {
+    let vid = localStorage.getItem('iam_visitor_id');
+    if (!vid) {
+      vid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('iam_visitor_id', vid);
+    }
+    return vid;
+  }
+
   // Create conversation on load (only if not already created)
   if (!window._fpConvId) {
-    window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}', user_identifier: null }, '*');
+    window.parent.postMessage({ 
+      type:    'IAM_CONV_CREATE', 
+      bot_id:  '${bot.id}',
+      user_id: getVisitorId(),
+    }, '*');
   }
 
   function fpSendMsg() {

@@ -1,9 +1,11 @@
 // Vercel API route for bot response
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Use service role key to bypass RLS for bot operations
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // Structured logger for Vercel function logs
 const log = {
@@ -67,6 +69,16 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'false');
     if (req.method === 'OPTIONS') return res.status(200).end();
+
+    // Verify required environment variables are present
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.error(JSON.stringify({ level: 'ERROR', msg: 'Missing Supabase env vars' }));
+        return res.status(500).json({ error: 'Server configuration error' });
+    }
+    if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
+        console.error(JSON.stringify({ level: 'ERROR', msg: 'Missing LLM API key' }));
+        return res.status(500).json({ error: 'LLM API key not configured' });
+    }
 
     if (req.method !== 'POST') {
         log.warn('Invalid method', { method: req.method });
