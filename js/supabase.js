@@ -102,10 +102,7 @@ export const Bots = {
   },
 
   async getStats(botId) {
-    const [messages, sessions, leads] = await Promise.all([
-      supabase.from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('conversation_id', botId),
+    const [sessions, leads] = await Promise.all([
       supabase.from('conversations')
         .select('id', { count: 'exact', head: true })
         .eq('bot_id', botId),
@@ -113,8 +110,24 @@ export const Bots = {
         .select('id', { count: 'exact', head: true })
         .eq('bot_id', botId),
     ])
+
+    // Get message count via conversations belonging to this bot
+    const { data: convIds } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('bot_id', botId)
+
+    let messageCount = 0
+    if (convIds && convIds.length > 0) {
+      const { count } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .in('conversation_id', convIds.map(c => c.id))
+      messageCount = count || 0
+    }
+
     return {
-      messages: messages.count || 0,
+      messages: messageCount,
       sessions: sessions.count || 0,
       leads: leads.count || 0,
     }
@@ -212,11 +225,23 @@ export const KnowledgeBases = {
       .from('knowledge-files')
       .upload(path, file)
     if (uploadError) throw uploadError
+
+    // Extract text content immediately for plain text files
+    // PDF and DOCX will be handled by the processing pipeline later
+    let content = null
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (['txt', 'md', 'csv'].includes(ext)) {
+      content = await file.text()
+    }
+    const status = content ? 'processed' : 'pending'
+
     return await this.addFile(kbId, {
       name: file.name,
-      type: file.name.split('.').pop(),
+      type: ext,
       size_bytes: file.size,
       storage_path: path,
+      content,
+      status,
     })
   }
 }
@@ -237,7 +262,7 @@ export const Conversations = {
   async create(botId, userIdentifier) {
     const { data, error } = await supabase
       .from('conversations')
-      .insert({ bot_id: botId, user_identifier: userIdentifier })
+      .insert({ bot_id: botId, user_id: userIdentifier })
       .select()
       .single()
     if (error) throw error

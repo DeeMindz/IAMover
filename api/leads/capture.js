@@ -1,9 +1,10 @@
 // Vercel API route for capturing leads
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export default async function handler(req, res) {
     // Add CORS headers - handle null origin from srcdoc iframes
@@ -34,8 +35,8 @@ export default async function handler(req, res) {
                 email,
                 phone: phone || null,
                 company: company || null,
-                data: data || {},
-                status: 'new'
+                extra_data: data || {},
+                status: 'cold'
             })
             .select()
             .single();

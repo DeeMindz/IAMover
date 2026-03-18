@@ -1,10 +1,10 @@
 {
-    "name": "chatbot",
+    "name": "iam-platform",
     "version": "1.0.0",
     "private": true,
     "type": "module",
     "engines": {
-        "node": "22.x"
+        "node": "24.x"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.39.0",

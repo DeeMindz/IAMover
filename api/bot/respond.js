@@ -14,97 +14,78 @@ const log = {
     error: (msg, data) => console.error(JSON.stringify({ level: 'error', message: msg, ...data }))
 };
 
-// Model maps for consistent model IDs
+// ── Model Maps ──────────────────────────────────────────────────────────────
+// Model-agnostic design: adding a new provider only requires adding it below
+// and adding a new branch in the provider routing section
+
 const GEMINI_MODEL_MAP = {
     // Gemini 2.5 (stable — recommended)
-    'gemini-2.5-flash': 'gemini-2.5-flash',
-    'gemini-2.5-flash-lite': 'gemini-2.5-flash-lite',
-    'gemini-2.5-pro': 'gemini-2.5-pro',
-
+    'gemini-2.5-flash':              'gemini-2.5-flash',
+    'gemini-2.5-flash-lite':         'gemini-2.5-flash-lite',
+    'gemini-2.5-pro':                'gemini-2.5-pro',
     // Gemini 3 (preview)
-    'gemini-3-flash-preview': 'gemini-3-flash-preview',
-    'gemini-3.1-pro-preview': 'gemini-3.1-pro-preview',
+    'gemini-3-flash-preview':        'gemini-3-flash-preview',
+    'gemini-3.1-pro-preview':        'gemini-3.1-pro-preview',
     'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite-preview',
-
     // Shortcuts
-    'gemini-flash': 'gemini-2.5-flash',
-    'gemini-latest': 'gemini-3-flash-preview',
+    'gemini-flash':                  'gemini-2.5-flash',
+    'gemini-latest':                 'gemini-3-flash-preview',
 };
 
 const OPENAI_MODEL_MAP = {
-    // GPT-4o series
-    'gpt-4o': 'gpt-4o',
-    'gpt-4o-mini': 'gpt-4o-mini',
-    'gpt-4o-audio-preview': 'gpt-4o-audio-preview',
-    'gpt-4o-realtime-preview': 'gpt-4o-realtime-preview',
-
-    // o1 series (reasoning)
-    'o1': 'o1',
-    'o1-mini': 'o1-mini',
-    'o1-preview': 'o1-preview',
-
-    // o3 series (reasoning)
-    'o3': 'o3',
-    'o3-mini': 'o3-mini',
-
-    // o4 series (reasoning)
-    'o4-mini': 'o4-mini',
-
-    // GPT-4 Turbo
-    'gpt-4-turbo': 'gpt-4-turbo',
-    'gpt-4-turbo-preview': 'gpt-4-turbo-preview',
-    'gpt-4': 'gpt-4',
-
-    // GPT-3.5
-    'gpt-3.5-turbo': 'gpt-3.5-turbo',
-    'gpt-3.5-turbo-16k': 'gpt-3.5-turbo-16k',
+    'gpt-4o':              'gpt-4o',
+    'gpt-4o-mini':         'gpt-4o-mini',
+    'o1':                  'o1',
+    'o1-mini':             'o1-mini',
+    'o1-preview':          'o1-preview',
+    'o3':                  'o3',
+    'o3-mini':             'o3-mini',
+    'o4-mini':             'o4-mini',
+    'gpt-4-turbo':         'gpt-4-turbo',
+    'gpt-4':               'gpt-4',
+    'gpt-3.5-turbo':       'gpt-3.5-turbo',
+    'gpt-3.5-turbo-16k':   'gpt-3.5-turbo-16k',
 };
 
+// ── Main Handler ────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-    // Add CORS headers - handle null origin from srcdoc iframes
+    // CORS — handle null origin from srcdoc iframes
     const origin = req.headers.origin || '*';
     res.setHeader('Access-Control-Allow-Origin', origin === 'null' ? '*' : origin);
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'false');
     if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    // Verify required environment variables are present
+    // Verify env vars
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        console.error(JSON.stringify({ level: 'ERROR', msg: 'Missing Supabase env vars' }));
+        log.error('Missing Supabase env vars', {});
         return res.status(500).json({ error: 'Server configuration error' });
     }
-    if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
-        console.error(JSON.stringify({ level: 'ERROR', msg: 'Missing LLM API key' }));
-        return res.status(500).json({ error: 'LLM API key not configured' });
-    }
 
-    // Debug: log env var status
-    console.log(JSON.stringify({
-        level: 'INFO',
-        step: 'startup',
-        hasUrl: !!process.env.SUPABASE_URL,
+    // Startup log — useful for debugging env vars in Vercel
+    log.info('Startup check', {
+        hasUrl:        !!process.env.SUPABASE_URL,
         hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        keyLength: process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0,
-        hasGeminiKey: !!process.env.GEMINI_API_KEY,
-    }));
-
-    if (req.method !== 'POST') {
-        log.warn('Invalid method', { method: req.method });
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
+        keyLength:     process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0,
+        hasGeminiKey:  !!process.env.GEMINI_API_KEY,
+        hasOpenAIKey:  !!process.env.OPENAI_API_KEY,
+        hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+    });
 
     try {
+        // FIX 1: conversation_id in first destructure
         const { message, bot_id, conversation_id, system_vars } = req.body;
 
-        log.info('Incoming request', { bot_id, messageLength: message?.length });
+        log.info('Incoming request', { bot_id, conversation_id: conversation_id || 'none', messageLength: message?.length });
 
         if (!message || !bot_id) {
-            log.warn('Missing required fields', { message: !!message, bot_id: !!bot_id });
+            log.warn('Missing required fields', { hasMessage: !!message, hasBotId: !!bot_id });
             return res.status(400).json({ error: 'Missing message or bot_id' });
         }
 
-        // Get bot configuration
+        // ── Step 1: Load bot config ─────────────────────────────────────────
         const { data: bot, error: botError } = await supabase
             .from('bots')
             .select('*')
@@ -116,9 +97,9 @@ export default async function handler(req, res) {
             return res.status(404).json({ error: 'Bot not found' });
         }
 
-        log.info('Bot found', { bot_id, model: bot.model });
+        log.info('Bot loaded', { botName: bot.name, model: bot.model, antiHallucination: bot.anti_hallucination });
 
-        // Load knowledge base files via the join tables
+        // ── Step 2: Load knowledge base files ──────────────────────────────
         let knowledgeContext = '';
         const { data: kbLinks } = await supabase
             .from('bot_knowledge_bases')
@@ -129,26 +110,28 @@ export default async function handler(req, res) {
             const kbIds = kbLinks.map(k => k.kb_id);
             const { data: files } = await supabase
                 .from('kb_files')
-                .select('name, content, type, storage_path')
+                .select('name, content, type')
                 .in('kb_id', kbIds)
                 .limit(20);
 
-            // Log KB files debug info
-            log.info('db', 'KB files fetched', {
-                totalFiles: files?.length || 0,
-                filesWithContent: files?.filter(f => f.content)?.length || 0,
-                fileNames: files?.map(f => f.name) || []
+            // FIX: filter out files with null/empty content
+            const filesWithContent = files?.filter(f => f.content && f.content.trim().length > 0) || [];
+
+            log.info('KB files fetched', {
+                totalFiles:        files?.length || 0,
+                filesWithContent:  filesWithContent.length,
+                fileNames:         files?.map(f => f.name) || []
             });
 
-            if (files && files.length > 0) {
+            if (filesWithContent.length > 0) {
                 knowledgeContext = '\n\n--- KNOWLEDGE BASE ---\n' +
-                    files.map(f => `[${f.name}]\n${f.content}`).join('\n\n') +
+                    filesWithContent.map(f => `[${f.name}]\n${f.content}`).join('\n\n') +
                     '\n--- END KNOWLEDGE BASE ---';
-                log.info('KB loaded', { fileCount: files.length });
+                log.info('KB context built', { chars: knowledgeContext.length });
             }
         }
 
-        // Load conversation history from messages table
+        // ── Step 3: Load conversation history ──────────────────────────────
         let conversationHistory = [];
         if (conversation_id) {
             const { data: messages } = await supabase
@@ -162,160 +145,196 @@ export default async function handler(req, res) {
                 const mapped = messages
                     .filter(m => m.role === 'user' || m.role === 'bot')
                     .map(m => ({
-                        role: m.role === 'bot' ? 'assistant' : 'user',
+                        role:    m.role === 'bot' ? 'assistant' : 'user',
                         content: m.content
                     }));
 
-                // Gemini requires history to start with 'user' role
-                // Find the first user message and trim everything before it
+                // All LLMs require history to start with user role — trim leading bot messages
                 const firstUserIndex = mapped.findIndex(m => m.role === 'user');
                 conversationHistory = firstUserIndex > -1 ? mapped.slice(firstUserIndex) : [];
+                log.info('Conversation history loaded', { messages: conversationHistory.length });
             }
         }
 
-        // Build system prompt from bot config
+        // ── Step 4: Save user message ───────────────────────────────────────
+        if (conversation_id) {
+            const { error: saveUserErr } = await supabase.from('messages').insert({
+                conversation_id,
+                role:    'user',
+                content: message
+            });
+            if (saveUserErr) {
+                log.warn('Failed to save user message', { error: saveUserErr.message });
+            } else {
+                log.info('User message saved', { conversation_id });
+            }
+        }
+
+        // ── Step 5: Build system prompt ─────────────────────────────────────
         let systemPrompt = bot.system_prompt || 'You are a helpful AI assistant.';
 
-        // Add knowledge base context if available
+        // FIX: inject anti-hallucination rules when enabled
+        if (bot.anti_hallucination) {
+            systemPrompt += `\n\nIMPORTANT RULES:
+- Only answer using information explicitly provided in the knowledge base below.
+- If the answer is not in the knowledge base, respond with: "${bot.fallback_message || "I don't have that information. Would you like to speak with a human agent?"}"
+- Never guess, assume, or make up information.
+- Always be honest about what you do and do not know.`;
+        }
+
+        // Append knowledge base context
         if (knowledgeContext) {
             systemPrompt += knowledgeContext;
         }
 
-        // Save user message to database
-        if (conversation_id) {
-            await supabase.from('messages').insert({
-                conversation_id,
-                role: 'user',
-                content: message
-            });
-            log.info('Saved user message', { conversation_id });
-        }
+        log.info('System prompt built', {
+            promptLength:   systemPrompt.length,
+            hasKnowledge:   !!knowledgeContext,
+            antiHallucination: bot.anti_hallucination
+        });
 
-        const botModel = bot.model;
+        // ── Step 6: Call the configured LLM ────────────────────────────────
+        const botModel = bot.model || 'gemini-2.5-flash';
         let responseText = '';
 
-        // Determine provider and call appropriate API
         if (botModel.startsWith('gemini')) {
-            // Google Gemini
-            if (!process.env.GEMINI_API_KEY) {
-                responseText = 'Gemini API key not configured. Please add GEMINI_API_KEY to your environment variables.';
+            // ── Google Gemini ────────────────────────────────────────────────
+            const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+            if (!apiKey) {
+                responseText = 'Gemini API key not configured. Please add GEMINI_API_KEY to your Vercel environment variables.';
             } else {
                 const { GoogleGenerativeAI } = await import('@google/generative-ai');
-                const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
+                const genAI = new GoogleGenerativeAI(apiKey);
                 const resolvedModel = GEMINI_MODEL_MAP[botModel] || botModel;
+
+                log.info('Calling Gemini', { resolvedModel });
+
+                // FIX 2: pass systemInstruction so system prompt and KB are actually used
                 const model = genAI.getGenerativeModel({
                     model: resolvedModel,
                     systemInstruction: systemPrompt,
                 });
 
-                // Ensure history never starts with 'model' role
-                let safeHistory = conversationHistory.filter((_, i) => {
-                    if (i === 0 && conversationHistory[0].role === 'assistant') return false;
-                    return true;
-                });
+                // Ensure history never starts with 'model' role — Gemini requirement
+                const safeHistory = conversationHistory[0]?.role === 'assistant'
+                    ? conversationHistory.slice(1)
+                    : conversationHistory;
 
                 const chat = model.startChat({
                     history: safeHistory.map(msg => ({
-                        role: msg.role === 'user' ? 'user' : 'model',
+                        role:  msg.role === 'user' ? 'user' : 'model',
                         parts: [{ text: msg.content }]
                     })),
                     generationConfig: {
                         maxOutputTokens: 1024,
-                        temperature: 0.5,
+                        temperature:     0.5,
                     },
                 });
 
                 const result = await chat.sendMessage(message);
                 responseText = result.response.text();
+                log.info('Gemini response received', { chars: responseText.length });
             }
+
         } else if (
             botModel.startsWith('gpt') ||
             botModel.startsWith('o1') ||
             botModel.startsWith('o3') ||
             botModel.startsWith('o4')
         ) {
-            // OpenAI
+            // ── OpenAI ───────────────────────────────────────────────────────
             if (!process.env.OPENAI_API_KEY) {
-                responseText = 'OpenAI API key not configured. Please add OPENAI_API_KEY to your environment variables or use a Gemini model.';
+                responseText = 'OpenAI API key not configured. Please add OPENAI_API_KEY to your Vercel environment variables.';
             } else {
                 const { default: OpenAI } = await import('openai');
-                const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-                // Resolve model ID
+                const client       = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
                 const resolvedModel = OPENAI_MODEL_MAP[botModel] || botModel;
 
-                // o1, o3, o4 reasoning models use max_completion_tokens instead of max_tokens
-                // and do not support system role — inject system prompt as first user message
-                const isReasoningModel =
-                    botModel.startsWith('o1') ||
-                    botModel.startsWith('o3') ||
-                    botModel.startsWith('o4');
+                // Reasoning models (o1/o3/o4) do not support system role or temperature
+                const isReasoning = botModel.startsWith('o1') || botModel.startsWith('o3') || botModel.startsWith('o4');
 
-                const messages = isReasoningModel
+                const messages = isReasoning
                     ? [
                         { role: 'user', content: `[Instructions]\n${systemPrompt}\n\n[User message]\n${message}` },
-                        ...conversationHistory.slice(1), // skip injected system in history
-                    ]
+                        ...conversationHistory.slice(1),
+                      ]
                     : [
                         { role: 'system', content: systemPrompt },
                         ...conversationHistory,
                         { role: 'user', content: message }
-                    ];
+                      ];
 
-                const completionParams = {
+                log.info('Calling OpenAI', { resolvedModel, isReasoning });
+
+                const response = await client.chat.completions.create({
                     model: resolvedModel,
                     messages,
-                    ...(isReasoningModel
+                    ...(isReasoning
                         ? { max_completion_tokens: 2048 }
                         : { max_tokens: 1024, temperature: 0.5 })
-                };
+                });
 
-                const response = await client.chat.completions.create(completionParams);
                 responseText = response.choices[0].message.content;
+                log.info('OpenAI response received', { chars: responseText.length });
             }
+
         } else if (botModel.startsWith('claude')) {
-            // Anthropic Claude
+            // ── Anthropic Claude ─────────────────────────────────────────────
             if (!process.env.ANTHROPIC_API_KEY) {
-                responseText = 'Anthropic API key not configured. Please add ANTHROPIC_API_KEY to your environment variables.';
+                responseText = 'Anthropic API key not configured. Please add ANTHROPIC_API_KEY to your Vercel environment variables.';
             } else {
                 const Anthropic = await import('@anthropic-ai/sdk');
-                const client = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
+                const client    = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+                log.info('Calling Claude', { model: botModel });
 
                 const response = await client.messages.create({
-                    model: botModel,
+                    model:      botModel,
                     max_tokens: 1024,
-                    system: systemPrompt,
-                    messages: [
+                    system:     systemPrompt,
+                    messages:   [
                         ...conversationHistory,
                         { role: 'user', content: message }
                     ]
                 });
 
                 responseText = response.content[0].text;
+                log.info('Claude response received', { chars: responseText.length });
             }
+
         } else {
-            responseText = `Unknown model: ${botModel}. Please select a supported model.`;
+            log.warn('Unknown model — using fallback', { botModel });
+            responseText = `Unknown model "${botModel}". Please select a supported model in your bot configuration.`;
         }
 
-        // Save bot response to database
+        // ── Step 7: Save bot response and update conversation ───────────────
         if (conversation_id && responseText) {
-            await supabase.from('messages').insert({
+            const { error: saveBotErr } = await supabase.from('messages').insert({
                 conversation_id,
-                role: 'bot',
+                role:    'bot',
                 content: responseText
             });
+            if (saveBotErr) {
+                log.warn('Failed to save bot response', { error: saveBotErr.message });
+            }
+
             await supabase
                 .from('conversations')
                 .update({ updated_at: new Date().toISOString() })
                 .eq('id', conversation_id);
-            log.info('Saved bot response', { conversation_id });
+
+            log.info('Bot response saved', { conversation_id });
         }
 
-        log.info('Sending response', { bot_id, model: botModel, responseLength: responseText.length });
+        log.info('Request complete', { bot_id, model: botModel, responseLength: responseText.length });
         return res.status(200).json({ response: responseText });
+
     } catch (error) {
-        log.error('Request failed', { bot_id: req.body?.bot_id, error: error.message, stack: error.stack });
+        log.error('Request failed', {
+            bot_id: req.body?.bot_id,
+            error:  error.message,
+            stack:  error.stack?.split('\n').slice(0, 4).join(' | ')
+        });
         return res.status(500).json({ error: 'Internal server error: ' + error.message });
     }
 }
