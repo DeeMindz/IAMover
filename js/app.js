@@ -1927,37 +1927,28 @@ function renderLivePreview(bot) {
     document.getElementById('chat-window').classList.add('hidden');
     document.getElementById('launcher').classList.remove('hidden');
   }
-  // Full markdown renderer — converts LLM markdown to clean HTML
+  // Markdown renderer — safely inside template literal
   function formatMarkdown(text) {
     if (!text) return '';
-    let html = text
+    let h = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    // Headings -> bold
-    html = html.replace(/^### (.+)$/gm, '<strong>$1</strong>');
-    html = html.replace(/^## (.+)$/gm, '<strong>$1</strong>');
-    html = html.replace(/^# (.+)$/gm, '<strong>$1</strong>');
-    // Bold
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-    // Italic
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    html = html.replace(/_(.+?)_/g, '<em>$1</em>');
-    // Inline code
-    html = html.replace(/\`(.+?)\`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
-    // Unordered lists
-    html = html.replace(/^\s*[-*•]\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-    html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, '<ul style="margin:6px 0;padding-left:18px;">$&</ul>');
-    // Numbered lists
-    html = html.replace(/^\s*\d+\.\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-    // URLs to links
-    html = html.replace(/(https?:\/\/[^\s&<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-    // Double newline = paragraph break
-    html = html.replace(/\n\n/g, '<br><br>');
-    // Single newline = line break
-    html = html.replace(/\n/g, '<br>');
-    return html;
+    h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
+    h = h.replace(/^## (.+)$/gm, '<strong>$1</strong>');
+    h = h.replace(/^# (.+)$/gm, '<strong>$1</strong>');
+    h = h.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
+    h = h.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    h = h.replace(/[*](.+?)[*]/g, '<em>$1</em>');
+    h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+    h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+    h = h.replace(/(<li[^>]*>[\s\S]*?<[/]li>)/g, function(m){ return '<ul style="margin:6px 0;padding-left:18px;">' + m + '</ul>'; });
+    h = h.replace(/
+
+/g, '<br><br>');
+    h = h.replace(/
+/g, '<br>');
+    return h;
   }
   function sendMsg() {
   const input = document.getElementById('chat-input');
@@ -2145,28 +2136,28 @@ function handleKey(e) {
         }, '*');
   }
 
-      // Full markdown renderer
+      // Markdown renderer
       function formatMarkdown(text) {
         if (!text) return '';
-        let html = text
+        let h = text
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
-        html = html.replace(/^### (.+)$/gm, '<strong>$1</strong>');
-        html = html.replace(/^## (.+)$/gm, '<strong>$1</strong>');
-        html = html.replace(/^# (.+)$/gm, '<strong>$1</strong>');
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        html = html.replace(/_(.+?)_/g, '<em>$1</em>');
-        html = html.replace(/\`(.+?)\`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
-        html = html.replace(/^\s*[-*•]\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-        html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, '<ul style="margin:6px 0;padding-left:18px;">$&</ul>');
-        html = html.replace(/^\s*\d+\.\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-        html = html.replace(/(https?:\/\/[^\s&<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-        html = html.replace(/\n\n/g, '<br><br>');
-        html = html.replace(/\n/g, '<br>');
-        return html;
+        h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
+        h = h.replace(/^## (.+)$/gm, '<strong>$1</strong>');
+        h = h.replace(/^# (.+)$/gm, '<strong>$1</strong>');
+        h = h.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
+        h = h.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        h = h.replace(/[*](.+?)[*]/g, '<em>$1</em>');
+        h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+        h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+        h = h.replace(/(<li[^>]*>[\s\S]*?<[/]li>)/g, function(m){ return '<ul style="margin:6px 0;padding-left:18px;">' + m + '</ul>'; });
+        h = h.replace(/
+
+/g, '<br><br>');
+        h = h.replace(/
+/g, '<br>');
+        return h;
       }
 
 function fpSendMsg() {
@@ -2495,7 +2486,7 @@ function showConfigSection(section) {
   configSections.forEach(el => el.classList.remove('active'));
   configNavItems.forEach(el => el.classList.remove('active'));
 
-  const target = document.getElementById(`config - ${section} `);
+  const target = document.getElementById(`config-${section}`);
   if (target) target.classList.add('active');
 
   const navItem = document.querySelector('.config-nav-item[data-section="' + section + '"]');
