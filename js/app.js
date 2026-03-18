@@ -903,7 +903,7 @@ function renderHome() {
     grid.innerHTML = bots.map(bot => {
       // Support both Supabase field names (snake_case) and legacy camelCase
       const color = bot.color || '#6c63ff';
-      const model = bot.model || 'claude-3-5-sonnet';
+      const model = bot.model || 'gemini-2.5-flash';
       const status = bot.status || 'unpublished';
       const isLive = status === 'live';
       return `
@@ -1072,7 +1072,7 @@ async function renderConversations() {
       const mappedConvs = dbConvs.map(c => ({
         id: c.id,
         botId: c.bot_id,
-        user: c.user_identifier,
+        user: c.user_id,
         time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         date: new Date(c.updated_at).toLocaleDateString(),
         status: (Date.now() - new Date(c.updated_at).getTime() < 3600000) ? 'active' : 'closed',
@@ -1927,14 +1927,35 @@ function renderLivePreview(bot) {
     document.getElementById('chat-window').classList.add('hidden');
     document.getElementById('launcher').classList.remove('hidden');
   }
-  // Simple text formatter with links
+  // Full markdown renderer — converts LLM markdown to clean HTML
   function formatMarkdown(text) {
     if (!text) return '';
-    // Escape HTML first
-    let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // Convert URLs to links
-    html = html.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
-    // Convert newlines to br
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    // Headings -> bold
+    html = html.replace(/^### (.+)$/gm, '<strong>$1</strong>');
+    html = html.replace(/^## (.+)$/gm, '<strong>$1</strong>');
+    html = html.replace(/^# (.+)$/gm, '<strong>$1</strong>');
+    // Bold
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    // Italic
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+    // Inline code
+    html = html.replace(/`(.+?)`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
+    // Unordered lists
+    html = html.replace(/^\s*[-*•]\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+    html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, '<ul style="margin:6px 0;padding-left:18px;">$&</ul>');
+    // Numbered lists
+    html = html.replace(/^\s*\d+\.\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+    // URLs to links
+    html = html.replace(/(https?:\/\/[^\s&<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    // Double newline = paragraph break
+    html = html.replace(/\n\n/g, '<br><br>');
+    // Single newline = line break
     html = html.replace(/\n/g, '<br>');
     return html;
   }
@@ -2012,7 +2033,7 @@ function handleKey(e) {
 </html > `;
 
   // Full page / inline embed mode
-  const fullPageHTML = `< !DOCTYPE html >
+  const fullPageHTML = `<!DOCTYPE html>
   <html>
     <head>
       <meta charset="UTF-8" />
@@ -2124,18 +2145,27 @@ function handleKey(e) {
         }, '*');
   }
 
-      // Convert markdown to HTML with link sanitization
+      // Full markdown renderer
       function formatMarkdown(text) {
         if (!text) return '';
         let html = text
-          // Escape HTML first
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          // Convert URLs to links
-          html = html.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
-          // Convert newlines to br
-          html = html.replace(/\n/g, '<br>');
+          .replace(/>/g, '&gt;');
+        html = html.replace(/^### (.+)$/gm, '<strong>$1</strong>');
+        html = html.replace(/^## (.+)$/gm, '<strong>$1</strong>');
+        html = html.replace(/^# (.+)$/gm, '<strong>$1</strong>');
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+        html = html.replace(/`(.+?)`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
+        html = html.replace(/^\s*[-*•]\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+        html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, '<ul style="margin:6px 0;padding-left:18px;">$&</ul>');
+        html = html.replace(/^\s*\d+\.\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
+        html = html.replace(/(https?:\/\/[^\s&<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+        html = html.replace(/\n\n/g, '<br><br>');
+        html = html.replace(/\n/g, '<br>');
         return html;
       }
 
@@ -2297,7 +2327,7 @@ function sharePreviewLink() {
   const bot = AppState.currentBot;
   if (!bot) return;
 
-  const url = `${window.location.origin}${window.location.pathname.replace('index.html', '')} preview.html ? botId = ${bot.id} `;
+  const url = `${window.location.origin}${window.location.pathname.replace('index.html', '')}preview.html?botId=${bot.id}`;
   navigator.clipboard.writeText(url).then(() => {
     showToast('Preview link copied to clipboard!', 'success');
   }).catch(() => {
@@ -2326,7 +2356,7 @@ window.copyApiKey = copyApiKey;
 /* ─── BOT CONFIG ─────────────────────────────────────────────────── */
 async function createBot() {
   const name = document.getElementById('new-bot-name')?.value?.trim();
-  const model = document.getElementById('new-bot-model')?.value || 'claude-3-5-sonnet';
+  const model = document.getElementById('new-bot-model')?.value || 'gemini-2.5-flash';
   if (!name) { showToast('Please enter a bot name', 'error'); return; }
   try {
     const newBot = await Bots.create({ name, model, status: 'unpublished', color: getColorForId(name + Date.now()) });
@@ -2437,7 +2467,7 @@ function fillBotForm(bot) {
   const setChk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
 
   set('cfg-bot-name', bot.name || '');
-  set('cfg-model', bot.model || 'claude-3-5-sonnet');
+  set('cfg-model', bot.model || 'gemini-2.5-flash');
   set('cfg-greeting', bot.greeting_message || '');
   set('cfg-prompt', bot.system_prompt || '');
   setChk('cfg-live', bot.status === 'live');
