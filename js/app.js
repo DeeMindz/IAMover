@@ -1927,24 +1927,15 @@ function renderLivePreview(bot) {
     document.getElementById('chat-window').classList.add('hidden');
     document.getElementById('launcher').classList.remove('hidden');
   }
-  // Convert markdown to HTML with link sanitization
+  // Simple text formatter with links
   function formatMarkdown(text) {
     if (!text) return '';
-    let html = text
-      // Escape HTML first
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      // Bold
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      // Italic
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      // Links with URL as title
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" title="$2" target="_blank" rel="noopener">$1</a>')
-      // Auto-link URLs
-      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" title="$1" target="_blank" rel="noopener">$1</a>')
-      // Line breaks
-      .replace(/\n/g, '<br>');
+    // Escape HTML first
+    let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Convert URLs to links
+    html = html.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+    // Convert newlines to br
+    html = html.replace(/\n/g, '<br>');
     return html;
   }
   function sendMsg() {
@@ -2141,16 +2132,10 @@ function handleKey(e) {
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
-          // Bold
-          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-          // Italic
-          .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-          // Links with URL as title
-          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" title="$2" target="_blank" rel="noopener">$1</a>')
-          // Auto-link URLs
-          .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" title="$1" target="_blank" rel="noopener">$1</a>')
-          // Line breaks
-          .replace(/\n/g, '<br>');
+          // Convert URLs to links
+          html = html.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+          // Convert newlines to br
+          html = html.replace(/\n/g, '<br>');
         return html;
       }
 
@@ -2483,7 +2468,7 @@ function showConfigSection(section) {
   const target = document.getElementById(`config - ${section} `);
   if (target) target.classList.add('active');
 
-  const navItem = document.querySelector(`.config - nav - item[data - section="${section}"]`);
+  const navItem = document.querySelector('.config-nav-item[data-section="' + section + '"]');
   if (navItem) navItem.classList.add('active');
 
   // Render preview when appearance section is shown
