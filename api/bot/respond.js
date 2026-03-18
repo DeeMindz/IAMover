@@ -95,7 +95,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { message, bot_id, system_vars, conversation_history = [] } = req.body;
+        const { message, bot_id, conversation_id, system_vars } = req.body;
 
         log.info('Incoming request', { bot_id, messageLength: message?.length });
 
@@ -149,7 +149,6 @@ export default async function handler(req, res) {
         }
 
         // Load conversation history from messages table
-        const conversation_id = req.body.conversation_id;
         let conversationHistory = [];
         if (conversation_id) {
             const { data: messages } = await supabase
@@ -182,6 +181,16 @@ export default async function handler(req, res) {
             systemPrompt += knowledgeContext;
         }
 
+        // Save user message to database
+        if (conversation_id) {
+            await supabase.from('messages').insert({
+                conversation_id,
+                role: 'user',
+                content: message
+            });
+            log.info('Saved user message', { conversation_id });
+        }
+
         const botModel = bot.model;
         let responseText = '';
 
@@ -195,7 +204,10 @@ export default async function handler(req, res) {
                 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
                 const resolvedModel = GEMINI_MODEL_MAP[botModel] || botModel;
-                const model = genAI.getGenerativeModel({ model: resolvedModel });
+                const model = genAI.getGenerativeModel({
+                    model: resolvedModel,
+                    systemInstruction: systemPrompt,
+                });
 
                 // Ensure history never starts with 'model' role
                 let safeHistory = conversationHistory.filter((_, i) => {
@@ -284,6 +296,20 @@ export default async function handler(req, res) {
             }
         } else {
             responseText = `Unknown model: ${botModel}. Please select a supported model.`;
+        }
+
+        // Save bot response to database
+        if (conversation_id && responseText) {
+            await supabase.from('messages').insert({
+                conversation_id,
+                role: 'bot',
+                content: responseText
+            });
+            await supabase
+                .from('conversations')
+                .update({ updated_at: new Date().toISOString() })
+                .eq('id', conversation_id);
+            log.info('Saved bot response', { conversation_id });
         }
 
         log.info('Sending response', { bot_id, model: botModel, responseLength: responseText.length });
