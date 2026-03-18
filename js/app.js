@@ -1935,23 +1935,19 @@ function renderLivePreview(bot) {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      // Code blocks
-      .replace(/```(\w *) \n?([\s\S] *?)```/g, '<pre><code>$2</code></pre>')
-      // Inline code
-      .replace(/`([^ `]+)` / g, '<code>$1</code>')
-    // Bold
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    // Links with URL as title - matches [text](url) and converts to <a href="url" title="url">text</a>
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" title="$2" target="_blank" rel="noopener">$1</a>')
-    // Auto-link URLs that aren't already in links
-    .replace(/(?!<a[^>]*>)(https?:\/\/[^\s<]+)(?!<\/a>)/g, '<a href="$1" title="$1" target="_blank" rel="noopener">$1</a>')
-    // Line breaks
-    .replace(/\n/g, '<br>');
-  return html;
-}
-function sendMsg() {
+      // Bold
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      // Links with URL as title
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" title="$2" target="_blank" rel="noopener">$1</a>')
+      // Auto-link URLs
+      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" title="$1" target="_blank" rel="noopener">$1</a>')
+      // Line breaks
+      .replace(/\n/g, '<br>');
+    return html;
+  }
+  function sendMsg() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text || isSending) return;
@@ -2141,94 +2137,94 @@ function handleKey(e) {
       function formatMarkdown(text) {
         if (!text) return '';
       let html = text
-      // Escape HTML first
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
+      // Convert markdown to HTML with link sanitization
+      function formatMarkdown(text) {
+        if (!text) return '';
+        let html = text
+          // Escape HTML first
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
-    // Code blocks
-    .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Bold
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    // Links with URL as title
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" title="$2" target="_blank" rel="noopener">$1</a>')
-    // Auto-link URLs
-    .replace(/(?!<a[^>]*>)(https?:\/\/[^\s<]+)(?!<\/a>)/g, '<a href="$1" title="$1" target="_blank" rel="noopener">$1</a>')
-    // Line breaks
-    .replace(/\n/g, '<br>');
-      return html;
+          // Bold
+          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+          // Italic
+          .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+          // Links with URL as title
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" title="$2" target="_blank" rel="noopener">$1</a>')
+          // Auto-link URLs
+          .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" title="$1" target="_blank" rel="noopener">$1</a>')
+          // Line breaks
+          .replace(/\n/g, '<br>');
+        return html;
       }
 
-      function fpSendMsg() {
-    const input = document.getElementById('fp-chat-input');
-      const text = input.value.trim();
-      if (!text || fpSending) return;
-      fpSending = true;
+function fpSendMsg() {
+  const input = document.getElementById('fp-chat-input');
+  const text = input.value.trim();
+  if (!text || fpSending) return;
+  fpSending = true;
 
-      const msgs = document.querySelector('.chat-messages');
-      const userMsg = document.createElement('div');
-      userMsg.className = 'msg user';
-      userMsg.textContent = text;
-      msgs.appendChild(userMsg);
-      input.value = '';
-      msgs.scrollTop = msgs.scrollHeight;
+  const msgs = document.querySelector('.chat-messages');
+  const userMsg = document.createElement('div');
+  userMsg.className = 'msg user';
+  userMsg.textContent = text;
+  msgs.appendChild(userMsg);
+  input.value = '';
+  msgs.scrollTop = msgs.scrollHeight;
 
-      const typing = document.createElement('div');
-      typing.className = 'typing-dots';
-      typing.id = 'fp-typing';
-      typing.innerHTML = '<span></span><span></span><span></span>';
-      msgs.appendChild(typing);
-      msgs.scrollTop = msgs.scrollHeight;
+  const typing = document.createElement('div');
+  typing.className = 'typing-dots';
+  typing.id = 'fp-typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
 
-      // Send to parent window to make the API call - avoids CORS
-      window.parent.postMessage({
-        type: 'IAM_BOT_REQUEST',
-      message: text,
-      bot_id: '${bot.id}',
-      conv_id: window._fpConvId || null
-    }, '*');
+  // Send to parent window to make the API call - avoids CORS
+  window.parent.postMessage({
+    type: 'IAM_BOT_REQUEST',
+    message: text,
+    bot_id: '${bot.id}',
+    conv_id: window._fpConvId || null
+  }, '*');
+}
+
+// Listen for response from parent
+window.addEventListener('message', function (e) {
+  if (!e.data) return;
+
+  if (e.data.type === 'IAM_CONV_CREATED') {
+    window._fpConvId = e.data.conv_id;
   }
 
-      // Listen for response from parent
-      window.addEventListener('message', function(e) {
-    if (!e.data) return;
-
-      if (e.data.type === 'IAM_CONV_CREATED') {
-        window._fpConvId = e.data.conv_id;
-    }
-
-      // Handle loading previous chat history (from mode switch)
-      if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
-      const msgs = document.querySelector('.chat-messages');
-      // Clear any greeting message and rebuild from history
-      msgs.innerHTML = '';
-      e.data.messages.forEach(m => {
-        const div = document.createElement('div');
+  // Handle loading previous chat history (from mode switch)
+  if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
+    const msgs = document.querySelector('.chat-messages');
+    // Clear any greeting message and rebuild from history
+    msgs.innerHTML = '';
+    e.data.messages.forEach(m => {
+      const div = document.createElement('div');
       div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
       div.textContent = m.content;
       msgs.appendChild(div);
-      });
-      msgs.scrollTop = msgs.scrollHeight;
-    }
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+  }
 
-      if (e.data.type === 'IAM_BOT_RESPONSE') {
-      const msgs = document.querySelector('.chat-messages');
-      const t = document.getElementById('fp-typing');
-      if (t) t.remove();
-      const botMsg = document.createElement('div');
-      botMsg.className = 'msg bot';
-      botMsg.innerHTML = formatMarkdown(e.data.response) || 'Sorry, no response received.';
-      msgs.appendChild(botMsg);
-      msgs.scrollTop = msgs.scrollHeight;
-      if (e.data.conv_id) window._fpConvId = e.data.conv_id;
-      fpSending = false;
-    }
-  });
-    </script>
-  </html>`;
+  if (e.data.type === 'IAM_BOT_RESPONSE') {
+    const msgs = document.querySelector('.chat-messages');
+    const t = document.getElementById('fp-typing');
+    if (t) t.remove();
+    const botMsg = document.createElement('div');
+    botMsg.className = 'msg bot';
+    botMsg.innerHTML = formatMarkdown(e.data.response) || 'Sorry, no response received.';
+    msgs.appendChild(botMsg);
+    msgs.scrollTop = msgs.scrollHeight;
+    if (e.data.conv_id) window._fpConvId = e.data.conv_id;
+    fpSending = false;
+  }
+});
+    </script >
+  </html > `;
 
   const html = isWidgetMode ? widgetPreviewHTML : fullPageHTML;
 
@@ -2320,7 +2316,7 @@ function sharePreviewLink() {
   const bot = AppState.currentBot;
   if (!bot) return;
 
-  const url = `${ window.location.origin }${ window.location.pathname.replace('index.html', '') } preview.html ? botId = ${ bot.id } `;
+  const url = `${window.location.origin}${window.location.pathname.replace('index.html', '')} preview.html ? botId = ${bot.id} `;
   navigator.clipboard.writeText(url).then(() => {
     showToast('Preview link copied to clipboard!', 'success');
   }).catch(() => {
@@ -2488,7 +2484,7 @@ function showConfigSection(section) {
   configSections.forEach(el => el.classList.remove('active'));
   configNavItems.forEach(el => el.classList.remove('active'));
 
-  const target = document.getElementById(`config - ${ section } `);
+  const target = document.getElementById(`config - ${section} `);
   if (target) target.classList.add('active');
 
   const navItem = document.querySelector(`.config - nav - item[data - section="${section}"]`);
@@ -2529,15 +2525,15 @@ function renderEmbedCode(bot) {
   })(window, document, 'https://iam-platform.app');
 <\/script>`;
 
-const inpageSnippet = `<div id="iam-chat" data-bot-id="${bot.id}"></div>
+  const inpageSnippet = `<div id="iam-chat" data-bot-id="${bot.id}"></div>
 <script src="https://iam-platform.app/embed.js" async><\/script>`;
 
-const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-setEl('widget-snippet', widgetSnippet);
-setEl('inpage-snippet', inpageSnippet);
-// Also fill the panel versions
-setEl('widget-snippet-p', widgetSnippet);
-setEl('inpage-snippet-p', inpageSnippet);
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl('widget-snippet', widgetSnippet);
+  setEl('inpage-snippet', inpageSnippet);
+  // Also fill the panel versions
+  setEl('widget-snippet-p', widgetSnippet);
+  setEl('inpage-snippet-p', inpageSnippet);
 }
 
 function renderEmbedPanel() {
