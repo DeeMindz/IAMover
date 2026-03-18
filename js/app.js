@@ -1945,7 +1945,7 @@ function renderLivePreview(bot) {
     html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
     html = html.replace(/_(.+?)_/g, '<em>$1</em>');
     // Inline code
-    html = html.replace(/`(.+?)`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
+    html = html.replace(/\`(.+?)\`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
     // Unordered lists
     html = html.replace(/^\s*[-*•]\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
     html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, '<ul style="margin:6px 0;padding-left:18px;">$&</ul>');
@@ -2159,7 +2159,7 @@ function handleKey(e) {
         html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
         html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
         html = html.replace(/_(.+?)_/g, '<em>$1</em>');
-        html = html.replace(/`(.+?)`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
+        html = html.replace(/\`(.+?)\`/g, '<code style="background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:0.9em;font-family:monospace;">$1</code>');
         html = html.replace(/^\s*[-*•]\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
         html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/g, '<ul style="margin:6px 0;padding-left:18px;">$&</ul>');
         html = html.replace(/^\s*\d+\.\s+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
