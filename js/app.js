@@ -1055,21 +1055,17 @@ async function renderConversations() {
   const topbarName = document.getElementById('conv-bot-name');
   if (!list || !AppState.currentBot) return;
 
-  if (topbarName) {
-    topbarName.innerHTML = `${AppState.currentBot.name}`;
-  }
+  if (topbarName) topbarName.textContent = AppState.currentBot.name;
 
-  const cacheKey = `conversations_${AppState.currentBot.id}`;
-  const cachedConvs = Cache.get(cacheKey);
+  // Always fetch fresh from DB — no caching to avoid stale/duplicate data
+  try {
+    const dbConvs = await Conversations.getAll(AppState.currentBot.id);
 
-  if (cachedConvs) {
-    AppState.conversations = cachedConvs.filter(c => c.bot_id === AppState.currentBot.id);
-  } else {
-    try {
-      const dbConvs = await Conversations.getAll(AppState.currentBot.id);
-
-      // Map DB schema to app schema
-      const mappedConvs = dbConvs.map(c => ({
+    // Deduplicate by id just in case
+    const seen = new Set();
+    const mappedConvs = dbConvs
+      .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
+      .map(c => ({
         id: c.id,
         botId: c.bot_id,
         user: c.user_id && !c.user_id.startsWith('vis_') && !c.user_id.startsWith('anonymous_')
@@ -1079,41 +1075,52 @@ async function renderConversations() {
         date: new Date(c.updated_at).toLocaleDateString(),
         status: (Date.now() - new Date(c.updated_at).getTime() < 3600000) ? 'active' : 'closed',
         msgs: c.messages?.[0]?.count || 0,
-        messages: [] // Will fetch on demand
+        messages: []
       }));
 
-      Cache.set(cacheKey, mappedConvs);
-      AppState.conversations = mappedConvs;
-    } catch (e) {
-      console.error(e);
-    }
+    AppState.conversations = mappedConvs;
+  } catch (e) {
+    console.error('Failed to load conversations:', e);
   }
 
   const botConvs = AppState.conversations;
 
+  if (botConvs.length === 0) {
+    list.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;font-size:13px;">No conversations yet.</div>';
+    return;
+  }
+
   list.innerHTML = botConvs.map(c => {
-    const color = getColorForId(c.user || 'Unknown');
-    const lastMsg = c.messages?.[c.messages.length - 1];
+    const color = getColorForId(c.id);
+    const isActive = c.id === AppState.activeConversation;
     return `
-      <div class="conv-item ${c.id === AppState.activeConversation ? 'active' : ''}"
-           onclick="AppState.activeConversation='${c.id}'; renderConversations(); loadConversationMessages('${c.id}');">
-        <div class="conv-avatar" style="background:${color}33; color:${color}">${initials(c.user || 'U')}</div>
+      <div class="conv-item ${isActive ? 'active' : ''}"
+           onclick="selectConversation('${c.id}')">
+        <div class="conv-avatar" style="background:${color}33; color:${color}">${initials(c.user || 'AN')}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div class="conv-name">${c.user || 'Anonymous'}</div>
-            <div class="conv-time">${c.time || c.date}</div>
+            <div class="conv-name">${c.user}</div>
+            <div class="conv-time">${c.time}</div>
           </div>
-          <div class="conv-preview">${lastMsg ? lastMsg.text : 'No messages'}</div>
+          <div class="conv-preview" id="conv-preview-${c.id}">${c.msgs > 0 ? c.msgs + ' message' + (c.msgs !== 1 ? 's' : '') : 'No messages yet'}</div>
         </div>
         ${c.status === 'active' ? '<div class="conv-unread"></div>' : ''}
       </div>
     `;
   }).join('');
-
-  if (AppState.activeConversation) {
-    renderConvDetail(AppState.activeConversation);
-  }
 }
+
+// Separate click handler — does NOT re-render full list (prevents disappearing)
+async function selectConversation(convId) {
+  // Update active state visually without full re-render
+  $$('.conv-item').forEach(el => el.classList.remove('active'));
+  const clicked = document.querySelector(`[onclick="selectConversation('${convId}')"]`);
+  if (clicked) clicked.classList.add('active');
+
+  AppState.activeConversation = convId;
+  await loadConversationMessages(convId);
+}
+window.selectConversation = selectConversation;
 
 function renderConvDetail(id) {
   const conv = AppState.conversations.find(c => c.id === id);
@@ -1175,6 +1182,21 @@ async function loadConversationMessages(convId) {
   const msgsEl = document.getElementById('conv-messages');
   if (!msgsEl) return;
 
+  // Show the detail panel immediately with loading state
+  const conv = AppState.conversations.find(c => c.id === convId);
+  if (conv) {
+    const nameEl = document.getElementById('conv-detail-name');
+    const statusEl = document.getElementById('conv-detail-status');
+    const botObj = AppState.bots.find(b => b.id === conv.botId);
+    const botName = botObj ? botObj.name : 'Unknown Bot';
+    if (nameEl) nameEl.textContent = conv.user;
+    if (statusEl) statusEl.innerHTML = `<span class="badge ${conv.status === 'active' ? 'badge-green' : 'badge-gray'}">${conv.status}</span> · ${botName}`;
+    const takeoverBtn = document.getElementById('btn-takeover');
+    if (takeoverBtn) takeoverBtn.style.display = (convId && !AppState.hitlActive) ? 'inline-flex' : 'none';
+    const inputBar = document.getElementById('chat-input-area');
+    if (inputBar) inputBar.style.display = AppState.hitlActive ? 'flex' : 'none';
+  }
+
   msgsEl.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;">Loading messages...</div>';
 
   try {
@@ -1187,25 +1209,47 @@ async function loadConversationMessages(convId) {
     if (error) throw error;
 
     if (!messages || messages.length === 0) {
-      msgsEl.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;">No messages yet.</div>';
+      msgsEl.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;font-size:13px;">No messages in this conversation yet.</div>';
       return;
     }
 
-    // Update the conversation object with fetched messages
-    const conv = AppState.conversations.find(c => c.id === convId);
+    // Update conversation object with fetched messages
     if (conv) {
       conv.messages = messages.map(m => ({
         role: m.role,
         text: m.content,
         time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }));
+
+      // Update preview snippet in sidebar
+      const lastMsg = conv.messages[conv.messages.length - 1];
+      const previewEl = document.getElementById(`conv-preview-${convId}`);
+      if (previewEl && lastMsg) {
+        previewEl.textContent = lastMsg.text.slice(0, 60) + (lastMsg.text.length > 60 ? '…' : '');
+      }
     }
 
-    // Re-render the detail view
-    renderConvDetail(convId);
+    // Render messages
+    msgsEl.innerHTML = (conv ? conv.messages : messages.map(m => ({
+      role: m.role,
+      text: m.content,
+      time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }))).map(m => `
+      <div class="message ${m.role}">
+        <div class="msg-avatar" style="background:${m.role === 'bot' ? 'var(--accent-dim)' : m.role === 'user' ? '#333' : 'var(--accent-2-dim)'}">
+          ${m.role === 'bot' ? '🤖' : m.role === 'human-agent' ? '👤' : ''}
+        </div>
+        <div>
+          <div class="msg-bubble">${m.text}</div>
+          <div class="msg-time">${m.time}</div>
+        </div>
+      </div>
+    `).join('');
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+
   } catch (e) {
     console.error('Failed to load messages:', e);
-    msgsEl.innerHTML = '<div style="padding:20px;color:var(--danger);">Failed to load messages.</div>';
+    msgsEl.innerHTML = '<div style="padding:20px;color:var(--danger);font-size:13px;">Failed to load messages.</div>';
   }
 }
 window.loadConversationMessages = loadConversationMessages;
