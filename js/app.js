@@ -1739,13 +1739,32 @@ async function deleteKnowledgeBase(id) {
 async function deleteKBFile(fileId, kbId) {
   if (!confirm('Delete this file?')) return;
   try {
+    // Get storage path first
+    const { data: file } = await supabase
+      .from('kb_files')
+      .select('storage_path')
+      .eq('id', fileId)
+      .single();
+
+    // Delete from Supabase Storage if file has a storage path
+    if (file?.storage_path) {
+      const { error: storageErr } = await supabase.storage
+        .from('knowledge-files')
+        .remove([file.storage_path]);
+      if (storageErr) console.warn('Storage delete error:', storageErr.message);
+    }
+
+    // Delete DB record — cascade handles kb_chunks for this file
     await supabase.from('kb_files').delete().eq('id', fileId);
     showToast('File deleted', 'info');
     LocalDB.clear('knowledge_bases');
     await loadKBDetailFiles();
     const freshKBs = await KnowledgeBases.getAll();
     Store.set('knowledge_bases', freshKBs);
-  } catch (e) { showToast('Failed to delete file', 'error'); }
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to delete file', 'error');
+  }
 }
 window.deleteKBFile = deleteKBFile;
 

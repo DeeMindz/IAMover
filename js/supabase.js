@@ -191,6 +191,28 @@ export const KnowledgeBases = {
   },
 
   async delete(id) {
+    // Step 1: Get all files with storage paths before deleting
+    const { data: files } = await supabase
+      .from('kb_files')
+      .select('id, storage_path')
+      .eq('kb_id', id)
+
+    // Step 2: Delete files from Supabase Storage
+    if (files && files.length > 0) {
+      const storagePaths = files
+        .filter(f => f.storage_path)
+        .map(f => f.storage_path)
+
+      if (storagePaths.length > 0) {
+        const { error: storageErr } = await supabase.storage
+          .from('knowledge-files')
+          .remove(storagePaths)
+        if (storageErr) console.warn('Storage delete partial error:', storageErr.message)
+      }
+    }
+
+    // Step 3: Delete the knowledge base record
+    // DB cascade will handle: kb_files, kb_chunks, bot_knowledge_bases
     const { error } = await supabase
       .from('knowledge_bases')
       .delete()
@@ -227,22 +249,56 @@ export const KnowledgeBases = {
     if (uploadError) throw uploadError
 
     // Extract text content immediately for plain text files
-    // PDF and DOCX will be handled by the processing pipeline later
     let content = null
     const ext = file.name.split('.').pop().toLowerCase()
     if (['txt', 'md', 'csv'].includes(ext)) {
       content = await file.text()
     }
-    const status = content ? 'processed' : 'pending'
 
-    return await this.addFile(kbId, {
+    // Save file record
+    const fileRecord = await this.addFile(kbId, {
       name: file.name,
       type: ext,
       size_bytes: file.size,
       storage_path: path,
       content,
-      status,
+      status: content ? 'processed' : 'pending',
     })
+
+    // Trigger background processing for DOCX and PDF
+    if (['docx', 'doc', 'pdf'].includes(ext)) {
+      fetch('/api/kb/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kb_file_id: fileRecord.id })
+      }).then(r => r.json())
+        .then(d => console.log('[KB] Processing triggered:', d))
+        .catch(e => console.warn('[KB] Processing trigger failed:', e))
+    }
+
+    return fileRecord
+  },
+
+  async processUrl(kbId, url) {
+    // Save URL as a file record first
+    const fileRecord = await this.addFile(kbId, {
+      name: url,
+      type: 'url',
+      url,
+      size_bytes: 0,
+      status: 'pending',
+    })
+
+    // Trigger crawl
+    fetch('/api/kb/crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kb_file_id: fileRecord.id })
+    }).then(r => r.json())
+      .then(d => console.log('[KB] Crawl triggered:', d))
+      .catch(e => console.warn('[KB] Crawl trigger failed:', e))
+
+    return fileRecord
   }
 }
 
