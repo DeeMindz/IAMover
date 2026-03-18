@@ -1927,7 +1927,7 @@ function renderLivePreview(bot) {
     document.getElementById('chat-window').classList.add('hidden');
     document.getElementById('launcher').classList.remove('hidden');
   }
-  // Markdown renderer — safely inside template literal
+  // Markdown renderer
   function formatMarkdown(text) {
     if (!text) return '';
     let h = text
@@ -1942,15 +1942,13 @@ function renderLivePreview(bot) {
     h = h.replace(/[*](.+?)[*]/g, '<em>$1</em>');
     h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
     h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-    h = h.replace(/(<li[^>]*>[\s\S]*?<[/]li>)/g, function(m){ return '<ul style="margin:6px 0;padding-left:18px;">' + m + '</ul>'; });
-    h = h.replace(/
-
-/g, '<br><br>');
-    h = h.replace(/
-/g, '<br>');
+    h = h.replace(/<li/g, function(m,o,s){ var prev=s.lastIndexOf('<ul',o); var prevEnd=s.lastIndexOf('</ul>',o); if(prev===-1||prevEnd>prev) return '<ul style="margin:6px 0;padding-left:18px;"><li'; return m; });
+    h = h.replace(/(<[/]li>)(?![\s\S]*?<li)/g, '$1</ul>');
+    h = h.replace(/([\r]?[\n]){2}/g, '<br><br>');
+    h = h.replace(/[\r]?[\n]/g, '<br>');
     return h;
   }
-  function sendMsg() {
+    function sendMsg() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text || isSending) return;
@@ -2151,16 +2149,11 @@ function handleKey(e) {
         h = h.replace(/[*](.+?)[*]/g, '<em>$1</em>');
         h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
         h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-        h = h.replace(/(<li[^>]*>[\s\S]*?<[/]li>)/g, function(m){ return '<ul style="margin:6px 0;padding-left:18px;">' + m + '</ul>'; });
-        h = h.replace(/
-
-/g, '<br><br>');
-        h = h.replace(/
-/g, '<br>');
+        h = h.replace(/([\r]?[\n]){2}/g, '<br><br>');
+        h = h.replace(/[\r]?[\n]/g, '<br>');
         return h;
       }
-
-function fpSendMsg() {
+      function fpSendMsg() {
   const input = document.getElementById('fp-chat-input');
   const text = input.value.trim();
   if (!text || fpSending) return;
@@ -2571,8 +2564,9 @@ const SYSTEM_VARIABLES = [
 ];
 
 function renderVariablesTable(vars, filter = 'all') {
-  // Prepend system variables to the list for display
-  const allVarsWithSystem = [...SYSTEM_VARIABLES, ...vars];
+  // Only include custom vars (non-system) from the DB to avoid duplicates
+  const customVars = (vars || []).filter(v => !v.is_system);
+  const allVarsWithSystem = [...SYSTEM_VARIABLES, ...customVars];
   _allVariables = allVarsWithSystem;
 
   const tbody = document.getElementById('variables-table-body');
