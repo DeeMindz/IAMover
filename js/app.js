@@ -2136,10 +2136,6 @@ function handleKey(e) {
       // Convert markdown to HTML with link sanitization
       function formatMarkdown(text) {
         if (!text) return '';
-      let html = text
-      // Convert markdown to HTML with link sanitization
-      function formatMarkdown(text) {
-        if (!text) return '';
         let html = text
           // Escape HTML first
           .replace(/&/g, '&amp;')
