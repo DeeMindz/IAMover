@@ -284,13 +284,21 @@ window.addEventListener('message', async function (e) {
       }
       const data = JSON.parse(text);
       console.log('[IAM Bridge] Bot response:', data);
-      e.source.postMessage({
-        type: 'IAM_BOT_RESPONSE',
-        response: data.response,
-        conv_id: data.conversation_id
-      }, '*');
-      // Save bot response to PreviewState
+      // If HITL is active, do not send any response to widget — human agent is handling it
+      if (data.hitl_active) {
+        console.log('[IAM Bridge] HITL active — suppressing bot response in widget');
+        // Subscribe to real-time messages so agent messages reach the widget
+        if (data.conversation_id || conv_id) {
+          startWidgetRealtimeSubscription(e.source, data.conversation_id || conv_id);
+        }
+        return;
+      }
       if (data.response) {
+        e.source.postMessage({
+          type: 'IAM_BOT_RESPONSE',
+          response: data.response,
+          conv_id: data.conversation_id
+        }, '*');
         PreviewState.messages.push({ role: 'bot', content: data.response });
       }
     } catch (err) {
@@ -302,6 +310,64 @@ window.addEventListener('message', async function (e) {
     }
   }
 });
+
+// Real-time subscription so agent messages reach the widget during HITL
+let _widgetRealtimeSub = null;
+function startWidgetRealtimeSubscription(iframeSource, convId) {
+  if (_widgetRealtimeSub) {
+    _widgetRealtimeSub.unsubscribe();
+    _widgetRealtimeSub = null;
+  }
+  if (!convId) return;
+  console.log('[IAM Bridge] Starting real-time widget subscription for conv:', convId);
+  _widgetRealtimeSub = supabase
+    .channel('widget_conv_' + convId)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: 'conversation_id=eq.' + convId
+    }, (payload) => {
+      const msg = payload.new;
+      console.log('[IAM Bridge] Real-time message received:', msg);
+      // Send agent messages and system notifications to widget
+      if (msg.role === 'human-agent') {
+        // Find the preview iframe and send it
+        const modalIframe = document.getElementById('preview-iframe');
+        const inlineIframe = document.getElementById('preview-iframe-inline');
+        [modalIframe, inlineIframe].forEach(iframe => {
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              type: 'IAM_AGENT_MESSAGE',
+              content: msg.content,
+              time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }, '*');
+          }
+        });
+      }
+      if (msg.role === 'system') {
+        const modalIframe = document.getElementById('preview-iframe');
+        const inlineIframe = document.getElementById('preview-iframe-inline');
+        [modalIframe, inlineIframe].forEach(iframe => {
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              type: 'IAM_SYSTEM_MESSAGE',
+              content: msg.content,
+            }, '*');
+          }
+        });
+        // If agent_left, stop the subscription
+        if (msg.content === 'agent_left') {
+          if (_widgetRealtimeSub) {
+            _widgetRealtimeSub.unsubscribe();
+            _widgetRealtimeSub = null;
+          }
+        }
+      }
+    })
+    .subscribe();
+}
+window.startWidgetRealtimeSubscription = startWidgetRealtimeSubscription;
 
 function setupEventListeners() {
   // Add some initial inline styling so the bot features start hidden if we launch on home
@@ -1074,11 +1140,19 @@ async function renderConversations() {
         time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         date: new Date(c.updated_at).toLocaleDateString(),
         status: (Date.now() - new Date(c.updated_at).getTime() < 3600000) ? 'active' : 'closed',
+        hitl_active: c.hitl_active || false,
         msgs: c.messages?.[0]?.count || 0,
         messages: []
       }));
 
+    // Restore HITL state from DB after page refresh
+    const activeHITL = mappedConvs.find(c => c.hitl_active);
+    if (activeHITL && AppState.activeConversation === activeHITL.id) {
+      AppState.hitlActive = true;
+    }
+
     AppState.conversations = mappedConvs;
+
   } catch (e) {
     console.error('Failed to load conversations:', e);
   }
@@ -1328,8 +1402,10 @@ async function interceptConversation() {
     console.error('HITL takeover failed:', e);
   }
 
-  // Subscribe to real-time messages
+  // Subscribe to real-time messages for dashboard
   subscribeToConversation(convId);
+  // Also start real-time for widget so it receives agent messages
+  startWidgetRealtimeSubscription(null, convId);
   renderConvDetail(convId);
   showToast('You have taken control of this conversation', 'success');
 }
@@ -2022,6 +2098,7 @@ function renderLivePreview(bot) {
         <div class="name">${botName}</div>
         <div class="status">⬤ Online · Ready to help</div>
       </div>
+      <button class="close-btn" onclick="newConversation()" title="New conversation" style="margin-right:4px;font-size:14px;">&#8635;</button>
       <button class="close-btn" onclick="closeChat()">✕</button>
     </div>
     <div class="chat-messages" id="chat-messages">
@@ -2114,35 +2191,88 @@ window.addEventListener('message', function (e) {
     window._previewConvId = e.data.conv_id;
   }
 
-  // Handle loading previous chat history (from mode switch)
+  // Load previous chat history
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
     const msgs = document.getElementById('chat-messages');
-    // Clear any greeting message and rebuild from history
     msgs.innerHTML = '';
-    e.data.messages.forEach(m => {
-      const div = document.createElement('div');
-      div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-      div.textContent = m.content;
-      msgs.appendChild(div);
+    e.data.messages.forEach(function(m) {
+      if (m.role === 'system') {
+        addSystemMsg(m.content);
+      } else {
+        var div = document.createElement('div');
+        div.className = 'msg ' + (m.role === 'bot' || m.role === 'human-agent' ? 'bot' : 'user');
+        div.textContent = m.content;
+        msgs.appendChild(div);
+      }
     });
     msgs.scrollTop = msgs.scrollHeight;
   }
 
+  // Bot AI response
   if (e.data.type === 'IAM_BOT_RESPONSE') {
-    const msgs = document.getElementById('chat-messages');
-    const t = document.getElementById('typing-indicator');
+    var msgs = document.getElementById('chat-messages');
+    var t = document.getElementById('typing-indicator');
     if (t) t.remove();
-    const botMsg = document.createElement('div');
-    botMsg.className = 'msg bot';
-    botMsg.innerHTML = formatMarkdown(e.data.response) || 'Sorry, no response received.';
-    msgs.appendChild(botMsg);
-    msgs.scrollTop = msgs.scrollHeight;
+    if (e.data.response) {
+      var botMsg = document.createElement('div');
+      botMsg.className = 'msg bot';
+      botMsg.innerHTML = formatMarkdown(e.data.response);
+      msgs.appendChild(botMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
     if (e.data.conv_id) window._previewConvId = e.data.conv_id;
     isSending = false;
   }
+
+  // Human agent message — show like a bot message (same side) but with agent label
+  if (e.data.type === 'IAM_AGENT_MESSAGE') {
+    var msgs = document.getElementById('chat-messages');
+    var t = document.getElementById('typing-indicator');
+    if (t) t.remove();
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+    var label = document.createElement('div');
+    label.textContent = 'Support Agent';
+    label.style.cssText = 'font-size:10px;color:#888;margin-left:4px;';
+    var agentMsg = document.createElement('div');
+    agentMsg.className = 'msg bot';
+    agentMsg.style.borderLeft = '3px solid #10b981';
+    agentMsg.textContent = e.data.content;
+    wrap.appendChild(label);
+    wrap.appendChild(agentMsg);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+    isSending = false;
+  }
+
+  // System notification message
+  if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
+    var msgs = document.getElementById('chat-messages');
+    addSystemMsg(e.data.content);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
 });
+
+function addSystemMsg(content) {
+  var msgs = document.getElementById('chat-messages');
+  var label = content === 'agent_joined'
+    ? '&#128100; A live agent has joined'
+    : '&#129302; AI assistant has resumed';
+  var div = document.createElement('div');
+  div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
+  div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
+  msgs.appendChild(div);
+}
+
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+}
+
+function newConversation() {
+  window._previewConvId = null;
+  var msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = '<div class="msg bot">${greeting}</div>';
+  window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
 }
 <\/script>
 </body >
