@@ -1072,7 +1072,9 @@ async function renderConversations() {
       const mappedConvs = dbConvs.map(c => ({
         id: c.id,
         botId: c.bot_id,
-        user: c.user_id,
+        user: c.user_id && !c.user_id.startsWith('vis_') && !c.user_id.startsWith('anonymous_')
+          ? c.user_id
+          : 'Anonymous Visitor',
         time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         date: new Date(c.updated_at).toLocaleDateString(),
         status: (Date.now() - new Date(c.updated_at).getTime() < 3600000) ? 'active' : 'closed',
@@ -1944,11 +1946,11 @@ function renderLivePreview(bot) {
     h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
     h = h.replace(/<li/g, function(m,o,s){ var prev=s.lastIndexOf('<ul',o); var prevEnd=s.lastIndexOf('</ul>',o); if(prev===-1||prevEnd>prev) return '<ul style="margin:6px 0;padding-left:18px;"><li'; return m; });
     h = h.replace(/(<[/]li>)(?![\s\S]*?<li)/g, '$1</ul>');
-    h = h.replace(/([\r]?[\n]){2}/g, '<br><br>');
-    h = h.replace(/[\r]?[\n]/g, '<br>');
+    var nl = String.fromCharCode(10); h = h.split(nl+nl).join('<br><br>'); h = h.split(nl).join('<br>');
     return h;
   }
-    function sendMsg() {
+
+  function sendMsg() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text || isSending) return;
@@ -2149,8 +2151,7 @@ function handleKey(e) {
         h = h.replace(/[*](.+?)[*]/g, '<em>$1</em>');
         h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
         h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-        h = h.replace(/([\r]?[\n]){2}/g, '<br><br>');
-        h = h.replace(/[\r]?[\n]/g, '<br>');
+        var nl = String.fromCharCode(10); h = h.split(nl+nl).join('<br><br>'); h = h.split(nl).join('<br>');
         return h;
       }
       function fpSendMsg() {
