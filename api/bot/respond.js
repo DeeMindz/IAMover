@@ -99,6 +99,26 @@ export default async function handler(req, res) {
 
         log.info('Bot loaded', { botName: bot.name, model: bot.model, antiHallucination: bot.anti_hallucination });
 
+        // ── HITL Check: if human agent is active, do not call LLM ──────────
+        if (conversation_id) {
+            const { data: convCheck } = await supabase
+                .from('conversations')
+                .select('hitl_active')
+                .eq('id', conversation_id)
+                .single();
+
+            if (convCheck?.hitl_active) {
+                log.info('HITL active — skipping LLM response', { conversation_id });
+                // Still save the user message so agent can see it
+                await supabase.from('messages').insert({
+                    conversation_id,
+                    role: 'user',
+                    content: message
+                });
+                return res.status(200).json({ response: null, hitl_active: true });
+            }
+        }
+
         // ── Step 2: Load knowledge base files ──────────────────────────────
         let knowledgeContext = '';
         const { data: kbLinks } = await supabase
@@ -143,13 +163,15 @@ export default async function handler(req, res) {
 
             if (messages) {
                 const mapped = messages
-                    .filter(m => m.role === 'user' || m.role === 'bot')
-                    .map(m => ({
-                        role:    m.role === 'bot' ? 'assistant' : 'user',
-                        content: m.content
-                    }));
+                    // Exclude system notification messages from LLM history
+                    .filter(m => m.role === 'user' || m.role === 'bot' || m.role === 'human-agent')
+                    .map(m => {
+                        if (m.role === 'bot') return { role: 'assistant', content: m.content };
+                        if (m.role === 'human-agent') return { role: 'assistant', content: `[Live Agent]: ${m.content}` };
+                        return { role: 'user', content: m.content };
+                    });
 
-                // All LLMs require history to start with user role — trim leading bot messages
+                // All LLMs require history to start with user role — trim leading assistant messages
                 const firstUserIndex = mapped.findIndex(m => m.role === 'user');
                 conversationHistory = firstUserIndex > -1 ? mapped.slice(firstUserIndex) : [];
                 log.info('Conversation history loaded', { messages: conversationHistory.length });

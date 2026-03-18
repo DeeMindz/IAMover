@@ -1139,17 +1139,33 @@ function renderConvDetail(id) {
   if (statusEl) statusEl.innerHTML = `<span class="badge ${conv.status === 'active' ? 'badge-green' : 'badge-gray'}">${conv.status}</span> · ${botName}`;
 
   if (msgsEl) {
-    msgsEl.innerHTML = conv.messages.map(m => `
-      <div class="message ${m.role}">
-        <div class="msg-avatar" style="background:${m.role === 'bot' ? 'var(--accent-dim)' : m.role === 'user' ? '#333' : 'var(--accent-2-dim)'}">
-          ${m.role === 'bot' ? '🤖' : m.role === 'human-agent' ? '👤' : ''}
+    msgsEl.innerHTML = conv.messages.map(m => {
+      // System notification messages — small centered pills
+      if (m.role === 'system') {
+        const isJoined = m.text === 'agent_joined';
+        const label = isJoined
+          ? '👤 A live agent has joined the conversation'
+          : '🤖 AI assistant has resumed';
+        return `<div style="display:flex;align-items:center;justify-content:center;margin:10px 0;">
+          <span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;white-space:nowrap;">${label}</span>
+        </div>`;
+      }
+      // Regular messages
+      const isAgent = m.role === 'human-agent';
+      const isBot = m.role === 'bot';
+      const isUser = m.role === 'user';
+      return `
+      <div class="message ${m.role}" style="${isAgent ? 'flex-direction:row-reverse;' : ''}">
+        <div class="msg-avatar" style="background:${isBot ? 'var(--accent-dim)' : isAgent ? 'var(--accent-2-dim)' : '#333'}">
+          ${isBot ? '🤖' : isAgent ? '👤' : ''}
         </div>
         <div>
-          <div class="msg-bubble">${m.text}</div>
-          <div class="msg-time">${m.time}</div>
+          ${isAgent ? '<div style="font-size:10px;color:var(--text-muted);text-align:right;margin-bottom:2px;">Agent</div>' : ''}
+          <div class="msg-bubble" style="${isAgent ? 'background:var(--accent-2);color:#fff;' : ''}">${m.text}</div>
+          <div class="msg-time" style="${isAgent ? 'text-align:right;' : ''}">${m.time}</div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
 
@@ -1229,23 +1245,8 @@ async function loadConversationMessages(convId) {
       }
     }
 
-    // Render messages
-    msgsEl.innerHTML = (conv ? conv.messages : messages.map(m => ({
-      role: m.role,
-      text: m.content,
-      time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }))).map(m => `
-      <div class="message ${m.role}">
-        <div class="msg-avatar" style="background:${m.role === 'bot' ? 'var(--accent-dim)' : m.role === 'user' ? '#333' : 'var(--accent-2-dim)'}">
-          ${m.role === 'bot' ? '🤖' : m.role === 'human-agent' ? '👤' : ''}
-        </div>
-        <div>
-          <div class="msg-bubble">${m.text}</div>
-          <div class="msg-time">${m.time}</div>
-        </div>
-      </div>
-    `).join('');
-    msgsEl.scrollTop = msgsEl.scrollHeight;
+    // Render all messages using renderConvDetail which handles all roles including system
+    renderConvDetail(convId);
 
   } catch (e) {
     console.error('Failed to load messages:', e);
@@ -1295,32 +1296,112 @@ function unsubscribeAll() {
   }
 }
 
-function interceptConversation() {
+async function interceptConversation() {
+  const convId = AppState.activeConversation;
+  if (!convId) return;
+
   AppState.hitlActive = true;
-  renderConvDetail(AppState.activeConversation);
+
+  try {
+    // Mark conversation as HITL active in DB
+    await supabase.from('conversations')
+      .update({ hitl_active: true, updated_at: new Date().toISOString() })
+      .eq('id', convId);
+
+    // Insert system notification message
+    await supabase.from('messages').insert({
+      conversation_id: convId,
+      role: 'system',
+      content: 'agent_joined'
+    });
+
+    // Add to local state for immediate display
+    const conv = AppState.conversations.find(c => c.id === convId);
+    if (conv) {
+      conv.messages.push({
+        role: 'system',
+        text: 'agent_joined',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+    }
+  } catch (e) {
+    console.error('HITL takeover failed:', e);
+  }
+
+  // Subscribe to real-time messages
+  subscribeToConversation(convId);
+  renderConvDetail(convId);
   showToast('You have taken control of this conversation', 'success');
 }
 window.interceptConversation = interceptConversation;
 
-function endHITL() {
+async function endHITL() {
+  const convId = AppState.activeConversation;
+  if (!convId) return;
+
   AppState.hitlActive = false;
-  const conv = AppState.conversations.find(c => c.id === AppState.activeConversation);
-  if (conv) {
-    conv.messages.push({ role: 'bot', text: 'I\'m back to assist you. Is there anything else I can help you with?', time: 'Now' });
+  unsubscribeAll();
+
+  try {
+    await supabase.from('conversations')
+      .update({ hitl_active: false, updated_at: new Date().toISOString() })
+      .eq('id', convId);
+
+    await supabase.from('messages').insert({
+      conversation_id: convId,
+      role: 'system',
+      content: 'agent_left'
+    });
+
+    const conv = AppState.conversations.find(c => c.id === convId);
+    if (conv) {
+      conv.messages.push({
+        role: 'system',
+        text: 'agent_left',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+    }
+  } catch (e) {
+    console.error('HITL resume failed:', e);
   }
-  renderConvDetail(AppState.activeConversation);
+
+  renderConvDetail(convId);
   showToast('AI has resumed the conversation', 'info');
 }
 window.endHITL = endHITL;
 
-function sendAgentMessage() {
+async function sendAgentMessage() {
   const input = document.getElementById('agent-input');
   if (!input || !input.value.trim()) return;
-  const conv = AppState.conversations.find(c => c.id === AppState.activeConversation);
+  const convId = AppState.activeConversation;
+  if (!convId) return;
+
+  const text = input.value.trim();
+  input.value = '';
+
+  const conv = AppState.conversations.find(c => c.id === convId);
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Optimistic UI — show immediately
   if (conv) {
-    conv.messages.push({ role: 'human-agent', text: input.value.trim(), time: 'Now' });
-    input.value = '';
-    renderConvDetail(AppState.activeConversation);
+    conv.messages.push({ role: 'human-agent', text, time });
+    renderConvDetail(convId);
+  }
+
+  try {
+    // Save agent message to DB — user will see it via real-time subscription
+    await supabase.from('messages').insert({
+      conversation_id: convId,
+      role: 'human-agent',
+      content: text
+    });
+    // Update conversation timestamp
+    await supabase.from('conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', convId);
+  } catch (e) {
+    console.error('Failed to send agent message:', e);
+    showToast('Failed to send message', 'error');
   }
 }
 window.sendAgentMessage = sendAgentMessage;
