@@ -1807,17 +1807,7 @@ function renderLivePreview(bot) {
     background:#fff; border:1px solid #eee;
     border-bottom-left-radius:4px; align-self:flex-start;
     color:#333; box-shadow:0 1px 3px rgba(0,0,0,0.05);
-    white-space: pre-wrap; word-wrap: break-word;
   }
-  .msg.bot pre, .msg.bot code {
-    background: #f5f5f5; border-radius: 4px; padding: 2px 6px; font-size: 12px;
-  }
-  .msg.bot pre { padding: 8px 12px; overflow-x: auto; }
-  .msg.bot ul, .msg.bot ol { margin: 8px 0; padding-left: 20px; }
-  .msg.bot li { margin: 4px 0; }
-  .msg.bot h1, .msg.bot h2, .msg.bot h3 { margin: 12px 0 8px 0; font-size: 14px; }
-  .msg.bot h1 { font-size: 16px; }
-  .msg.bot a { color: #6c63ff; }
   .msg.user {
     background:${primaryColor}; color:#fff;
     border-bottom-right-radius:4px; align-self:flex-end;
@@ -1994,876 +1984,815 @@ function renderLivePreview(bot) {
       if (t) t.remove();
       const botMsg = document.createElement('div');
       botMsg.className = 'msg bot';
-      botMsg.innerHTML = (e.data.response || 'Sorry, no response received.').replace(/\n/g, '<br>');
+      botMsg.textContent = e.data.response || 'Sorry, no response received.';
       msgs.appendChild(botMsg);
       msgs.scrollTop = msgs.scrollHeight;
       if (e.data.conv_id) window._previewConvId = e.data.conv_id;
       isSending = false;
     }
   });
-  // Simple markdown formatter
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
   }
-  function formatMarkdown(text) {
-    if (!text) return '';
-    // Code blocks first (```...```)
-    text = text.replace(/`{ 3 } ([\s\S] *?)`{3}/g, '<pre><code>$1</code></pre>');
-    // Inline code (`...`)
-    text = text.replace(/`([^ `]+)` / g, '<code>$1</code>');
-  // Headers
-  text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
-  text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
-  text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
-  // Bold
-  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  // Italic
-  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  // Numbered lists
-  text = text.replace(/^(\d+)\.\s+(.*$)/gm, '<li>$2</li>');
-  // Unordered lists
-  text = text.replace(/^[-*]\s+(.*$)/gm, '<li>$1</li>');
-  // Wrap consecutive <li> elements in <ol> or <ul>
-  text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-  // Links
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-  // Line breaks
-  text = text.replace(/\n/g, '<br>');
-  return text;
-}
-function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
-}
 <\/script>
-</body >
-</html > `;
+</body>
+</html>`;
 
   // Full page / inline embed mode
-  const fullPageHTML = `< !DOCTYPE html >
-  <html>
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-        <style>
-          * {margin:0; padding:0; box-sizing:border-box; }
-          body {
-            font - family:'Plus Jakarta Sans',sans-serif;
-          background:#0a0a0f;
-          height:100vh; display:flex; overflow:hidden;
+  const fullPageHTML = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Plus Jakarta Sans',sans-serif;
+    background:#0a0a0f;
+    height:100vh; display:flex; overflow:hidden;
   }
-          .chat-window {
-            width:100%; height:100vh;
-          background:#fff;
-          display:flex; flex-direction:column; overflow:hidden;
+  .chat-window {
+    width:100%; height:100vh;
+    background:#fff;
+    display:flex; flex-direction:column; overflow:hidden;
   }
-          .chat-header {
-            background:${primaryColor};
-          padding:16px 20px;
-          display:flex; align-items:center; gap:12px;
-          color:#fff; flex-shrink:0;
+  .chat-header {
+    background:${primaryColor};
+    padding:16px 20px;
+    display:flex; align-items:center; gap:12px;
+    color:#fff; flex-shrink:0;
   }
-          .chat-header-avatar {
-            width:40px; height:40px;
-          background:rgba(255,255,255,0.2);
-          border-radius:12px;
-          display:flex; align-items:center; justify-content:center;
-          font-size:20px; flex-shrink:0; overflow:hidden;
+  .chat-header-avatar {
+    width:40px; height:40px;
+    background:rgba(255,255,255,0.2);
+    border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; flex-shrink:0; overflow:hidden;
   }
-          .chat-header-info .name {font - weight:700; font-size:15px; }
-          .chat-header-info .status {font - size:12px; opacity:0.85; margin-top:2px; }
-          .chat-messages {
-            flex:1; padding:20px;
-          display:flex; flex-direction:column; gap:12px;
-          overflow-y:auto; background:#fafafa;
+  .chat-header-info .name { font-weight:700; font-size:15px; }
+  .chat-header-info .status { font-size:12px; opacity:0.85; margin-top:2px; }
+  .chat-messages {
+    flex:1; padding:20px;
+    display:flex; flex-direction:column; gap:12px;
+    overflow-y:auto; background:#fafafa;
   }
-          .msg {max - width:75%; padding:11px 16px; border-radius:18px; font-size:14px; line-height:1.55; }
-          .msg.bot {background:#fff; border:1px solid #eee; border-bottom-left-radius:4px; align-self:flex-start; color:#333; box-shadow:0 1px 4px rgba(0,0,0,0.06); white-space: pre-wrap; word-wrap: break-word; }
-          .msg.bot pre, .msg.bot code {background: #f5f5f5; border-radius: 4px; padding: 2px 6px; font-size: 12px; }
-          .msg.bot pre {padding: 8px 12px; overflow-x: auto; }
-          .msg.bot ul, .msg.bot ol {margin: 8px 0; padding-left: 20px; }
-          .msg.bot li {margin: 4px 0; }
-          .msg.bot h1, .msg.bot h2, .msg.bot h3 {margin: 12px 0 8px 0; font-size: 14px; }
-          .msg.bot h1 {font - size: 16px; }
-          .msg.bot a {color: #6c63ff; }
-          .msg.user {background:${primaryColor}; color:#fff; border-bottom-right-radius:4px; align-self:flex-end; }
-          .typing-dots {
-            display: flex;
-          align-items: center;
-          gap: 3px;
-          padding: 6px 2px;
-          align-self: flex-start;
+  .msg { max-width:75%; padding:11px 16px; border-radius:18px; font-size:14px; line-height:1.55; }
+  .msg.bot { background:#fff; border:1px solid #eee; border-bottom-left-radius:4px; align-self:flex-start; color:#333; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+  .msg.user { background:${primaryColor}; color:#fff; border-bottom-right-radius:4px; align-self:flex-end; }
+  .typing-dots {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 2px;
+    align-self: flex-start;
   }
-          .typing-dots span {
-            width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          animation: wave 1.3s ease-in-out infinite;
+  .typing-dots span {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    animation: wave 1.3s ease-in-out infinite;
   }
-          .typing-dots span:nth-child(1) {
-            background: #c0c0c0;
-          animation-delay: 0s;
+  .typing-dots span:nth-child(1) {
+    background: #c0c0c0;
+    animation-delay: 0s;
   }
-          .typing-dots span:nth-child(2) {
-            background: #808080;
-          animation-delay: 0.18s;
+  .typing-dots span:nth-child(2) {
+    background: #808080;
+    animation-delay: 0.18s;
   }
-          .typing-dots span:nth-child(3) {
-            background: #303030;
-          animation-delay: 0.36s;
+  .typing-dots span:nth-child(3) {
+    background: #303030;
+    animation-delay: 0.36s;
   }
-          @keyframes wave {
-            0 %, 60 %, 100 % { transform: translateY(0); opacity: 0.6; }
-    30% {transform:translateY(-4px); opacity:1; }
+  @keyframes wave {
+    0%,60%,100% { transform:translateY(0); opacity:0.6; }
+    30% { transform:translateY(-4px); opacity:1; }
   }
-          .chat-input-area {
-            padding:14px 16px; border-top:1px solid #eee;
-          display:flex; gap:10px; align-items:center; background:#fff; flex-shrink:0;
+  .chat-input-area {
+    padding:14px 16px; border-top:1px solid #eee;
+    display:flex; gap:10px; align-items:center; background:#fff; flex-shrink:0;
   }
-          .chat-input {flex:1; border:1px solid #e5e5e5; border-radius:24px; padding:10px 18px; font-size:14px; outline:none; color:#333; background:#f8f8f8; font-family:inherit; }
-          .chat-input:focus {border - color:${primaryColor}; }
-          .send-btn {width:38px; height:38px; background:${primaryColor}; border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; flex-shrink:0; }
-        </style>
-    </head>
-    <body>
-      <div class="chat-window">
-        <div class="chat-header">
-          <div class="chat-header-avatar">${avatarContent}</div>
-          <div class="chat-header-info">
-            <div class="name">${botName}</div>
-            <div class="status">⬤ Online · Ready to help</div>
-          </div>
-        </div>
-        <div class="chat-messages">
-          <div class="msg bot">${greeting}</div>
-        </div>
-        <div class="chat-input-area">
-          <input class="chat-input" id="fp-chat-input" placeholder="Type a message…"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fpSendMsg()}" />
-          <button class="send-btn" onclick="fpSendMsg()">↑</button>
-        </div>
+  .chat-input { flex:1; border:1px solid #e5e5e5; border-radius:24px; padding:10px 18px; font-size:14px; outline:none; color:#333; background:#f8f8f8; font-family:inherit; }
+  .chat-input:focus { border-color:${primaryColor}; }
+  .send-btn { width:38px; height:38px; background:${primaryColor}; border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; flex-shrink:0; }
+</style>
+</head>
+<body>
+  <div class="chat-window">
+    <div class="chat-header">
+      <div class="chat-header-avatar">${avatarContent}</div>
+      <div class="chat-header-info">
+        <div class="name">${botName}</div>
+        <div class="status">⬤ Online · Ready to help</div>
       </div>
-    </body>
-    <script>
-      let fpSending = false;
+    </div>
+    <div class="chat-messages">
+      <div class="msg bot">${greeting}</div>
+    </div>
+    <div class="chat-input-area">
+      <input class="chat-input" id="fp-chat-input" placeholder="Type a message…"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fpSendMsg()}" />
+      <button class="send-btn" onclick="fpSendMsg()">↑</button>
+    </div>
+  </div>
+</body>
+<script>
+  let fpSending = false;
 
-      // Create conversation on load (only if not already created)
-      // Parent window will attach visitor ID from localStorage
-      if (!window._fpConvId) {
-        window.parent.postMessage({
-          type: 'IAM_CONV_CREATE',
-          bot_id: '${bot.id}',
-        }, '*');
+  // Create conversation on load (only if not already created)
+  // Parent window will attach visitor ID from localStorage
+  if (!window._fpConvId) {
+    window.parent.postMessage({ 
+      type:   'IAM_CONV_CREATE', 
+      bot_id: '${bot.id}',
+    }, '*');
   }
 
-      function fpSendMsg() {
+  function fpSendMsg() {
     const input = document.getElementById('fp-chat-input');
-      const text = input.value.trim();
-      if (!text || fpSending) return;
-      fpSending = true;
+    const text = input.value.trim();
+    if (!text || fpSending) return;
+    fpSending = true;
 
-      const msgs = document.querySelector('.chat-messages');
-      const userMsg = document.createElement('div');
-      userMsg.className = 'msg user';
-      userMsg.textContent = text;
-      msgs.appendChild(userMsg);
-      input.value = '';
-      msgs.scrollTop = msgs.scrollHeight;
+    const msgs = document.querySelector('.chat-messages');
+    const userMsg = document.createElement('div');
+    userMsg.className = 'msg user';
+    userMsg.textContent = text;
+    msgs.appendChild(userMsg);
+    input.value = '';
+    msgs.scrollTop = msgs.scrollHeight;
 
-      const typing = document.createElement('div');
-      typing.className = 'typing-dots';
-      typing.id = 'fp-typing';
-      typing.innerHTML = '<span></span><span></span><span></span>';
-      msgs.appendChild(typing);
-      msgs.scrollTop = msgs.scrollHeight;
+    const typing = document.createElement('div');
+    typing.className = 'typing-dots';
+    typing.id = 'fp-typing';
+    typing.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(typing);
+    msgs.scrollTop = msgs.scrollHeight;
 
-      // Send to parent window to make the API call - avoids CORS
-      window.parent.postMessage({
-        type: 'IAM_BOT_REQUEST',
+    // Send to parent window to make the API call - avoids CORS
+    window.parent.postMessage({
+      type: 'IAM_BOT_REQUEST',
       message: text,
       bot_id: '${bot.id}',
       conv_id: window._fpConvId || null
     }, '*');
   }
 
-      // Listen for response from parent
-      window.addEventListener('message', function(e) {
+  // Listen for response from parent
+  window.addEventListener('message', function(e) {
     if (!e.data) return;
 
-      if (e.data.type === 'IAM_CONV_CREATED') {
-        window._fpConvId = e.data.conv_id;
+    if (e.data.type === 'IAM_CONV_CREATED') {
+      window._fpConvId = e.data.conv_id;
     }
 
-      // Handle loading previous chat history (from mode switch)
-      if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
+    // Handle loading previous chat history (from mode switch)
+    if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
       const msgs = document.querySelector('.chat-messages');
       // Clear any greeting message and rebuild from history
       msgs.innerHTML = '';
       e.data.messages.forEach(m => {
         const div = document.createElement('div');
-      div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-      div.textContent = m.content;
-      msgs.appendChild(div);
+        div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
+        div.textContent = m.content;
+        msgs.appendChild(div);
       });
       msgs.scrollTop = msgs.scrollHeight;
     }
 
-      if (e.data.type === 'IAM_BOT_RESPONSE') {
+    if (e.data.type === 'IAM_BOT_RESPONSE') {
       const msgs = document.querySelector('.chat-messages');
       const t = document.getElementById('fp-typing');
       if (t) t.remove();
       const botMsg = document.createElement('div');
       botMsg.className = 'msg bot';
-      botMsg.innerHTML = (e.data.response || 'Sorry, no response received.').replace(/\n/g, '<br>');
-        msgs.appendChild(botMsg);
-        msgs.scrollTop = msgs.scrollHeight;
-        if (e.data.conv_id) window._fpConvId = e.data.conv_id;
-        fpSending = false;
+      botMsg.textContent = e.data.response || 'Sorry, no response received.';
+      msgs.appendChild(botMsg);
+      msgs.scrollTop = msgs.scrollHeight;
+      if (e.data.conv_id) window._fpConvId = e.data.conv_id;
+      fpSending = false;
     }
   });
-        // Simple markdown formatter for full page
-        function escapeHtmlFp(text) {
-    const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-  }
-        function formatMarkdownFp(text) {
-    if (!text) return '';
-        text = text.replace(/`{3}([\\s\\S]*?)`{3}/g, '<pre><code>$1</code></pre>');
-        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-        text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
-        text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
-        text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
-        text = text.replace(/\\*\\*([^*]+)\\*/g, '<strong>$1</strong>');
-        text = text.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
-        text = text.replace(/^(\\d+)\\. (.*$)/gm, '<li>$2</li>');
-        text = text.replace(/^[-*] (.*$)/gm, '<li>$1</li>');
-        text = text.replace(/(<li>[\\s\\S]*?<\\/li>)/g, '<ul>$1</ul>');
-          text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank">$1</a>');
-          text = text.replace(/\\n/g, '<br>');
-            return text;
-  }
-            <\/script>
-          </html>`;
+</script>
+</html>`;
 
-          const html = isWidgetMode ? widgetPreviewHTML : fullPageHTML;
+  const html = isWidgetMode ? widgetPreviewHTML : fullPageHTML;
 
-          // Render in modal preview iframe
-          const modalIframe = document.getElementById('preview-iframe');
-          if (modalIframe) {
-            modalIframe.srcdoc = html;
+  // Render in modal preview iframe
+  const modalIframe = document.getElementById('preview-iframe');
+  if (modalIframe) {
+    modalIframe.srcdoc = html;
     // Restore previous chat state after iframe loads
     modalIframe.onload = () => {
       if (PreviewState.convId) {
-            modalIframe.contentWindow.postMessage({
-              type: 'IAM_CONV_CREATED',
-              conv_id: PreviewState.convId,
-              returning: true
-            }, '*');
+        modalIframe.contentWindow.postMessage({
+          type: 'IAM_CONV_CREATED',
+          conv_id: PreviewState.convId,
+          returning: true
+        }, '*');
       }
       if (PreviewState.messages.length > 0) {
-            modalIframe.contentWindow.postMessage({
-              type: 'IAM_LOAD_HISTORY',
-              messages: PreviewState.messages
-            }, '*');
+        modalIframe.contentWindow.postMessage({
+          type: 'IAM_LOAD_HISTORY',
+          messages: PreviewState.messages
+        }, '*');
       }
     };
   }
 
-          // Also render in inline appearance preview
-          const inlineIframe = document.getElementById('preview-iframe-inline');
-          if (inlineIframe) {
-            inlineIframe.srcdoc = html;
+  // Also render in inline appearance preview
+  const inlineIframe = document.getElementById('preview-iframe-inline');
+  if (inlineIframe) {
+    inlineIframe.srcdoc = html;
     inlineIframe.onload = () => {
       if (PreviewState.convId) {
-            inlineIframe.contentWindow.postMessage({
-              type: 'IAM_CONV_CREATED',
-              conv_id: PreviewState.convId,
-              returning: true
-            }, '*');
+        inlineIframe.contentWindow.postMessage({
+          type: 'IAM_CONV_CREATED',
+          conv_id: PreviewState.convId,
+          returning: true
+        }, '*');
       }
       if (PreviewState.messages.length > 0) {
-            inlineIframe.contentWindow.postMessage({
-              type: 'IAM_LOAD_HISTORY',
-              messages: PreviewState.messages
-            }, '*');
+        inlineIframe.contentWindow.postMessage({
+          type: 'IAM_LOAD_HISTORY',
+          messages: PreviewState.messages
+        }, '*');
       }
     };
   }
 }
-          window.renderLivePreview = renderLivePreview;
+window.renderLivePreview = renderLivePreview;
 
-          function setPreviewMode(mode) {
-            currentPreviewMode = mode;
-          const widgetTab = document.getElementById('preview-tab-widget');
-          const embedTab = document.getElementById('preview-tab-embed');
-          const btnWidgetView = document.getElementById('btn-widget-view');
-          const btnFullpageView = document.getElementById('btn-fullpage-view');
+function setPreviewMode(mode) {
+  currentPreviewMode = mode;
+  const widgetTab = document.getElementById('preview-tab-widget');
+  const embedTab = document.getElementById('preview-tab-embed');
+  const btnWidgetView = document.getElementById('btn-widget-view');
+  const btnFullpageView = document.getElementById('btn-fullpage-view');
 
-          // Update modal tabs
-          if (widgetTab) widgetTab.classList.toggle('active', mode === 'widget');
-          if (embedTab) embedTab.classList.toggle('active', mode === 'embed');
+  // Update modal tabs
+  if (widgetTab) widgetTab.classList.toggle('active', mode === 'widget');
+  if (embedTab) embedTab.classList.toggle('active', mode === 'embed');
 
-          // Update inline preview buttons (active state)
-          if (btnWidgetView) {
-            btnWidgetView.classList.toggle('btn-primary', mode === 'widget');
-          btnWidgetView.classList.toggle('btn-secondary', mode !== 'widget');
+  // Update inline preview buttons (active state)
+  if (btnWidgetView) {
+    btnWidgetView.classList.toggle('btn-primary', mode === 'widget');
+    btnWidgetView.classList.toggle('btn-secondary', mode !== 'widget');
   }
-          if (btnFullpageView) {
-            btnFullpageView.classList.toggle('btn-primary', mode === 'embed');
-          btnFullpageView.classList.toggle('btn-secondary', mode !== 'embed');
+  if (btnFullpageView) {
+    btnFullpageView.classList.toggle('btn-primary', mode === 'embed');
+    btnFullpageView.classList.toggle('btn-secondary', mode !== 'embed');
   }
 
-          // Render preview directly using srcdoc (no external file needed)
-          const bot = AppState.currentBot;
-          if (bot) {
-            renderLivePreview(bot);
+  // Render preview directly using srcdoc (no external file needed)
+  const bot = AppState.currentBot;
+  if (bot) {
+    renderLivePreview(bot);
   }
 }
-          window.setPreviewMode = setPreviewMode;
+window.setPreviewMode = setPreviewMode;
 
-          function openBotPreview() {
+function openBotPreview() {
   const bot = AppState.currentBot;
-          if (!bot) return;
+  if (!bot) return;
 
-          setPreviewMode('widget'); // Default to widget view
-          renderLivePreview(bot); // Render immediately
-          openModal('modal-preview-bot');
+  setPreviewMode('widget'); // Default to widget view
+  renderLivePreview(bot); // Render immediately
+  openModal('modal-preview-bot');
 }
-          window.openBotPreview = openBotPreview;
+window.openBotPreview = openBotPreview;
 
-          function sharePreviewLink() {
+function sharePreviewLink() {
   const bot = AppState.currentBot;
-          if (!bot) return;
+  if (!bot) return;
 
-          const url = `${window.location.origin}${window.location.pathname.replace('index.html', '')} preview.html ? botId = ${bot.id} `;
+  const url = `${window.location.origin}${window.location.pathname.replace('index.html', '')}preview.html?botId=${bot.id}`;
   navigator.clipboard.writeText(url).then(() => {
-            showToast('Preview link copied to clipboard!', 'success');
+    showToast('Preview link copied to clipboard!', 'success');
   }).catch(() => {
-            showToast('Failed to copy link', 'error');
+    showToast('Failed to copy link', 'error');
   });
 }
-          window.sharePreviewLink = sharePreviewLink;
+window.sharePreviewLink = sharePreviewLink;
 
-          /* ── API KEY HELPERS ── */
-          function generateApiKey() {
+/* ── API KEY HELPERS ── */
+function generateApiKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-          const key = 'iam_live_' + Array.from({length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-          const el = document.getElementById('api-key-display');
-          if (el) {el.value = key; el.type = 'text'; }
-          showToast('API key generated — copy it now, it won\'t be shown again', 'info');
-}
-          window.generateApiKey = generateApiKey;
-
-          function copyApiKey() {
+  const key = 'iam_live_' + Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   const el = document.getElementById('api-key-display');
-          if (!el || !el.value) {showToast('Generate a key first', 'error'); return; }
+  if (el) { el.value = key; el.type = 'text'; }
+  showToast('API key generated — copy it now, it won\'t be shown again', 'info');
+}
+window.generateApiKey = generateApiKey;
+
+function copyApiKey() {
+  const el = document.getElementById('api-key-display');
+  if (!el || !el.value) { showToast('Generate a key first', 'error'); return; }
   navigator.clipboard.writeText(el.value).then(() => showToast('API key copied!', 'success'));
 }
-          window.copyApiKey = copyApiKey;
+window.copyApiKey = copyApiKey;
 
-          /* ─── BOT CONFIG ─────────────────────────────────────────────────── */
-          async function createBot() {
+/* ─── BOT CONFIG ─────────────────────────────────────────────────── */
+async function createBot() {
   const name = document.getElementById('new-bot-name')?.value?.trim();
-          const model = document.getElementById('new-bot-model')?.value || 'claude-3-5-sonnet';
-          if (!name) {showToast('Please enter a bot name', 'error'); return; }
-          try {
-    const newBot = await Bots.create({name, model, status: 'unpublished', color: getColorForId(name + Date.now()) });
-          Store.addItem('bots', newBot);
-          LocalDB.clear('bots');
-          closeModal('modal-create-bot');
-          document.getElementById('new-bot-name').value = '';
-          showToast(`"${name}" created!`, 'success');
-          navigate('bot-config', {botId: newBot.id, botName: newBot.name });
+  const model = document.getElementById('new-bot-model')?.value || 'claude-3-5-sonnet';
+  if (!name) { showToast('Please enter a bot name', 'error'); return; }
+  try {
+    const newBot = await Bots.create({ name, model, status: 'unpublished', color: getColorForId(name + Date.now()) });
+    Store.addItem('bots', newBot);
+    LocalDB.clear('bots');
+    closeModal('modal-create-bot');
+    document.getElementById('new-bot-name').value = '';
+    showToast(`"${name}" created!`, 'success');
+    navigate('bot-config', { botId: newBot.id, botName: newBot.name });
   } catch (e) {
-            console.error(e);
-          showToast('Failed to create bot', 'error');
+    console.error(e);
+    showToast('Failed to create bot', 'error');
   }
 }
 
-          async function saveBotConfig() {
+async function saveBotConfig() {
   const bot = AppState.currentBot;
-          if (!bot) return;
-          const updates = {
-            name: document.getElementById('cfg-bot-name')?.value?.trim() || bot.name,
-          model: document.getElementById('cfg-model')?.value || bot.model,
-          greeting_message: document.getElementById('cfg-greeting')?.value?.trim() || bot.greeting_message,
-          system_prompt: document.getElementById('cfg-prompt')?.value?.trim() || bot.system_prompt,
-          status: document.getElementById('cfg-live')?.checked ? 'live' : 'unpublished',
-          theme: {
-            ...(bot.theme || {}),
-            primaryColor: document.getElementById('cfg-primary-color')?.value || bot.theme?.primaryColor,
-          position: document.getElementById('cfg-widget-position')?.value || bot.theme?.position,
-          displayName: document.getElementById('cfg-display-name')?.value?.trim() || bot.theme?.displayName,
-          avatarUrl: document.getElementById('cfg-avatar-url')?.value?.trim() || bot.theme?.avatarUrl,
+  if (!bot) return;
+  const updates = {
+    name: document.getElementById('cfg-bot-name')?.value?.trim() || bot.name,
+    model: document.getElementById('cfg-model')?.value || bot.model,
+    greeting_message: document.getElementById('cfg-greeting')?.value?.trim() || bot.greeting_message,
+    system_prompt: document.getElementById('cfg-prompt')?.value?.trim() || bot.system_prompt,
+    status: document.getElementById('cfg-live')?.checked ? 'live' : 'unpublished',
+    theme: {
+      ...(bot.theme || {}),
+      primaryColor: document.getElementById('cfg-primary-color')?.value || bot.theme?.primaryColor,
+      position: document.getElementById('cfg-widget-position')?.value || bot.theme?.position,
+      displayName: document.getElementById('cfg-display-name')?.value?.trim() || bot.theme?.displayName,
+      avatarUrl: document.getElementById('cfg-avatar-url')?.value?.trim() || bot.theme?.avatarUrl,
     },
   };
-          try {
-    const saved = await Bots.update(bot.id, updates);
-          Store.updateItem('bots', bot.id, saved);
-          AppState.currentBot = {...bot, ...saved };
-          LocalDB.clear('bots');
-          Cache.clear(`analytics_summary_all`);
-          showToast('Bot saved!', 'success');
-          renderEmbedCode(AppState.currentBot);
-  } catch (e) {
-            console.error(e);
-          showToast('Failed to save bot', 'error');
-  }
-}
-
-          function confirmDeleteBot(id, name) {
-  if (confirm(`Delete "${name}" ? This cannot be undone.`)) deleteBot(id);
-}
-
-          async function deleteBot(id) {
   try {
-            Store.removeItem('bots', id);
-          LocalDB.clear('bots');
-          await Bots.delete(id);
-          if (AppState.currentBot?.id === id) {
-            AppState.currentBot = null;
-          navigate('home');
-    }
-          showToast('Bot deleted', 'info');
+    const saved = await Bots.update(bot.id, updates);
+    Store.updateItem('bots', bot.id, saved);
+    AppState.currentBot = { ...bot, ...saved };
+    LocalDB.clear('bots');
+    Cache.clear(`analytics_summary_all`);
+    showToast('Bot saved!', 'success');
+    renderEmbedCode(AppState.currentBot);
   } catch (e) {
-            console.error(e);
-          showToast('Failed to delete bot', 'error');
+    console.error(e);
+    showToast('Failed to save bot', 'error');
   }
 }
 
-          function renderBotConfig(extra = { }) {
+function confirmDeleteBot(id, name) {
+  if (confirm(`Delete "${name}"? This cannot be undone.`)) deleteBot(id);
+}
+
+async function deleteBot(id) {
+  try {
+    Store.removeItem('bots', id);
+    LocalDB.clear('bots');
+    await Bots.delete(id);
+    if (AppState.currentBot?.id === id) {
+      AppState.currentBot = null;
+      navigate('home');
+    }
+    showToast('Bot deleted', 'info');
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to delete bot', 'error');
+  }
+}
+
+function renderBotConfig(extra = {}) {
   const botId = extra.botId || AppState.currentBot?.id;
-          if (!botId) {navigate('home'); return; }
+  if (!botId) { navigate('home'); return; }
 
   const bot = AppState.bots.find(b => b.id === botId) || AppState.currentBot;
-          if (!bot) {navigate('home'); return; }
+  if (!bot) { navigate('home'); return; }
 
-          AppState.currentBot = bot;
+  AppState.currentBot = bot;
 
-          // Update page title elements
-          const titleEl = document.getElementById('bot-config-name');
-          if (titleEl) titleEl.textContent = bot.name;
+  // Update page title elements
+  const titleEl = document.getElementById('bot-config-name');
+  if (titleEl) titleEl.textContent = bot.name;
 
-          // Fill the form fields
-          fillBotForm(bot);
+  // Fill the form fields
+  fillBotForm(bot);
 
-          // Render attached KBs and embed code
-          renderAttachedKBs(bot);
-          renderEmbedCode(bot);
+  // Render attached KBs and embed code
+  renderAttachedKBs(bot);
+  renderEmbedCode(bot);
 
-          // Set default preview mode to widget
-          currentPreviewMode = 'widget';
+  // Set default preview mode to widget
+  currentPreviewMode = 'widget';
 
-          // Update button states
-          const btnWidgetView = document.getElementById('btn-widget-view');
-          const btnFullpageView = document.getElementById('btn-fullpage-view');
-          if (btnWidgetView) {
-            btnWidgetView.classList.add('btn-primary');
-          btnWidgetView.classList.remove('btn-secondary');
+  // Update button states
+  const btnWidgetView = document.getElementById('btn-widget-view');
+  const btnFullpageView = document.getElementById('btn-fullpage-view');
+  if (btnWidgetView) {
+    btnWidgetView.classList.add('btn-primary');
+    btnWidgetView.classList.remove('btn-secondary');
   }
-          if (btnFullpageView) {
-            btnFullpageView.classList.add('btn-secondary');
-          btnFullpageView.classList.remove('btn-primary');
+  if (btnFullpageView) {
+    btnFullpageView.classList.add('btn-secondary');
+    btnFullpageView.classList.remove('btn-primary');
   }
 
-          // Reset to Overview tab (preview is in Appearance tab)
-          showConfigSection('overview');
+  // Reset to Overview tab (preview is in Appearance tab)
+  showConfigSection('overview');
 }
 
-          function fillBotForm(bot) {
+function fillBotForm(bot) {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
   const setChk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
 
-          set('cfg-bot-name', bot.name || '');
-          set('cfg-model', bot.model || 'claude-3-5-sonnet');
-          set('cfg-greeting', bot.greeting_message || '');
-          set('cfg-prompt', bot.system_prompt || '');
-          setChk('cfg-live', bot.status === 'live');
+  set('cfg-bot-name', bot.name || '');
+  set('cfg-model', bot.model || 'claude-3-5-sonnet');
+  set('cfg-greeting', bot.greeting_message || '');
+  set('cfg-prompt', bot.system_prompt || '');
+  setChk('cfg-live', bot.status === 'live');
 
-          const theme = bot.theme || { };
-          const color = theme.primaryColor || bot.color || '#6c63ff';
-          set('cfg-primary-color', color);
-          set('cfg-primary-color-hex', color);
-          set('cfg-widget-position', theme.position || 'bottom-right');
-          set('cfg-display-name', theme.displayName || '');
-          set('cfg-avatar-url', theme.avatarUrl || '');
+  const theme = bot.theme || {};
+  const color = theme.primaryColor || bot.color || '#6c63ff';
+  set('cfg-primary-color', color);
+  set('cfg-primary-color-hex', color);
+  set('cfg-widget-position', theme.position || 'bottom-right');
+  set('cfg-display-name', theme.displayName || '');
+  set('cfg-avatar-url', theme.avatarUrl || '');
 
-          // Sync the preview bubble color
-          const bubble = document.getElementById('cfg-preview-bubble');
-          if (bubble) bubble.style.background = color;
+  // Sync the preview bubble color
+  const bubble = document.getElementById('cfg-preview-bubble');
+  if (bubble) bubble.style.background = color;
 
-          // Render variables
-          renderVariablesTable(bot.bot_variables || []);
+  // Render variables
+  renderVariablesTable(bot.bot_variables || []);
 }
 
-          function showConfigSection(section) {
+function showConfigSection(section) {
   // CSS controls visibility via .config-section.active (display:flex) vs no active (display:none)
   const configSections = document.querySelectorAll('.config-section');
-          const configNavItems = document.querySelectorAll('.config-nav-item');
+  const configNavItems = document.querySelectorAll('.config-nav-item');
   configSections.forEach(el => el.classList.remove('active'));
   configNavItems.forEach(el => el.classList.remove('active'));
 
-          const target = document.getElementById(`config - ${section} `);
-          if (target) target.classList.add('active');
+  const target = document.getElementById(`config-${section}`);
+  if (target) target.classList.add('active');
 
-          const navItem = document.querySelector(`.config - nav - item[data - section="${section}"]`);
-          if (navItem) navItem.classList.add('active');
+  const navItem = document.querySelector(`.config-nav-item[data-section="${section}"]`);
+  if (navItem) navItem.classList.add('active');
 
-          // Render preview when appearance section is shown
-          if (section === 'design' && AppState.currentBot) {
-            // Ensure default mode is widget
-            currentPreviewMode = 'widget';
+  // Render preview when appearance section is shown
+  if (section === 'design' && AppState.currentBot) {
+    // Ensure default mode is widget
+    currentPreviewMode = 'widget';
 
-          // Update button states to show widget as active
-          const btnWidgetView = document.getElementById('btn-widget-view');
-          const btnFullpageView = document.getElementById('btn-fullpage-view');
-          if (btnWidgetView) {
-            btnWidgetView.classList.add('btn-primary');
-          btnWidgetView.classList.remove('btn-secondary');
+    // Update button states to show widget as active
+    const btnWidgetView = document.getElementById('btn-widget-view');
+    const btnFullpageView = document.getElementById('btn-fullpage-view');
+    if (btnWidgetView) {
+      btnWidgetView.classList.add('btn-primary');
+      btnWidgetView.classList.remove('btn-secondary');
     }
-          if (btnFullpageView) {
-            btnFullpageView.classList.add('btn-secondary');
-          btnFullpageView.classList.remove('btn-primary');
+    if (btnFullpageView) {
+      btnFullpageView.classList.add('btn-secondary');
+      btnFullpageView.classList.remove('btn-primary');
     }
 
-          renderLivePreview(AppState.currentBot);
+    renderLivePreview(AppState.currentBot);
   }
 }
 
-          function renderEmbedCode(bot) {
+function renderEmbedCode(bot) {
   if (!bot) return;
-          const color = bot.theme?.primaryColor || bot.color || '#6c63ff';
-          const name = bot.theme?.displayName || bot.name || 'Assistant';
-          const pos = bot.theme?.position || 'bottom-right';
+  const color = bot.theme?.primaryColor || bot.color || '#6c63ff';
+  const name = bot.theme?.displayName || bot.name || 'Assistant';
+  const pos = bot.theme?.position || 'bottom-right';
 
-          const widgetSnippet = `< script >
-            (function (w, d, b) {
-              w.IAMConfig = { botId: "${bot.id}", color: "${color}", position: "${pos}" };
-            var s = d.createElement('script'); s.src = b + '/widget.js'; s.async = true;
-            d.head.appendChild(s);
-  })(window, document, 'https://iam-platform.app');
-            <\/script>`;
+  const widgetSnippet = `<script>
+  (function(w,d,b){
+    w.IAMConfig = { botId:"${bot.id}", color:"${color}", position:"${pos}" };
+    var s=d.createElement('script'); s.src=b+'/widget.js'; s.async=true;
+    d.head.appendChild(s);
+  })(window,document,'https://iam-platform.app');
+<\/script>`;
 
-            const inpageSnippet = `<div id="iam-chat" data-bot-id="${bot.id}"></div>
-            <script src="https://iam-platform.app/embed.js" async><\/script>`;
+  const inpageSnippet = `<div id="iam-chat" data-bot-id="${bot.id}"></div>
+<script src="https://iam-platform.app/embed.js" async><\/script>`;
 
-const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-              setEl('widget-snippet', widgetSnippet);
-              setEl('inpage-snippet', inpageSnippet);
-              // Also fill the panel versions
-              setEl('widget-snippet-p', widgetSnippet);
-              setEl('inpage-snippet-p', inpageSnippet);
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl('widget-snippet', widgetSnippet);
+  setEl('inpage-snippet', inpageSnippet);
+  // Also fill the panel versions
+  setEl('widget-snippet-p', widgetSnippet);
+  setEl('inpage-snippet-p', inpageSnippet);
 }
 
-              function renderEmbedPanel() {
+function renderEmbedPanel() {
   const bot = AppState.currentBot;
-              if (!bot) return;
-              renderEmbedCode(bot);
+  if (!bot) return;
+  renderEmbedCode(bot);
 }
 
-              function copySnippet(elementId) {
+function copySnippet(elementId) {
   const el = document.getElementById(elementId);
-              if (!el) return;
-              navigator.clipboard.writeText(el.textContent).then(
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(
     () => showToast('Snippet copied!', 'success'),
     () => showToast('Copy failed', 'error')
-              );
+  );
 }
 
-              /* ─── BOT VARIABLES ──────────────────────────────────────────────── */
-              let _editingVarId = null;
-              let _allVariables = [];
+/* ─── BOT VARIABLES ──────────────────────────────────────────────── */
+let _editingVarId = null;
+let _allVariables = [];
 
-              // System variables - read-only, cannot be edited or deleted
-              const SYSTEM_VARIABLES = [
-              {id: 'sys_timestamp', name: 'current_timestamp', description: 'Current Unix timestamp (ms)', type: 'datetime', required: false, is_system: true },
-              {id: 'sys_page_url', name: 'page_url', description: 'Current page URL', type: 'url', required: false, is_system: true },
-              {id: 'sys_language', name: 'browser_language', description: 'Browser language code', type: 'text', required: false, is_system: true },
-              {id: 'sys_title', name: 'page_title', description: 'Current page title', type: 'text', required: false, is_system: true },
-              {id: 'sys_timezone', name: 'user_timezone', description: 'User timezone', type: 'text', required: false, is_system: true },
-              {id: 'sys_platform', name: 'user_platform', description: 'User OS and browser platform', type: 'text', required: false, is_system: true },
-              {id: 'sys_origin', name: 'user_origin', description: 'Traffic source / referrer', type: 'text', required: false, is_system: true },
-              {id: 'sys_bot_id', name: 'bot_id', description: 'Current bot ID', type: 'text', required: false, is_system: true },
-              {id: 'sys_conv_id', name: 'conversation_id', description: 'Current conversation ID', type: 'text', required: false, is_system: true },
-              ];
+// System variables - read-only, cannot be edited or deleted
+const SYSTEM_VARIABLES = [
+  { id: 'sys_timestamp', name: 'current_timestamp', description: 'Current Unix timestamp (ms)', type: 'datetime', required: false, is_system: true },
+  { id: 'sys_page_url', name: 'page_url', description: 'Current page URL', type: 'url', required: false, is_system: true },
+  { id: 'sys_language', name: 'browser_language', description: 'Browser language code', type: 'text', required: false, is_system: true },
+  { id: 'sys_title', name: 'page_title', description: 'Current page title', type: 'text', required: false, is_system: true },
+  { id: 'sys_timezone', name: 'user_timezone', description: 'User timezone', type: 'text', required: false, is_system: true },
+  { id: 'sys_platform', name: 'user_platform', description: 'User OS and browser platform', type: 'text', required: false, is_system: true },
+  { id: 'sys_origin', name: 'user_origin', description: 'Traffic source / referrer', type: 'text', required: false, is_system: true },
+  { id: 'sys_bot_id', name: 'bot_id', description: 'Current bot ID', type: 'text', required: false, is_system: true },
+  { id: 'sys_conv_id', name: 'conversation_id', description: 'Current conversation ID', type: 'text', required: false, is_system: true },
+];
 
-              function renderVariablesTable(vars, filter = 'all') {
+function renderVariablesTable(vars, filter = 'all') {
   // Prepend system variables to the list for display
   const allVarsWithSystem = [...SYSTEM_VARIABLES, ...vars];
-              _allVariables = allVarsWithSystem;
+  _allVariables = allVarsWithSystem;
 
-              const tbody = document.getElementById('variables-table-body');
-              if (!tbody) return;
+  const tbody = document.getElementById('variables-table-body');
+  if (!tbody) return;
 
-              const filtered = filter === 'all' ? allVarsWithSystem
+  const filtered = filter === 'all' ? allVarsWithSystem
     : allVarsWithSystem.filter(v => v.source === filter || (filter === 'custom' && !v.is_system) || (filter === 'system' && v.is_system));
 
-              if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No variables yet.</td></tr>`;
-              return;
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No variables yet.</td></tr>`;
+    return;
   }
 
   tbody.innerHTML = filtered.map(v => `
-              <tr id="var-row-${v.id}" style="${v.is_system ? 'opacity:0.7;background:rgba(108,99,255,0.05);' : ''}">
-                <td style="font-family:monospace;font-size:12px;">
-                  ${v.is_system ? '<span style="color:var(--accent);">🔒</span> ' : ''}${v.name}
-                </td>
-                <td style="font-size:13px;color:var(--text-secondary);">${v.description || '—'}</td>
-                <td><span class="badge ${v.is_system ? 'badge-purple' : 'badge-gray'}">${v.is_system ? 'system' : (v.type || 'text')}</span></td>
-                <td style="text-align:center;">
-                  <span style="color:${v.required ? 'var(--accent-2)' : 'var(--text-muted)'};">${v.required ? '✓' : '—'}</span>
-                </td>
-                <td style="text-align:right;">
-                  ${v.is_system
-                    ? '<span style="font-size:11px;color:var(--text-muted);">System</span>'
-                    : `<button class="btn btn-ghost btn-sm btn-icon" onclick="editVariable('${v.id}')">✏️</button>
+    <tr id="var-row-${v.id}" style="${v.is_system ? 'opacity:0.7;background:rgba(108,99,255,0.05);' : ''}">
+      <td style="font-family:monospace;font-size:12px;">
+        ${v.is_system ? '<span style="color:var(--accent);">🔒</span> ' : ''}${v.name}
+      </td>
+      <td style="font-size:13px;color:var(--text-secondary);">${v.description || '—'}</td>
+      <td><span class="badge ${v.is_system ? 'badge-purple' : 'badge-gray'}">${v.is_system ? 'system' : (v.type || 'text')}</span></td>
+      <td style="text-align:center;">
+        <span style="color:${v.required ? 'var(--accent-2)' : 'var(--text-muted)'};">${v.required ? '✓' : '—'}</span>
+      </td>
+      <td style="text-align:right;">
+        ${v.is_system
+      ? '<span style="font-size:11px;color:var(--text-muted);">System</span>'
+      : `<button class="btn btn-ghost btn-sm btn-icon" onclick="editVariable('${v.id}')">✏️</button>
              <button class="btn btn-ghost btn-sm btn-icon" style="color:var(--danger);" onclick="removeVariable('${v.id}')">🗑</button>`}
-                </td>
-              </tr>
-              `).join('');
+      </td>
+    </tr>
+  `).join('');
 }
 
-              function filterVariables(filter) {
-                $$('#var-filter-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().includes(filter === 'all' ? 'all' : filter)));
-              renderVariablesTable(_allVariables, filter);
+function filterVariables(filter) {
+  $$('#var-filter-tabs .tab-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().includes(filter === 'all' ? 'all' : filter)));
+  renderVariablesTable(_allVariables, filter);
 }
 
-              async function addVariable() {
+async function addVariable() {
   const bot = AppState.currentBot;
-              if (!bot) return;
+  if (!bot) return;
 
-              const name = document.getElementById('new-var-name')?.value?.trim();
-              const desc = document.getElementById('new-var-desc')?.value?.trim() || '';
-              const type = document.getElementById('new-var-type')?.value || 'text';
-              const required = document.getElementById('new-var-required')?.checked || false;
+  const name = document.getElementById('new-var-name')?.value?.trim();
+  const desc = document.getElementById('new-var-desc')?.value?.trim() || '';
+  const type = document.getElementById('new-var-type')?.value || 'text';
+  const required = document.getElementById('new-var-required')?.checked || false;
 
-              if (!name) {showToast('Variable name is required', 'error'); return; }
-              if (!/^[a-z_][a-z0-9_]*$/i.test(name)) {showToast('Name must start with a letter and contain only letters, numbers, underscores', 'error'); return; }
+  if (!name) { showToast('Variable name is required', 'error'); return; }
+  if (!/^[a-z_][a-z0-9_]*$/i.test(name)) { showToast('Name must start with a letter and contain only letters, numbers, underscores', 'error'); return; }
 
   // Check for duplicate with system variables
   const systemNames = SYSTEM_VARIABLES.map(sv => sv.name.toLowerCase());
-              if (systemNames.includes(name.toLowerCase())) {
-                showToast('Cannot create variable: name conflicts with system variable "' + name + '"', 'error');
-              return;
+  if (systemNames.includes(name.toLowerCase())) {
+    showToast('Cannot create variable: name conflicts with system variable "' + name + '"', 'error');
+    return;
   }
 
   // Check for duplicate with existing custom variables
   const customVarNames = _allVariables.filter(v => !v.is_system).map(v => v.name.toLowerCase());
-              if (customVarNames.includes(name.toLowerCase())) {
-                showToast('A variable with this name already exists', 'error');
-              return;
+  if (customVarNames.includes(name.toLowerCase())) {
+    showToast('A variable with this name already exists', 'error');
+    return;
   }
 
-              if (_editingVarId) {
+  if (_editingVarId) {
     // Update existing - also check system variable conflict
     const systemNames = SYSTEM_VARIABLES.map(sv => sv.name.toLowerCase());
-              if (systemNames.includes(name.toLowerCase())) {
-                showToast('Cannot rename to system variable name "' + name + '"', 'error');
-              return;
+    if (systemNames.includes(name.toLowerCase())) {
+      showToast('Cannot rename to system variable name "' + name + '"', 'error');
+      return;
     }
 
-              // Update existing
-              try {
-                await supabase.from('bot_variables').update({ name, description: desc, type, required }).eq('id', _editingVarId);
+    // Update existing
+    try {
+      await supabase.from('bot_variables').update({ name, description: desc, type, required }).eq('id', _editingVarId);
       const idx = _allVariables.findIndex(v => v.id === _editingVarId);
-      if (idx > -1) _allVariables[idx] = {..._allVariables[idx], name, description: desc, type, required };
-              renderVariablesTable(_allVariables);
-              cancelEditVariable();
-              showToast('Variable updated', 'success');
-    } catch (e) {showToast('Failed to update variable', 'error'); }
-              return;
+      if (idx > -1) _allVariables[idx] = { ..._allVariables[idx], name, description: desc, type, required };
+      renderVariablesTable(_allVariables);
+      cancelEditVariable();
+      showToast('Variable updated', 'success');
+    } catch (e) { showToast('Failed to update variable', 'error'); }
+    return;
   }
 
-              try {
-    const {BotVariables} = await import('./supabase.js');
-              const newVar = await BotVariables.add(bot.id, {name, description: desc, type, required });
-              _allVariables = [newVar, ..._allVariables];
-              renderVariablesTable(_allVariables);
-              document.getElementById('new-var-name').value = '';
-              document.getElementById('new-var-desc').value = '';
-              showToast('Variable added', 'success');
+  try {
+    const { BotVariables } = await import('./supabase.js');
+    const newVar = await BotVariables.add(bot.id, { name, description: desc, type, required });
+    _allVariables = [newVar, ..._allVariables];
+    renderVariablesTable(_allVariables);
+    document.getElementById('new-var-name').value = '';
+    document.getElementById('new-var-desc').value = '';
+    showToast('Variable added', 'success');
   } catch (e) {
-                console.error(e);
-              showToast('Failed to add variable', 'error');
+    console.error(e);
+    showToast('Failed to add variable', 'error');
   }
 }
 
-              function editVariable(id) {
+function editVariable(id) {
   const v = _allVariables.find(v => v.id === id);
-              if (!v) return;
+  if (!v) return;
 
-              // Prevent editing system variables
-              if (v.is_system) {
-                showToast('System variables cannot be edited', 'error');
-              return;
+  // Prevent editing system variables
+  if (v.is_system) {
+    showToast('System variables cannot be edited', 'error');
+    return;
   }
 
-              _editingVarId = id;
+  _editingVarId = id;
   const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val ?? ''; };
-              set('new-var-name', v.name);
-              set('new-var-desc', v.description || '');
-              set('new-var-type', v.type || 'text');
-              const req = document.getElementById('new-var-required');
-              if (req) req.checked = !!v.required;
-              const addBtn = document.getElementById('var-add-btn');
-              const cancelBtn = document.getElementById('var-cancel-edit-btn');
-              if (addBtn) addBtn.textContent = '✓ Save';
-              if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+  set('new-var-name', v.name);
+  set('new-var-desc', v.description || '');
+  set('new-var-type', v.type || 'text');
+  const req = document.getElementById('new-var-required');
+  if (req) req.checked = !!v.required;
+  const addBtn = document.getElementById('var-add-btn');
+  const cancelBtn = document.getElementById('var-cancel-edit-btn');
+  if (addBtn) addBtn.textContent = '✓ Save';
+  if (cancelBtn) cancelBtn.style.display = 'inline-flex';
 }
 
-              function cancelEditVariable() {
-                _editingVarId = null;
+function cancelEditVariable() {
+  _editingVarId = null;
   const clear = (id) => { const el = document.getElementById(id); if (el) el.value = ''; };
-              clear('new-var-name'); clear('new-var-desc');
-              const sel = document.getElementById('new-var-type'); if (sel) sel.value = 'text';
-              const req = document.getElementById('new-var-required'); if (req) req.checked = false;
-              const addBtn = document.getElementById('var-add-btn');
-              const cancelBtn = document.getElementById('var-cancel-edit-btn');
-              if (addBtn) addBtn.textContent = '+ Add';
-              if (cancelBtn) cancelBtn.style.display = 'none';
+  clear('new-var-name'); clear('new-var-desc');
+  const sel = document.getElementById('new-var-type'); if (sel) sel.value = 'text';
+  const req = document.getElementById('new-var-required'); if (req) req.checked = false;
+  const addBtn = document.getElementById('var-add-btn');
+  const cancelBtn = document.getElementById('var-cancel-edit-btn');
+  if (addBtn) addBtn.textContent = '+ Add';
+  if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
-              async function removeVariable(id) {
+async function removeVariable(id) {
   // Find the variable first
   const v = _allVariables.find(v => v.id === id);
-              if (!v) return;
+  if (!v) return;
 
-              // Prevent deleting system variables
-              if (v.is_system) {
-                showToast('System variables cannot be deleted', 'error');
-              return;
+  // Prevent deleting system variables
+  if (v.is_system) {
+    showToast('System variables cannot be deleted', 'error');
+    return;
   }
 
-              if (!confirm('Delete this variable?')) return;
-              try {
-    const {BotVariables} = await import('./supabase.js');
-              await BotVariables.delete(id);
+  if (!confirm('Delete this variable?')) return;
+  try {
+    const { BotVariables } = await import('./supabase.js');
+    await BotVariables.delete(id);
     _allVariables = _allVariables.filter(v => v.id !== id);
-              renderVariablesTable(_allVariables);
-              showToast('Variable removed', 'info');
-  } catch (e) {showToast('Failed to remove variable', 'error'); }
+    renderVariablesTable(_allVariables);
+    showToast('Variable removed', 'info');
+  } catch (e) { showToast('Failed to remove variable', 'error'); }
 }
 
-              /* ─── LEADS ──────────────────────────────────────────────────────── */
-              async function renderLeads() {
+/* ─── LEADS ──────────────────────────────────────────────────────── */
+async function renderLeads() {
   const tbody = document.getElementById('leads-tbody');
-              if (!tbody) return;
+  if (!tbody) return;
 
-              let leads = Store.get('leads') || [];
+  let leads = Store.get('leads') || [];
 
-              // If scoped to a bot, filter
-              if (AppState.currentBot) {
-                leads = leads.filter(l => l.bot_id === AppState.currentBot.id);
+  // If scoped to a bot, filter
+  if (AppState.currentBot) {
+    leads = leads.filter(l => l.bot_id === AppState.currentBot.id);
   }
 
-              if (leads.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:28px;">No leads yet.</td></tr>`;
-              return;
+  if (leads.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:28px;">No leads yet.</td></tr>`;
+    return;
   }
 
   tbody.innerHTML = leads.map(l => {
     const botName = l.bots?.name || (AppState.bots.find(b => b.id === l.bot_id)?.name) || '—';
-              const date = l.created_at ? new Date(l.created_at).toLocaleDateString() : '—';
-              const statusColor = l.status === 'qualified' ? 'badge-green' : l.status === 'new' ? 'badge-purple' : 'badge-gray';
-              return `
-              <tr>
-                <td>
-                  <div style="font-weight:600;">${l.name || '—'}</div>
-                  <div style="font-size:12px;color:var(--text-muted);">${l.email || ''}</div>
-                </td>
-                <td>${l.company || '—'}</td>
-                <td>${l.phone || '—'}</td>
-                <td>${botName}</td>
-                <td>${date}</td>
-                <td><span class="badge ${statusColor}">${l.status || 'new'}</span></td>
-                <td style="text-align:right;">
-                  <button class="btn btn-ghost btn-sm btn-icon" style="color:var(--danger);" onclick="deleteLead('${l.id}')">🗑</button>
-                </td>
-              </tr>`;
+    const date = l.created_at ? new Date(l.created_at).toLocaleDateString() : '—';
+    const statusColor = l.status === 'qualified' ? 'badge-green' : l.status === 'new' ? 'badge-purple' : 'badge-gray';
+    return `
+      <tr>
+        <td>
+          <div style="font-weight:600;">${l.name || '—'}</div>
+          <div style="font-size:12px;color:var(--text-muted);">${l.email || ''}</div>
+        </td>
+        <td>${l.company || '—'}</td>
+        <td>${l.phone || '—'}</td>
+        <td>${botName}</td>
+        <td>${date}</td>
+        <td><span class="badge ${statusColor}">${l.status || 'new'}</span></td>
+        <td style="text-align:right;">
+          <button class="btn btn-ghost btn-sm btn-icon" style="color:var(--danger);" onclick="deleteLead('${l.id}')">🗑</button>
+        </td>
+      </tr>`;
   }).join('');
 }
 
-              async function deleteLead(id) {
+async function deleteLead(id) {
   if (!confirm('Delete this lead?')) return;
-              try {
-                Store.removeItem('leads', id);
-              await Leads.delete(id);
-              showToast('Lead deleted', 'info');
+  try {
+    Store.removeItem('leads', id);
+    await Leads.delete(id);
+    showToast('Lead deleted', 'info');
   } catch (e) {
-                console.error(e);
-              showToast('Failed to delete lead', 'error');
+    console.error(e);
+    showToast('Failed to delete lead', 'error');
   }
 }
 
-              /* ─── Final Global Exposures ─────────────────────────────────────── */
+/* ─── Final Global Exposures ─────────────────────────────────────── */
 
-              // Safe wrapper for embed button on bot cards — avoids AppState inline access
-              function openEmbedForBot(botId) {
+// Safe wrapper for embed button on bot cards — avoids AppState inline access
+function openEmbedForBot(botId) {
   const bot = AppState.bots.find(b => b.id === botId);
-              if (!bot) return;
-              AppState.currentBot = bot;
-              renderEmbedPanel();
-              openPanel('panel-embed');
+  if (!bot) return;
+  AppState.currentBot = bot;
+  renderEmbedPanel();
+  openPanel('panel-embed');
 }
-              window.openEmbedForBot = openEmbedForBot;
-              window.renderConversations = renderConversations;
-              window.openModal = openModal;
-              window.closeModal = closeModal;
-              window.openPanel = openPanel;
-              window.closePanel = closePanel;
-              window.showToast = showToast;
-              window.navigate = navigate;
-              window.createBot = createBot;
-              window.saveBotConfig = saveBotConfig;
-              window.confirmDeleteBot = confirmDeleteBot;
-              window.addVariable = addVariable;
-              window.removeVariable = removeVariable;
-              window.editVariable = editVariable;
-              window.cancelEditVariable = cancelEditVariable;
-              window.filterVariables = filterVariables;
-              window.copySnippet = copySnippet;
-              window.sendAgentMessage = sendAgentMessage;
-              window.interceptConversation = interceptConversation;
-              window.endHITL = endHITL;
-              window.deleteLead = deleteLead;
-              window.deleteBot = deleteBot;
-              window.renderEmbedPanel = renderEmbedPanel;
-              window.renderBotConfig = renderBotConfig;
-              // KB functions
-              window.openKBDetail = openKBDetail;
-              window.openKB = openKBDetail; // alias for any old references
-              window.loadKBDetailFiles = loadKBDetailFiles;
-              window.switchKBDetailTab = switchKBDetailTab;
-              window.uploadKBDetailFiles = uploadKBDetailFiles;
-              window.saveKBRichText = saveKBRichText;
-              window.startKBCrawl = startKBCrawl;
-              window.deleteKBFile = deleteKBFile;
-              window.renameKB = renameKB;
-              window.renameCurrentKB = renameCurrentKB;
-              window.confirmRenameKB = confirmRenameKB;
-              window.deleteCurrentKB = deleteCurrentKB;
-              window.confirmDeleteKB = confirmDeleteKB;
-              window.deleteKnowledgeBase = deleteKnowledgeBase;
-              window.openAttachKBModal = openAttachKBModal;
-              window.attachKB = attachKB;
-              window.detachKB = detachKB;
-              window.renderAttachedKBs = renderAttachedKBs;
-              window.addKnowledgeBase = addKnowledgeBase;
-              // Settings / auth
-              window.saveWorkspaceSettings = saveWorkspaceSettings;
-              window.handleSignOut = handleSignOut;
-              window.toggleUserMenu = toggleUserMenu;
-              window.generateApiKey = generateApiKey;
-              window.copyApiKey = copyApiKey;
-              // Preview / config
-              window.openBotPreview = openBotPreview;
-              window.setPreviewMode = setPreviewMode;
-              window.sharePreviewLink = sharePreviewLink;
-              window.showConfigSection = showConfigSection;
-              window.handleConversationsNav = handleConversationsNav;
-              window.renderAnalytics = renderAnalytics;
+window.openEmbedForBot = openEmbedForBot;
+window.renderConversations = renderConversations;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.openPanel = openPanel;
+window.closePanel = closePanel;
+window.showToast = showToast;
+window.navigate = navigate;
+window.createBot = createBot;
+window.saveBotConfig = saveBotConfig;
+window.confirmDeleteBot = confirmDeleteBot;
+window.addVariable = addVariable;
+window.removeVariable = removeVariable;
+window.editVariable = editVariable;
+window.cancelEditVariable = cancelEditVariable;
+window.filterVariables = filterVariables;
+window.copySnippet = copySnippet;
+window.sendAgentMessage = sendAgentMessage;
+window.interceptConversation = interceptConversation;
+window.endHITL = endHITL;
+window.deleteLead = deleteLead;
+window.deleteBot = deleteBot;
+window.renderEmbedPanel = renderEmbedPanel;
+window.renderBotConfig = renderBotConfig;
+// KB functions
+window.openKBDetail = openKBDetail;
+window.openKB = openKBDetail; // alias for any old references
+window.loadKBDetailFiles = loadKBDetailFiles;
+window.switchKBDetailTab = switchKBDetailTab;
+window.uploadKBDetailFiles = uploadKBDetailFiles;
+window.saveKBRichText = saveKBRichText;
+window.startKBCrawl = startKBCrawl;
+window.deleteKBFile = deleteKBFile;
+window.renameKB = renameKB;
+window.renameCurrentKB = renameCurrentKB;
+window.confirmRenameKB = confirmRenameKB;
+window.deleteCurrentKB = deleteCurrentKB;
+window.confirmDeleteKB = confirmDeleteKB;
+window.deleteKnowledgeBase = deleteKnowledgeBase;
+window.openAttachKBModal = openAttachKBModal;
+window.attachKB = attachKB;
+window.detachKB = detachKB;
+window.renderAttachedKBs = renderAttachedKBs;
+window.addKnowledgeBase = addKnowledgeBase;
+// Settings / auth
+window.saveWorkspaceSettings = saveWorkspaceSettings;
+window.handleSignOut = handleSignOut;
+window.toggleUserMenu = toggleUserMenu;
+window.generateApiKey = generateApiKey;
+window.copyApiKey = copyApiKey;
+// Preview / config
+window.openBotPreview = openBotPreview;
+window.setPreviewMode = setPreviewMode;
+window.sharePreviewLink = sharePreviewLink;
+window.showConfigSection = showConfigSection;
+window.handleConversationsNav = handleConversationsNav;
+window.renderAnalytics = renderAnalytics;
 
-              console.log('IAM Platform: app.js loaded.');
+console.log('IAM Platform: app.js loaded.');
