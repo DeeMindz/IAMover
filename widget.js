@@ -206,9 +206,26 @@
         filter: 'conversation_id=eq.' + cId
       }, function(payload) {
         var msg = payload.new;
-        if (msg.role === 'human-agent') { hideTyping(); appendAgent(msg.content); isSending = false; }
-        if (msg.role === 'system')      { appendSystem(msg.content); }
-        // bot messages come via API response — skip to avoid duplicate
+        if (msg.role === 'human-agent') {
+          hideTyping();
+          appendAgent(msg.content);
+          isSending = false;
+        }
+        if (msg.role === 'system') {
+          appendSystem(msg.content);
+        }
+        if (msg.role === 'bot') {
+          // Only show via realtime if we didn't already show it via direct API response
+          // Check last bot message to avoid duplicate
+          var botMsgs = msgsEl.querySelectorAll('.iam-msg.bot');
+          var lastBot = botMsgs[botMsgs.length - 1];
+          var alreadyShown = lastBot && lastBot.textContent.trim() === msg.content.trim();
+          if (!alreadyShown) {
+            hideTyping();
+            appendBot(msg.content);
+            isSending = false;
+          }
+        }
       })
       .subscribe(function(status) {
         console.log('[IAM] Realtime:', status);
