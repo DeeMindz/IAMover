@@ -2919,17 +2919,16 @@ function renderEmbedCode(bot) {
   const pos   = bot.theme?.position || 'bottom-right';
   const base  = window.location.origin;
 
-  // Floating bubble — appears on every page as a launcher in the corner
+  // Floating bubble
   const widgetSnippet =
 `<script>
   window.IAMConfig = { botId: "${bot.id}", color: "${color}", position: "${pos}" };
 </script>
 <script src="${base}/widget.js" async></script>`;
 
-  // Inline embed — opens chat directly inside a specific div on the page
+  // Inline embed — position:relative and overflow:hidden required to contain the widget
   const inpageSnippet =
-`<!-- Place this div where you want the chat to appear -->
-<div id="iam-chat-inline" style="width:100%;max-width:420px;height:600px;border-radius:18px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.12);"></div>
+`<div id="iam-chat-inline" style="width:100%;max-width:420px;height:600px;border-radius:18px;overflow:hidden;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.12);"></div>
 <script>
   window.IAMConfig = { botId: "${bot.id}", color: "${color}", position: "inline", containerId: "iam-chat-inline" };
 </script>
