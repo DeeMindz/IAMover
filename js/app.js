@@ -250,11 +250,57 @@ window.addEventListener('message', async function (e) {
       // Save conv ID to PreviewState for persistence across mode switches
       if (data.conversation_id) {
         PreviewState.convId = data.conversation_id;
+        // Start real-time subscription immediately for this conversation
+        // This ensures agent messages and HITL notifications always reach the widget
+        startWidgetRealtimeSubscription(e.source, data.conversation_id);
+      }
+      // Load history for returning visitors
+      if (data.returning && data.conversation_id) {
+        try {
+          const msgsRes = await fetch('/api/conversation/messages?conversation_id=' + data.conversation_id);
+          if (msgsRes.ok) {
+            const msgsData = await msgsRes.json();
+            if (msgsData.messages && msgsData.messages.length > 0) {
+              e.source.postMessage({ type: 'IAM_LOAD_HISTORY', messages: msgsData.messages }, '*');
+            }
+          }
+        } catch(err) { console.warn('[IAM Bridge] History load failed:', err); }
       }
     } catch (err) {
       console.error('[IAM Bridge] Exception creating conversation:', err);
       e.source.postMessage({ type: 'IAM_CONV_ERROR', error: err.message }, '*');
     }
+  }
+
+  // Handle new conversation request from widget
+  if (e.data.type === 'IAM_NEW_CONV') {
+    console.log('[IAM Bridge] New conversation requested for bot:', e.data.bot_id);
+    // Stop existing real-time subscription
+    if (_widgetRealtimeSub) {
+      _widgetRealtimeSub.unsubscribe();
+      _widgetRealtimeSub = null;
+    }
+    PreviewState.convId = null;
+    PreviewState.messages = [];
+    // Create new conversation
+    try {
+      const visitor_id = getOrCreateVisitorId();
+      const res = await fetch('/api/conversation/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bot_id: e.data.bot_id,
+          user_id: visitor_id + '_new_' + Date.now(), // new visitor ID for fresh conv
+          page_url: window.location.href,
+        })
+      });
+      const data = await res.json();
+      if (data.conversation_id) {
+        PreviewState.convId = data.conversation_id;
+        e.source.postMessage({ type: 'IAM_CONV_CREATED', conv_id: data.conversation_id, returning: false }, '*');
+        startWidgetRealtimeSubscription(e.source, data.conversation_id);
+      }
+    } catch(err) { console.warn('[IAM Bridge] New conv create failed:', err); }
   }
 
   // Handle bot response request
@@ -1224,19 +1270,18 @@ function renderConvDetail(id) {
           <span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;white-space:nowrap;">${label}</span>
         </div>`;
       }
-      // Regular messages
+      // Regular messages — agent aligns LEFT same as bot
       const isAgent = m.role === 'human-agent';
       const isBot = m.role === 'bot';
-      const isUser = m.role === 'user';
       return `
-      <div class="message ${m.role}" style="${isAgent ? 'flex-direction:row-reverse;' : ''}">
-        <div class="msg-avatar" style="background:${isBot ? 'var(--accent-dim)' : isAgent ? 'var(--accent-2-dim)' : '#333'}">
+      <div class="message ${isAgent ? 'bot' : m.role}">
+        <div class="msg-avatar" style="background:${isBot ? 'var(--accent-dim)' : isAgent ? '#10b98133' : '#333'}">
           ${isBot ? '🤖' : isAgent ? '👤' : ''}
         </div>
         <div>
-          ${isAgent ? '<div style="font-size:10px;color:var(--text-muted);text-align:right;margin-bottom:2px;">Agent</div>' : ''}
-          <div class="msg-bubble" style="${isAgent ? 'background:var(--accent-2);color:#fff;' : ''}">${m.text}</div>
-          <div class="msg-time" style="${isAgent ? 'text-align:right;' : ''}">${m.time}</div>
+          ${isAgent ? '<div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>' : ''}
+          <div class="msg-bubble" style="${isAgent ? 'border-left:3px solid #10b981;' : ''}">${m.text}</div>
+          <div class="msg-time">${m.time}</div>
         </div>
       </div>`;
     }).join('');
@@ -2117,7 +2162,7 @@ function renderLivePreview(bot) {
         <div class="name">${botName}</div>
         <div class="status">⬤ Online · Ready to help</div>
       </div>
-      <button class="close-btn" onclick="newConversation()" title="New conversation" style="margin-right:4px;font-size:14px;">&#8635;</button>
+      <button class="close-btn" onclick="showNewConvConfirm()" title="New conversation" style="margin-right:4px;font-size:14px;">&#8635;</button>
       <button class="close-btn" onclick="closeChat()">✕</button>
     </div>
     <div class="chat-messages" id="chat-messages">
@@ -2126,6 +2171,15 @@ function renderLivePreview(bot) {
     <div class="chat-input-area">
       <input class="chat-input" id="chat-input" placeholder="Type a message…" onkeydown="handleKey(event)" />
       <button class="send-btn" onclick="sendMsg()">↑</button>
+    </div>
+    <!-- New conversation confirm footer — hidden by default -->
+    <div id="new-conv-confirm" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eee;padding:14px 16px;display:none;flex-direction:column;align-items:center;gap:10px;z-index:10;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">
+      <div style="font-size:13px;font-weight:600;color:#333;">Start a new conversation?</div>
+      <div style="font-size:11px;color:#888;text-align:center;">Your current chat history will no longer be visible.</div>
+      <div style="display:flex;gap:8px;width:100%;">
+        <button onclick="cancelNewConv()" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:10px;background:#fff;font-size:13px;cursor:pointer;">Cancel</button>
+        <button onclick="confirmNewConv()" style="flex:1;padding:8px;border:none;border-radius:10px;background:#6c63ff;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">New Chat</button>
+      </div>
     </div>
   </div>
 
@@ -2287,11 +2341,21 @@ function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
 }
 
-function newConversation() {
+function showNewConvConfirm() {
+  var footer = document.getElementById('new-conv-confirm');
+  if (footer) { footer.style.display = 'flex'; }
+}
+function cancelNewConv() {
+  var footer = document.getElementById('new-conv-confirm');
+  if (footer) { footer.style.display = 'none'; }
+}
+function confirmNewConv() {
+  var footer = document.getElementById('new-conv-confirm');
+  if (footer) { footer.style.display = 'none'; }
   window._previewConvId = null;
   var msgs = document.getElementById('chat-messages');
   msgs.innerHTML = '<div class="msg bot">${greeting}</div>';
-  window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
+  window.parent.postMessage({ type: 'IAM_NEW_CONV', bot_id: '${bot.id}' }, '*');
 }
 <\/script>
 </body >
