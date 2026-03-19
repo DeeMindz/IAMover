@@ -97,12 +97,12 @@ async function embedText(text) {
     if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: 'models/text-embedding-004',
+                model: 'models/gemini-embedding-001',
                 content: { parts: [{ text }] },
                 taskType: 'RETRIEVAL_DOCUMENT',
             })
@@ -124,7 +124,7 @@ async function saveChunks(chunks, kb_file_id, kb_id, sourceUrl) {
     for (let i = 0; i < chunks.length; i++) {
         try {
             const embedding = await embedText(chunks[i]);
-            const padded = [...embedding, ...new Array(1536 - embedding.length).fill(0)];
+            const padded = [...embedding, ...new Array(3072 - embedding.length).fill(0)];
             const vectorStr = '[' + padded.join(',') + ']';
 
             await supabase.from('kb_chunks').insert({
@@ -134,8 +134,8 @@ async function saveChunks(chunks, kb_file_id, kb_id, sourceUrl) {
                 embedding:            vectorStr,
                 chunk_index:          i,
                 token_count:          Math.round(chunks[i].length / 4),
-                embedding_model:      'text-embedding-004',
-                embedding_dimensions: 768,
+                embedding_model:      'gemini-embedding-001',
+                embedding_dimensions: 3072,
                 metadata: { source_url: sourceUrl, chunk_of: chunks.length }
             });
 

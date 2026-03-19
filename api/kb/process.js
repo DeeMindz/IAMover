@@ -49,12 +49,12 @@ async function embedText(text) {
     if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: 'models/text-embedding-004',
+                model: 'models/gemini-embedding-001',
                 content: { parts: [{ text }] },
                 taskType: 'RETRIEVAL_DOCUMENT',
             })
@@ -197,9 +197,8 @@ export default async function handler(req, res) {
             try {
                 const embedding = await embedText(chunk);
 
-                // Format as pgvector string: [0.1,0.2,...] padded to 1536 dims
-                // Gemini text-embedding-004 returns 768 dims — pad to 1536 for schema
-                const padded = [...embedding, ...new Array(1536 - embedding.length).fill(0)];
+                // Format as pgvector string: [0.1,0.2,...] — gemini-embedding-001 returns 3072 dims
+                const padded = [...embedding, ...new Array(3072 - embedding.length).fill(0)];
                 const vectorStr = '[' + padded.join(',') + ']';
 
                 await supabase.from('kb_chunks').insert({
@@ -209,8 +208,8 @@ export default async function handler(req, res) {
                     embedding:            vectorStr,
                     chunk_index:          i,
                     token_count:          Math.round(chunk.length / 4),
-                    embedding_model:      'text-embedding-004',
-                    embedding_dimensions: 768,
+                    embedding_model:      'gemini-embedding-001',
+                    embedding_dimensions: 3072,
                     metadata: {
                         file_name:  file.name,
                         file_type:  file.type,

@@ -13,12 +13,12 @@ async function embedQuery(text) {
     if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: 'models/text-embedding-004',
+                model: 'models/gemini-embedding-001',
                 content: { parts: [{ text }] },
                 taskType: 'RETRIEVAL_QUERY', // different task type for queries vs documents
             })
@@ -50,8 +50,8 @@ export default async function handler(req, res) {
         // Embed the user query
         const queryEmbedding = await embedQuery(query);
 
-        // Pad to 1536 dimensions to match stored vectors
-        const padded = [...queryEmbedding, ...new Array(1536 - queryEmbedding.length).fill(0)];
+        // Pad to 3072 dimensions to match gemini-embedding-001 output
+        const padded = [...queryEmbedding, ...new Array(3072 - queryEmbedding.length).fill(0)];
         const vectorStr = '[' + padded.join(',') + ']';
 
         // Semantic search using pgvector cosine similarity

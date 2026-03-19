@@ -134,12 +134,12 @@ export default async function handler(req, res) {
                 // Embed the user message for semantic search
                 const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
                 const embedRes = await fetch(
-                    `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            model: 'models/text-embedding-004',
+                            model: 'models/gemini-embedding-001',
                             content: { parts: [{ text: message }] },
                             taskType: 'RETRIEVAL_QUERY',
                         })
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
                 if (embedRes.ok) {
                     const embedData = await embedRes.json();
                     const queryVec = embedData.embedding.values;
-                    const padded = [...queryVec, ...new Array(1536 - queryVec.length).fill(0)];
+                    const padded = [...queryVec, ...new Array(3072 - queryVec.length).fill(0)];
                     const vectorStr = '[' + padded.join(',') + ']';
 
                     // Semantic similarity search in pgvector
