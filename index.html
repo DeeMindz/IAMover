@@ -151,7 +151,7 @@
           <div class="user-menu" id="user-menu" style="display:none;">
             <div class="user-menu-header">
               <div id="user-menu-name" style="font-weight:700;">User Name</div>
-              <div id="user-menu-email" style="font-size:12px;color:var(--text-muted);">user@email.com</div>
+              <div id="user-menu-email" style="font-size:12px;color:var(--text-muted);"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="8afff9eff8caefe7ebe3e6a4e9e5e7">[email&#160;protected]</a></div>
             </div>
             <div class="divider" style="margin:8px 0;"></div>
             <div class="user-menu-item" onclick="navigate('settings');toggleUserMenu()">
@@ -205,7 +205,7 @@
             <div class="page-subtitle">Track performance across all your bots</div>
           </div>
           <div class="tabs" id="analytics-bot-tabs">
-            <div class="tab-btn active" onclick="switchAnalyticTab(this,'all')">All Bots</div>
+            <div class="tab-btn active" onclick="switchAnalyticTab('all')">All Bots</div>
             <!-- Dynamic bot tabs injected here -->
           </div>
         </div>
@@ -349,7 +349,7 @@
 
             <!-- Agent input (shown during HITL) -->
             <div class="chat-input-bar" id="chat-input-area" style="display:none;">
-              <textarea class="chat-input" id="agent-input" rows="1" placeholder="Type a message as agent…"></textarea>
+              <textarea class="chat-input" id="agent-input" rows="1" placeholder="Type a message as agent…" oninput="handleAgentTyping()"></textarea>
               <button class="btn btn-primary" onclick="sendAgentMessage()">Send</button>
             </div>
           </div>
@@ -642,7 +642,7 @@
                 style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
                 <div class="avatar" id="owner-avatar">D</div>
                 <div>
-                  <div style="font-weight:600;" id="owner-email">owner@example.com</div>
+                  <div style="font-weight:600;" id="owner-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="26495148435466435e474b564a430845494b">[email&#160;protected]</a></div>
                   <div class="text-sm text-muted" id="owner-role">Owner</div>
                 </div>
                 <span class="badge badge-purple" style="margin-left:auto;">Owner</span>
@@ -828,7 +828,7 @@
 
               <div class="form-group">
                 <label class="form-label">Fallback Message</label>
-                <input class="form-control" id="cfg-fallback-message"
+                <input class="form-control"
                   value="I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?" />
                 <div class="form-hint">Shown when the bot cannot answer confidently</div>
               </div>
@@ -853,9 +853,10 @@
                 </div>
               </div>
             </div>
+          </div>
 
-            <!-- Knowledge Base -->
-            <div class="config-section card hidden" id="config-knowledge">
+          <!-- Knowledge Base -->
+          <div class="config-section card hidden" id="config-knowledge">
             <div class="card-header">
               <div class="card-title">Knowledge Base</div>
             </div>
@@ -887,55 +888,57 @@
                     <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX up to 50MB each</div>
                   </div>
                   <input type="file" id="file-upload" multiple style="display:none;"
-                    onchange="uploadKBDetailFiles(this)" />
+                    onchange="handleFileUpload(this)" />
                 </div>
 
                 <div id="kb-tab-text" style="display:none;">
                   <div class="form-group">
                     <label class="form-label">Content Title</label>
-                    <input class="form-control" id="kb-text-title" placeholder="e.g. Pricing FAQ" />
+                    <input class="form-control" placeholder="e.g. Pricing FAQ" />
                   </div>
                   <div class="form-group">
                     <label class="form-label">Content</label>
-                    <textarea class="form-control" id="kb-text-content" rows="8" placeholder="Paste or type your content here…"></textarea>
+                    <textarea class="form-control" rows="8" placeholder="Paste or type your content here…"></textarea>
                   </div>
-                  <button class="btn btn-primary" onclick="saveKBRichText()">Add Content</button>
+                  <button class="btn btn-primary" onclick="showToast('Content added to knowledge base','success')">Add
+                    Content</button>
                 </div>
 
                 <div id="kb-tab-sitemap" style="display:none;">
                   <div class="form-group">
                     <label class="form-label">Website URL or Sitemap URL</label>
-                    <input class="form-control" id="kb-sitemap-url"
+                    <input class="form-control"
                       placeholder="https://yoursite.com or https://yoursite.com/sitemap.xml" />
                     <div class="form-hint">We'll crawl your website and add pages to the knowledge base</div>
                   </div>
                   <div class="form-row">
                     <div class="form-group">
                       <label class="form-label">Max Pages</label>
-                      <select class="form-control" id="kb-sitemap-maxpages">
-                        <option value="25">25</option>
-                        <option value="50" selected>50</option>
-                        <option value="100">100</option>
-                        <option value="250">250</option>
+                      <select class="form-control">
+                        <option>25</option>
+                        <option selected>50</option>
+                        <option>100</option>
+                        <option>250</option>
                       </select>
                     </div>
                     <div class="form-group">
                       <label class="form-label">Crawl Depth</label>
-                      <select class="form-control" id="kb-sitemap-depth">
-                        <option value="1">1</option>
-                        <option value="2" selected>2</option>
-                        <option value="3">3</option>
+                      <select class="form-control">
+                        <option>1</option>
+                        <option selected>2</option>
+                        <option>3</option>
                       </select>
                     </div>
                   </div>
-                  <button class="btn btn-primary" onclick="startKBCrawl()">Start Crawl</button>
+                  <button class="btn btn-primary"
+                    onclick="showToast('Crawl started — this may take a few minutes','info')">Start Crawl</button>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- Variables -->
-            <div class="config-section card hidden" id="config-variables">
+          <div class="config-section card hidden" id="config-variables">
             <div class="card-header">
               <div class="card-title">Lead Capture Variables</div>
             </div>
@@ -1004,7 +1007,7 @@
           </div>
 
           <!-- Appearance -->
-            <div class="config-section card hidden" id="config-design">
+          <div class="config-section card hidden" id="config-design">
             <div class="card-header">
               <div class="card-title">Bot Appearance</div>
             </div>
@@ -1061,7 +1064,7 @@
           </div>
 
           <!-- Embed -->
-            <div class="config-section card hidden" id="config-embed">
+          <div class="config-section card hidden" id="config-embed">
             <div class="card-header">
               <div class="card-title">Embed Your Bot</div>
             </div>
@@ -1099,7 +1102,7 @@
             </div>
           </div>
 
-        </div><!-- /config-layout -->
+        </div>
       </div>
     </div>
 
@@ -1309,7 +1312,7 @@
       <div class="modal-body"
         style="padding:0; background:#050505; display:flex; align-items:center; justify-content:center; position:relative; height:540px; overflow:hidden;">
         <iframe id="preview-iframe" style="width:100%; height:100%; border:none;"
-          sandbox="allow-scripts allow-forms allow-popups allow-same-origin"></iframe>
+          sandbox="allow-scripts allow-forms allow-popups"></iframe>
       </div>
       <div class="modal-footer"
         style="padding:12px 24px; display:flex; justify-content:space-between; align-items:center;">
@@ -1378,7 +1381,7 @@
           <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX</div>
         </div>
         <input type="file" id="kb-panel-file-upload" multiple style="display:none;"
-          onchange="uploadKBPanelFiles(this)" />
+          onchange="handleKBFileUpload(this)" />
         <div class="divider"></div>
         <div id="kb-panel-files">
           <!-- Rendered dynamically by openKB() -->
@@ -1389,29 +1392,38 @@
   </div>
 
 
-  <script type="module" src="js/supabase.js"></script>
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module" src="js/supabase.js"></script>
   <script type="module" src="js/charts.js"></script>
   <script type="module" src="js/app.js"></script>
   <script>
-    /* ── Analytics tab switcher ─────────────────────────────────────── */
-    // Also calls renderAnalytics so data refreshes when switching bot filter
+    // Tab switchers
     function switchAnalyticTab(btn, tab) {
       btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      if (typeof renderAnalytics === 'function') renderAnalytics(tab === 'all' ? null : tab);
     }
 
-    /* ── KB Quick-Add tab switcher (inside bot config Knowledge section) */
     function switchKBTab(btn, tab) {
       btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       ['files', 'text', 'sitemap'].forEach(t => {
-        const el = document.getElementById('kb-tab-' + t);
+        const el = document.getElementById(`kb-tab-${t}`);
         if (el) el.style.display = t === tab ? 'block' : 'none';
       });
     }
 
-    /* ── Embed tab switcher (bot config Embed section + panel-embed) ── */
+    function endHITL() {
+      window.endHITL();
+    }
+
+    function handleConversationsNav() {
+      if (AppState.currentBot) {
+        navigate('conversations', { botId: AppState.currentBot.id, botName: AppState.currentBot.name });
+      } else {
+        showToast('Please select a bot first to view its conversations', 'error');
+        navigate('home');
+      }
+    }
+
     function switchEmbedTab(btn, tab) {
       btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -1423,35 +1435,12 @@
       }
     }
 
-    /* ── Proxies for functions called from innerHTML-rendered buttons ── */
-    // endHITL button is injected into hitl-banner innerHTML by app.js
-    function endHITL() { window.endHITL && window.endHITL(); }
-
-    /* ── Export leads to CSV ─────────────────────────────────────────── */
-    function exportLeads() {
-      const leads = (window.AppState && AppState.leads) || [];
-      const bots  = (window.AppState && AppState.bots)  || [];
-      const rows  = [['Name', 'Email', 'Company', 'Phone', 'Bot', 'Date', 'Status']];
-      leads.forEach(function(l) {
-        rows.push([
-          l.name    || '',
-          l.email   || '',
-          l.company || '',
-          l.phone   || '',
-          (l.bots && l.bots.name) || (bots.find(function(b){ return b.id === l.bot_id; }) || {}).name || '',
-          l.created_at ? new Date(l.created_at).toLocaleDateString() : '',
-          l.status  || 'new'
-        ]);
-      });
-      const csv  = rows.map(function(r){ return r.map(function(c){ return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = 'leads_' + new Date().toISOString().slice(0, 10) + '.csv';
-      a.click();
-      URL.revokeObjectURL(url);
+    function handleFileUpload(input) {
+      const files = [...input.files];
+      if (files.length) showToast(`${files.length} file(s) added to knowledge base`, 'success');
     }
-  </script>
-</body>
-</html>
+
+    function exportLeads() {
+      const rows = [['Name', 'Email', 'Company', 'Phone', 'Bot', 'Date', 'Status']];
+      AppState.leads.forEach(l => rows.push([l.name, l.email, l.company, l.phone, l.bot, l.date, l.status]));
+      const csv = rows.map(r => r.

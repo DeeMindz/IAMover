@@ -1624,6 +1624,19 @@ async function endHITL() {
 }
 window.endHITL = endHITL;
 
+// Typing indicator debounce — broadcasts to widget via conversations row update
+let _agentTypingTimer = null;
+function handleAgentTyping() {
+  const convId = AppState.activeConversation;
+  if (!convId || !AppState.hitlActive) return;
+  Conversations.setAgentTyping(convId, true);
+  clearTimeout(_agentTypingTimer);
+  _agentTypingTimer = setTimeout(() => {
+    Conversations.setAgentTyping(convId, false);
+  }, 3000);
+}
+window.handleAgentTyping = handleAgentTyping;
+
 async function sendAgentMessage() {
   const input = document.getElementById('agent-input');
   if (!input || !input.value.trim()) return;
@@ -1633,10 +1646,13 @@ async function sendAgentMessage() {
   const text = input.value.trim();
   input.value = '';
 
-  const conv = AppState.conversations.find(c => c.id === convId);
+  // Clear typing indicator immediately on send
+  clearTimeout(_agentTypingTimer);
+  Conversations.setAgentTyping(convId, false);
+
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Optimistic UI — append directly to DOM without full re-render
+  // Optimistic UI — append directly to DOM
   const msgsEl = document.getElementById('conv-messages');
   if (msgsEl) {
     const div = document.createElement('div');
@@ -1651,12 +1667,6 @@ async function sendAgentMessage() {
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
-  // Also update local state
-  if (conv) conv.messages.push({ role: 'human-agent', text, time });
-
-  // Clear typing indicator immediately
-  clearTimeout(_agentTypingTimer);
-  setAgentTyping(convId, false);
 
   try {
     await supabase.from('messages').insert({
@@ -1665,7 +1675,7 @@ async function sendAgentMessage() {
       content: text
     });
     await supabase.from('conversations')
-      .update({ updated_at: new Date().toISOString(), last_agent_seen: new Date().toISOString() })
+      .update({ updated_at: new Date().toISOString() })
       .eq('id', convId);
   } catch (e) {
     console.error('Failed to send agent message:', e);

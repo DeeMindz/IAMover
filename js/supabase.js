@@ -373,8 +373,33 @@ export const Conversations = {
       .subscribe()
   },
 
-  async setHITL(conversationId, active) {
-    return await this.update(conversationId, { hitl_active: active })
+  // Subscribe to conversation row changes — typing indicator + HITL status
+  subscribeToConversationRow(conversationId, callback) {
+    return supabase
+      .channel(`conv_row:${conversationId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'conversations',
+        filter: `id=eq.${conversationId}`
+      }, payload => callback(payload.new))
+      .subscribe()
+  },
+
+  async setHITL(conversationId, active, agentId = null) {
+    return await this.update(conversationId, {
+      hitl_active: active,
+      claimed_by: active ? agentId : null,
+      agent_typing: false,
+    })
+  },
+
+  async setAgentTyping(conversationId, isTyping) {
+    const { error } = await supabase
+      .from('conversations')
+      .update({ agent_typing: isTyping })
+      .eq('id', conversationId)
+    if (error) console.warn('[HITL] setAgentTyping failed:', error.message)
   }
 }
 
