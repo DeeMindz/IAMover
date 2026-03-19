@@ -7,9 +7,11 @@
   'use strict';
 
   var cfg      = window.IAMConfig || {};
-  var BOT_ID   = cfg.botId;
-  var COLOR    = cfg.color    || '#6c63ff';
-  var POSITION = cfg.position || 'bottom-right';
+  var BOT_ID      = cfg.botId;
+  var COLOR       = cfg.color      || '#6c63ff';
+  var POSITION    = cfg.position   || 'bottom-right';
+  var CONTAINER_ID = cfg.containerId || null;
+  var IS_INLINE   = POSITION === 'inline' && CONTAINER_ID;
 
   if (!BOT_ID) { console.warn('[IAM] No botId in IAMConfig'); return; }
 
@@ -45,17 +47,19 @@
     return id;
   }
 
-  // ── Position ───────────────────────────────────────────────────────
+  // ── Position (floating mode only) ─────────────────────────────────
   var POS = { 'bottom-right': 'bottom:24px;right:24px;', 'bottom-left': 'bottom:24px;left:24px;', 'top-right': 'top:24px;right:24px;', 'top-left': 'top:24px;left:24px;' };
-  var pos = POS[POSITION] || POS['bottom-right'];
+  var pos = IS_INLINE ? '' : (POS[POSITION] || POS['bottom-right']);
 
   // ── Styles ─────────────────────────────────────────────────────────
   var css = document.createElement('style');
   css.textContent = [
-    '#iam-launcher{position:fixed;' + pos + 'width:58px;height:58px;background:' + COLOR + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s,box-shadow .2s;overflow:hidden;}',
-    '#iam-launcher:hover{transform:scale(1.08);}',
-    '#iam-launcher img{width:100%;height:100%;object-fit:cover;border-radius:50%;}',
-    '#iam-window{position:fixed;' + pos + 'width:360px;height:530px;background:#fff;border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamOpen .25s cubic-bezier(.34,1.56,.64,1);}',
+    IS_INLINE ? '' : '#iam-launcher{position:fixed;' + pos + 'width:58px;height:58px;background:' + COLOR + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s,box-shadow .2s;overflow:hidden;}',
+    IS_INLINE ? '' : '#iam-launcher:hover{transform:scale(1.08);}',
+    IS_INLINE ? '' : '#iam-launcher img{width:100%;height:100%;object-fit:cover;border-radius:50%;}',
+    IS_INLINE
+      ? '#iam-window{width:100%;height:100%;background:#fff;border-radius:18px;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}'
+      : '#iam-window{position:fixed;' + pos + 'width:360px;height:530px;background:#fff;border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamOpen .25s cubic-bezier(.34,1.56,.64,1);}',
     '@keyframes iamOpen{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}',
     '#iam-header{padding:14px 16px;display:flex;align-items:center;gap:10px;color:#fff;flex-shrink:0;}',
     '#iam-bot-avatar{width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;overflow:hidden;color:#fff;}',
@@ -95,17 +99,21 @@
   ].join('');
   document.head.appendChild(css);
 
-  // ── Launcher ───────────────────────────────────────────────────────
-  var launcher = document.createElement('button');
-  launcher.id = 'iam-launcher';
-  launcher.title = 'Chat with us';
-  launcher.innerHTML = '💬';
-  document.body.appendChild(launcher);
+  // ── Launcher (floating mode only) ────────────────────────────────
+  var launcher = null;
+  if (!IS_INLINE) {
+    launcher = document.createElement('button');
+    launcher.id = 'iam-launcher';
+    launcher.title = 'Chat with us';
+    launcher.innerHTML = '💬';
+    document.body.appendChild(launcher);
+  }
 
   // ── Chat window ───────────────────────────────────────────────────
   var win = document.createElement('div');
   win.id = 'iam-window';
-  win.style.display = 'none';
+  // In floating mode, start hidden; in inline mode, always visible
+  win.style.display = IS_INLINE ? 'flex' : 'none';
   win.innerHTML = [
     '<div id="iam-header" style="background:' + COLOR + '">',
     '  <div id="iam-bot-avatar">🤖</div>',
@@ -130,7 +138,14 @@
     '  </div>',
     '</div>',
   ].join('');
-  document.body.appendChild(win);
+  // Mount into container div (inline) or body (floating)
+  if (IS_INLINE) {
+    var container = document.getElementById(CONTAINER_ID);
+    if (!container) { console.warn('[IAM] Container #' + CONTAINER_ID + ' not found'); return; }
+    container.appendChild(win);
+  } else {
+    document.body.appendChild(win);
+  }
 
   var msgsEl = document.getElementById('iam-messages');
   var input  = document.getElementById('iam-input');
@@ -313,10 +328,16 @@
     createConversation(function() { input.focus(); });
   }
 
+  // Hide close button in inline mode — user can't "close" an embedded widget
+  if (IS_INLINE) {
+    var closeBtn = document.getElementById('iam-btn-close');
+    if (closeBtn) closeBtn.style.display = 'none';
+  }
+
   // ── Open / close ──────────────────────────────────────────────────
   function openWidget() {
     win.style.display = 'flex';
-    launcher.style.display = 'none';
+    if (launcher) launcher.style.display = 'none';
     if (!convId) {
       loadBotConfig(function() { createConversation(function() { input.focus(); }); });
     } else {
@@ -325,18 +346,22 @@
     }
   }
   function closeWidget() {
+    if (IS_INLINE) return; // can't close inline widget
     win.style.display = 'none';
-    launcher.style.display = 'flex';
+    if (launcher) launcher.style.display = 'flex';
     hideNewConvConfirm();
   }
 
   // ── Events ────────────────────────────────────────────────────────
-  launcher.addEventListener('click', openWidget);
+  if (launcher) launcher.addEventListener('click', openWidget);
   document.getElementById('iam-btn-close').addEventListener('click', closeWidget);
   document.getElementById('iam-btn-new').addEventListener('click', showNewConvConfirm);
   document.getElementById('iam-btn-cancel-nc').addEventListener('click', hideNewConvConfirm);
   document.getElementById('iam-btn-confirm-nc').addEventListener('click', startNewConversation);
   document.getElementById('iam-send').addEventListener('click', sendMessage);
   input.addEventListener('keydown', function(e) { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();} });
+
+  // Auto-open immediately in inline mode
+  if (IS_INLINE) openWidget();
 
 })(window, document);
