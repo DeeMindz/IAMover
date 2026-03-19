@@ -408,8 +408,8 @@ function startWidgetRealtimeSubscription(iframeSource, convId) {
             const t = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div>
               <div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>
-              <div class="msg-bubble" style="border-left:3px solid #10b981;">\${msg.content}</div>
-              <div class="msg-time">\${t}</div></div>`;
+              <div class="msg-bubble" style="border-left:3px solid #10b981;">${msg.content}</div>
+              <div class="msg-time">${t}</div></div>`;
             convMsgsEl.appendChild(div);
             convMsgsEl.scrollTop = convMsgsEl.scrollHeight;
           }
@@ -1187,6 +1187,12 @@ async function renderConversations() {
 
   if (topbarName) topbarName.textContent = AppState.currentBot.name;
 
+  // Restore last active conversation from localStorage on refresh
+  if (!AppState.activeConversation) {
+    const saved = LocalDB.get('activeConversation');
+    if (saved) AppState.activeConversation = saved;
+  }
+
   // Always fetch fresh from DB — no caching to avoid stale/duplicate data
   try {
     const dbConvs = await Conversations.getAll(AppState.currentBot.id);
@@ -1209,13 +1215,17 @@ async function renderConversations() {
         messages: []
       }));
 
-    // Restore HITL state from DB after page refresh
-    const activeHITL = mappedConvs.find(c => c.hitl_active);
-    if (activeHITL && AppState.activeConversation === activeHITL.id) {
-      AppState.hitlActive = true;
-    }
-
     AppState.conversations = mappedConvs;
+
+    // Restore HITL state from DB — must happen before any rendering
+    const activeHITL = mappedConvs.find(c => c.hitl_active);
+    if (activeHITL) {
+      AppState.hitlActive = activeHITL.hitl_active;
+      // If we had this conversation active, keep it active
+      if (!AppState.activeConversation) {
+        AppState.activeConversation = activeHITL.id;
+      }
+    }
 
   } catch (e) {
     console.error('Failed to load conversations:', e);
@@ -1246,6 +1256,16 @@ async function renderConversations() {
       </div>
     `;
   }).join('');
+
+  // Auto-load the active conversation on refresh — don't wait for a click
+  if (AppState.activeConversation) {
+    await loadConversationMessages(AppState.activeConversation);
+    // Re-subscribe to realtime if HITL was active
+    if (AppState.hitlActive) {
+      subscribeToConversation(AppState.activeConversation);
+      startWidgetRealtimeSubscription(null, AppState.activeConversation);
+    }
+  }
 }
 
 // Separate click handler — does NOT re-render full list (prevents disappearing)
@@ -1256,6 +1276,8 @@ async function selectConversation(convId) {
   if (clicked) clicked.classList.add('active');
 
   AppState.activeConversation = convId;
+  // Persist so it survives page refresh
+  LocalDB.set('activeConversation', convId);
   await loadConversationMessages(convId);
 }
 window.selectConversation = selectConversation;
@@ -1283,7 +1305,7 @@ function renderConvDetail(id) {
         const isJoined = m.text === 'agent_joined';
         const label = isJoined
           ? '👤 A live agent has joined the conversation'
-          : '🤖 AI assistant has resumed';
+          : `${botName} has resumed`;
         return `<div style="display:flex;align-items:center;justify-content:center;margin:10px 0;">
           <span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;white-space:nowrap;">${label}</span>
         </div>`;
@@ -1291,10 +1313,12 @@ function renderConvDetail(id) {
       // Regular messages — agent aligns LEFT same as bot
       const isAgent = m.role === 'human-agent';
       const isBot = m.role === 'bot';
+      const botColor = botObj?.color || botObj?.theme?.primaryColor || '#6c63ff';
+      const botInitial = botName.charAt(0).toUpperCase();
       return `
       <div class="message ${isAgent ? 'bot' : m.role}">
-        <div class="msg-avatar" style="background:${isBot ? 'var(--accent-dim)' : isAgent ? '#10b98133' : '#333'}">
-          ${isBot ? '🤖' : isAgent ? '👤' : ''}
+        <div class="msg-avatar" style="background:${isBot ? botColor + '33' : isAgent ? '#10b98133' : '#333'}; color:${isBot ? botColor : isAgent ? '#10b981' : '#fff'}; font-weight:700; font-size:12px;">
+          ${isBot ? botInitial : isAgent ? '👤' : ''}
         </div>
         <div>
           ${isAgent ? '<div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>' : ''}
@@ -1530,9 +1554,11 @@ async function endHITL() {
   // Append system message directly without full re-render
   const msgsEl = document.getElementById('conv-messages');
   if (msgsEl) {
+    const botObj = AppState.bots.find(b => b.id === AppState.conversations.find(c => c.id === convId)?.botId);
+    const botName = botObj?.name || 'Bot';
     const div = document.createElement('div');
     div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
-    div.innerHTML = '<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">🤖 AI assistant has resumed</span>';
+    div.innerHTML = `<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">${botName} has resumed</span>`;
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -1568,8 +1594,8 @@ async function sendAgentMessage() {
       <div class="msg-avatar" style="background:#10b98133;">👤</div>
       <div>
         <div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>
-        <div class="msg-bubble" style="border-left:3px solid #10b981;">\${text}</div>
-        <div class="msg-time">\${time}</div>
+        <div class="msg-bubble" style="border-left:3px solid #10b981;">${text}</div>
+        <div class="msg-time">${time}</div>
       </div>`;
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
@@ -2404,11 +2430,16 @@ window.addEventListener('message', function (e) {
     e.data.messages.forEach(function(m) {
       if (m.role === 'system') {
         addSystemMsg(m.content);
+      } else if (m.role === 'human-agent') {
+        showAgentMessage(m.content);
       } else {
         var div = document.createElement('div');
-        div.className = 'msg ' + (m.role === 'bot' || m.role === 'human-agent' ? 'bot' : 'user');
-        if (m.role === 'human-agent') div.style.borderLeft = '3px solid #10b981';
-        div.textContent = m.content;
+        div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
+        if (m.role === 'bot') {
+          div.innerHTML = formatMarkdown(m.content);
+        } else {
+          div.textContent = m.content;
+        }
         msgs.appendChild(div);
       }
     });
@@ -2450,9 +2481,11 @@ window.addEventListener('message', function (e) {
 
 function addSystemMsg(content) {
   var msgs = document.getElementById('chat-messages');
-  var label = content === 'agent_joined'
-    ? '&#128100; A live agent has joined'
-    : '&#129302; AI assistant has resumed';
+  if (!msgs) return;
+  var isJoined = content === 'agent_joined';
+  var label = isJoined
+    ? '👤 A live agent has joined'
+    : '${botName} has resumed';
   var div = document.createElement('div');
   div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
   div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
