@@ -1835,10 +1835,7 @@ async function confirmDeleteKB(id) {
 
 async function deleteKnowledgeBase(id) {
   try {
-    // DB first — removes kb_files, kb_chunks, bot_knowledge_bases via cascade
-    // and deletes storage files via KnowledgeBases.delete()
     await KnowledgeBases.delete(id);
-    // Only remove from Store AFTER DB confirms success — prevents re-fetch race
     Store.removeItem('knowledge_bases', id);
     LocalDB.clear('knowledge_bases');
     showToast('Knowledge base deleted', 'success');
@@ -2255,189 +2252,221 @@ function renderLivePreview(bot) {
   </div>
 
 <script>
-  let isSending = false;
+  var isSending = false;
+  var _realtimeSub = null;
+
+  // ── Supabase Realtime ─────────────────────────────────────────────
+  // Subscribes directly inside the widget so agent messages and system
+  // notifications arrive in real-time on any page — no parent postMessage needed.
+  function startRealtimeSubscription(convId) {
+    if (_realtimeSub) { try { _realtimeSub.unsubscribe(); } catch(e) {} _realtimeSub = null; }
+    if (!convId) return;
+    var SUPA_URL = 'https://ekdsfvjsbhoxjszciquq.supabase.co';
+    var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrZHNmdmpzYmhveGpzemNpcXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTM1ODcsImV4cCI6MjA4OTE4OTU4N30.otpg9pOci8B9nN33APefE0ulHAlfJ-nVMvNSvrIf_xQ';
+    function doSubscribe(sb) {
+      var client = sb.createClient(SUPA_URL, SUPA_KEY);
+      _realtimeSub = client
+        .channel('widget_' + convId)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'messages',
+          filter: 'conversation_id=eq.' + convId
+        }, function(payload) {
+          var msg = payload.new;
+          if (msg.role === 'human-agent') {
+            var t = document.getElementById('typing-indicator');
+            if (t) t.remove();
+            showAgentMessage(msg.content);
+            isSending = false;
+          }
+          if (msg.role === 'system') {
+            addSystemMsg(msg.content);
+            var msgs = document.getElementById('chat-messages');
+            if (msgs) msgs.scrollTop = msgs.scrollHeight;
+          }
+        })
+        .subscribe();
+    }
+    if (window.supabase && window.supabase.createClient) {
+      doSubscribe(window.supabase);
+    } else {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.onload = function() { doSubscribe(window.supabase); };
+      document.head.appendChild(s);
+    }
+  }
+
+  function showAgentMessage(content) {
+    var msgs = document.getElementById('chat-messages');
+    if (!msgs) return;
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+    var label = document.createElement('div');
+    label.textContent = 'Support Agent';
+    label.style.cssText = 'font-size:10px;color:#10b981;margin-left:4px;font-weight:600;';
+    var agentMsg = document.createElement('div');
+    agentMsg.className = 'msg bot';
+    agentMsg.style.borderLeft = '3px solid #10b981';
+    agentMsg.textContent = content;
+    wrap.appendChild(label);
+    wrap.appendChild(agentMsg);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
 
   function openChat() {
     document.getElementById('launcher').classList.add('hidden');
     document.getElementById('greeting-popup').classList.add('hidden');
     document.getElementById('chat-window').classList.remove('hidden');
-
     if (!window._previewConvId) {
-      // New visitor — request conversation creation from parent
-      window.parent.postMessage({ 
-        type:   'IAM_CONV_CREATE', 
-        bot_id: '${bot.id}',
-      }, '*');
+      window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
     } else {
-      // Returning visitor — convId already known, start realtime immediately
-      // so agent messages arrive without needing a page reload
+      // Returning visitor — subscribe immediately so agent messages arrive live
       startRealtimeSubscription(window._previewConvId);
     }
   }
+
   function closeChat() {
     document.getElementById('chat-window').classList.add('hidden');
     document.getElementById('launcher').classList.remove('hidden');
   }
-  // Markdown renderer
+
+  // ── Markdown renderer ─────────────────────────────────────────────
   function formatMarkdown(text) {
     if (!text) return '';
-    let h = text
+    var h = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
     h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
     h = h.replace(/^## (.+)$/gm, '<strong>$1</strong>');
-    h = h.replace(/^# (.+)$/gm, '<strong>$1</strong>');
+    h = h.replace(/^# (.+)$/gm,  '<strong>$1</strong>');
     h = h.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
-    h = h.replace(/__(.+?)__/g, '<strong>$1</strong>');
-    h = h.replace(/[*](.+?)[*]/g, '<em>$1</em>');
+    h = h.replace(/__(.+?)__/g,         '<strong>$1</strong>');
+    h = h.replace(/[*](.+?)[*]/g,       '<em>$1</em>');
     h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
     h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-    h = h.replace(/<li/g, function(m,o,s){ var prev=s.lastIndexOf('<ul',o); var prevEnd=s.lastIndexOf('</ul>',o); if(prev===-1||prevEnd>prev) return '<ul style="margin:6px 0;padding-left:18px;"><li'; return m; });
+    h = h.replace(/<li/g, function(m,o,s){ var p=s.lastIndexOf('<ul',o),pe=s.lastIndexOf('</ul>',o); if(p===-1||pe>p) return '<ul style="margin:6px 0;padding-left:18px;"><li'; return m; });
     h = h.replace(/(<[/]li>)(?![\s\S]*?<li)/g, '$1</ul>');
-    var nl = String.fromCharCode(10); h = h.split(nl+nl).join('<br><br>'); h = h.split(nl).join('<br>');
+    var nl = String.fromCharCode(10);
+    h = h.split(nl+nl).join('<br><br>');
+    h = h.split(nl).join('<br>');
     return h;
   }
 
   function sendMsg() {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text || isSending) return;
-  isSending = true;
-
-  const msgs = document.getElementById('chat-messages');
-  const userMsg = document.createElement('div');
-  userMsg.className = 'msg user';
-  userMsg.textContent = text;
-  msgs.appendChild(userMsg);
-  input.value = '';
-  msgs.scrollTop = msgs.scrollHeight;
-
-  // Show typing indicator
-  const typing = document.createElement('div');
-  typing.className = 'typing-dots';
-  typing.id = 'typing-indicator';
-  typing.innerHTML = '<span></span><span></span><span></span>';
-  msgs.appendChild(typing);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  // Send to parent window to make the API call - avoids CORS
-  window.parent.postMessage({
-    type: 'IAM_BOT_REQUEST',
-    message: text,
-    bot_id: '${bot.id}',
-    conv_id: window._previewConvId || null
-  }, '*');
-}
-
-// Listen for response from parent
-window.addEventListener('message', function (e) {
-  if (!e.data) return;
-
-  if (e.data.type === 'IAM_CONV_CREATED') {
-    window._previewConvId = e.data.conv_id;
-    // Always start realtime — covers new visitors, returning visitors, and mode switches
-    startRealtimeSubscription(e.data.conv_id);
+    var input = document.getElementById('chat-input');
+    var text = input.value.trim();
+    if (!text || isSending) return;
+    isSending = true;
+    var msgs = document.getElementById('chat-messages');
+    var userMsg = document.createElement('div');
+    userMsg.className = 'msg user';
+    userMsg.textContent = text;
+    msgs.appendChild(userMsg);
+    input.value = '';
+    msgs.scrollTop = msgs.scrollHeight;
+    var typing = document.createElement('div');
+    typing.className = 'typing-dots';
+    typing.id = 'typing-indicator';
+    typing.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(typing);
+    msgs.scrollTop = msgs.scrollHeight;
+    window.parent.postMessage({
+      type: 'IAM_BOT_REQUEST',
+      message: text,
+      bot_id: '${bot.id}',
+      conv_id: window._previewConvId || null
+    }, '*');
   }
 
-  // Load previous chat history (returning visitor)
-  if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
-    var msgs = document.getElementById('chat-messages');
-    msgs.innerHTML = '';
-    e.data.messages.forEach(function(m) {
-      if (m.role === 'system') {
-        addSystemMsg(m.content);
-      } else if (m.role === 'human-agent') {
-        showAgentMessage(m.content);
-      } else {
+  // ── Message listener (postMessage from parent dashboard) ──────────
+  window.addEventListener('message', function(e) {
+    if (!e.data) return;
+
+    if (e.data.type === 'IAM_CONV_CREATED') {
+      window._previewConvId = e.data.conv_id;
+      // Always start realtime — works for new and returning visitors
+      startRealtimeSubscription(e.data.conv_id);
+    }
+
+    if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages && e.data.messages.length) {
+      var msgs = document.getElementById('chat-messages');
+      msgs.innerHTML = '';
+      e.data.messages.forEach(function(m) {
+        if (m.role === 'system') { addSystemMsg(m.content); return; }
+        if (m.role === 'human-agent') { showAgentMessage(m.content); return; }
         var div = document.createElement('div');
         div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
         if (m.role === 'bot') { div.innerHTML = formatMarkdown(m.content); }
         else { div.textContent = m.content; }
         msgs.appendChild(div);
-      }
-    });
-    msgs.scrollTop = msgs.scrollHeight;
-    // Ensure realtime is running for returning visitors
-    if (window._previewConvId) startRealtimeSubscription(window._previewConvId);
-  }
-
-  // Bot AI response
-  if (e.data.type === 'IAM_BOT_RESPONSE') {
-    var msgs = document.getElementById('chat-messages');
-    var t = document.getElementById('typing-indicator');
-    if (t) t.remove();
-    if (e.data.response) {
-      var botMsg = document.createElement('div');
-      botMsg.className = 'msg bot';
-      botMsg.innerHTML = formatMarkdown(e.data.response);
-      msgs.appendChild(botMsg);
+      });
       msgs.scrollTop = msgs.scrollHeight;
+      // Ensure realtime is running for returning visitors
+      if (window._previewConvId) startRealtimeSubscription(window._previewConvId);
     }
-    if (e.data.conv_id) window._previewConvId = e.data.conv_id;
-    isSending = false;
-  }
 
-  // Human agent message — show like a bot message (same side) but with agent label
-  if (e.data.type === 'IAM_AGENT_MESSAGE') {
+    if (e.data.type === 'IAM_BOT_RESPONSE') {
+      var msgs = document.getElementById('chat-messages');
+      var t = document.getElementById('typing-indicator');
+      if (t) t.remove();
+      if (e.data.response) {
+        var botMsg = document.createElement('div');
+        botMsg.className = 'msg bot';
+        botMsg.innerHTML = formatMarkdown(e.data.response);
+        msgs.appendChild(botMsg);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+      if (e.data.conv_id) window._previewConvId = e.data.conv_id;
+      isSending = false;
+    }
+
+    // Fallback handlers — used in preview iframe context
+    if (e.data.type === 'IAM_AGENT_MESSAGE') {
+      var t = document.getElementById('typing-indicator');
+      if (t) t.remove();
+      showAgentMessage(e.data.content);
+      isSending = false;
+    }
+    if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
+      addSystemMsg(e.data.content);
+    }
+  });
+
+  function addSystemMsg(content) {
     var msgs = document.getElementById('chat-messages');
-    var t = document.getElementById('typing-indicator');
-    if (t) t.remove();
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
-    var label = document.createElement('div');
-    label.textContent = 'Support Agent';
-    label.style.cssText = 'font-size:10px;color:#888;margin-left:4px;';
-    var agentMsg = document.createElement('div');
-    agentMsg.className = 'msg bot';
-    agentMsg.style.borderLeft = '3px solid #10b981';
-    agentMsg.textContent = e.data.content;
-    wrap.appendChild(label);
-    wrap.appendChild(agentMsg);
-    msgs.appendChild(wrap);
-    msgs.scrollTop = msgs.scrollHeight;
-    isSending = false;
+    if (!msgs) return;
+    var label = content === 'agent_joined'
+      ? '&#128100; A live agent has joined'
+      : '${botName} has resumed';
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
+    div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
+    msgs.appendChild(div);
   }
 
-  // System notification message
-  if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+  }
+
+  function showNewConvConfirm() {
+    var footer = document.getElementById('new-conv-confirm');
+    if (footer) footer.style.display = 'flex';
+  }
+  function cancelNewConv() {
+    var footer = document.getElementById('new-conv-confirm');
+    if (footer) footer.style.display = 'none';
+  }
+  function confirmNewConv() {
+    var footer = document.getElementById('new-conv-confirm');
+    if (footer) footer.style.display = 'none';
+    if (_realtimeSub) { try { _realtimeSub.unsubscribe(); } catch(e) {} _realtimeSub = null; }
+    window._previewConvId = null;
     var msgs = document.getElementById('chat-messages');
-    addSystemMsg(e.data.content);
-    msgs.scrollTop = msgs.scrollHeight;
+    msgs.innerHTML = '<div class="msg bot">${greeting}</div>';
+    window.parent.postMessage({ type: 'IAM_NEW_CONV', bot_id: '${bot.id}' }, '*');
   }
-});
-
-function addSystemMsg(content) {
-  var msgs = document.getElementById('chat-messages');
-  var label = content === 'agent_joined'
-    ? '&#128100; A live agent has joined'
-    : '&#129302; AI assistant has resumed';
-  var div = document.createElement('div');
-  div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
-  div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
-  msgs.appendChild(div);
-}
-
-function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
-}
-
-function showNewConvConfirm() {
-  var footer = document.getElementById('new-conv-confirm');
-  if (footer) { footer.style.display = 'flex'; }
-}
-function cancelNewConv() {
-  var footer = document.getElementById('new-conv-confirm');
-  if (footer) { footer.style.display = 'none'; }
-}
-function confirmNewConv() {
-  var footer = document.getElementById('new-conv-confirm');
-  if (footer) { footer.style.display = 'none'; }
-  window._previewConvId = null;
-  var msgs = document.getElementById('chat-messages');
-  msgs.innerHTML = '<div class="msg bot">${greeting}</div>';
-  window.parent.postMessage({ type: 'IAM_NEW_CONV', bot_id: '${bot.id}' }, '*');
-}
 <\/script>
 </body >
 </html > `;
@@ -2545,77 +2574,15 @@ function confirmNewConv() {
     </body>
     <script>
       let fpSending = false;
-      let _fpRealtimeSub = null;
 
-      // ── Supabase Realtime — same as widget mode ───────────────────
-      function startRealtimeSubscription(convId) {
-        if (_fpRealtimeSub) { try { _fpRealtimeSub.unsubscribe(); } catch(e){} _fpRealtimeSub = null; }
-        if (!convId) return;
-        var SUPA_URL = 'https://ekdsfvjsbhoxjszciquq.supabase.co';
-        var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrZHNmdmpzYmhveGpzemNpcXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTM1ODcsImV4cCI6MjA4OTE4OTU4N30.otpg9pOci8B9nN33APefE0ulHAlfJ-nVMvNSvrIf_xQ';
-        function doSubscribe(sb) {
-          var client = sb.createClient(SUPA_URL, SUPA_KEY);
-          _fpRealtimeSub = client
-            .channel('fp_messages_' + convId)
-            .on('postgres_changes', {
-              event: 'INSERT', schema: 'public', table: 'messages',
-              filter: 'conversation_id=eq.' + convId
-            }, function(payload) {
-              var msg = payload.new;
-              if (msg.role === 'human-agent') { showAgentMessage(msg.content); fpSending = false; }
-              if (msg.role === 'system') { addSystemMsg(msg.content); }
-            })
-            .subscribe();
-        }
-        if (window.supabase && window.supabase.createClient) { doSubscribe(window.supabase); }
-        else {
-          var s = document.createElement('script');
-          s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-          s.onload = function() { doSubscribe(window.supabase); };
-          document.head.appendChild(s);
-        }
-      }
-
-      function showAgentMessage(content) {
-        var msgs = document.querySelector('.chat-messages');
-        if (!msgs) return;
-        var wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
-        var label = document.createElement('div');
-        label.textContent = 'Support Agent';
-        label.style.cssText = 'font-size:10px;color:#10b981;margin-left:4px;font-weight:600;';
-        var agentMsg = document.createElement('div');
-        agentMsg.className = 'msg bot';
-        agentMsg.style.borderLeft = '3px solid #10b981';
-        agentMsg.textContent = content;
-        wrap.appendChild(label);
-        wrap.appendChild(agentMsg);
-        msgs.appendChild(wrap);
-        msgs.scrollTop = msgs.scrollHeight;
-      }
-
-      function addSystemMsg(content) {
-        var msgs = document.querySelector('.chat-messages');
-        if (!msgs) return;
-        var isJoined = content === 'agent_joined';
-        var label = isJoined ? '👤 A live agent has joined' : '${botName} has resumed';
-        var div = document.createElement('div');
-        div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
-        div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
-        msgs.appendChild(div);
-        msgs.scrollTop = msgs.scrollHeight;
-      }
-
-      // Create conversation on load — or re-subscribe if returning visitor
+      // Create conversation on load (only if not already created)
+      // Parent window will attach visitor ID from localStorage
       if (!window._fpConvId) {
         window.parent.postMessage({
           type: 'IAM_CONV_CREATE',
           bot_id: '${bot.id}',
         }, '*');
-      } else {
-        // Returning visitor — start realtime immediately
-        startRealtimeSubscription(window._fpConvId);
-      }
+  }
 
       // Markdown renderer
       function formatMarkdown(text) {
@@ -2671,24 +2638,20 @@ window.addEventListener('message', function (e) {
 
   if (e.data.type === 'IAM_CONV_CREATED') {
     window._fpConvId = e.data.conv_id;
-    startRealtimeSubscription(e.data.conv_id);
   }
 
   // Handle loading previous chat history (from mode switch)
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
     const msgs = document.querySelector('.chat-messages');
+    // Clear any greeting message and rebuild from history
     msgs.innerHTML = '';
     e.data.messages.forEach(m => {
-      if (m.role === 'human-agent') { showAgentMessage(m.content); return; }
-      if (m.role === 'system') { addSystemMsg(m.content); return; }
       const div = document.createElement('div');
       div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-      if (m.role === 'bot') { div.innerHTML = formatMarkdown(m.content); }
-      else { div.textContent = m.content; }
+      div.textContent = m.content;
       msgs.appendChild(div);
     });
     msgs.scrollTop = msgs.scrollHeight;
-    if (window._fpConvId) startRealtimeSubscription(window._fpConvId);
   }
 
   if (e.data.type === 'IAM_BOT_RESPONSE') {
@@ -2702,15 +2665,6 @@ window.addEventListener('message', function (e) {
     msgs.scrollTop = msgs.scrollHeight;
     if (e.data.conv_id) window._fpConvId = e.data.conv_id;
     fpSending = false;
-  }
-
-  if (e.data.type === 'IAM_AGENT_MESSAGE') {
-    showAgentMessage(e.data.content);
-    fpSending = false;
-  }
-
-  if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
-    addSystemMsg(e.data.content);
   }
 });
     </script >
