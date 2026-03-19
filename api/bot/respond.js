@@ -119,7 +119,7 @@ export default async function handler(req, res) {
             }
         }
 
-        // ── Step 2: Load knowledge base files ──────────────────────────────
+        // ── Step 2: Semantic search over KB chunks (RAG) ───────────────────
         let knowledgeContext = '';
         const { data: kbLinks } = await supabase
             .from('bot_knowledge_bases')
@@ -128,26 +128,68 @@ export default async function handler(req, res) {
 
         if (kbLinks && kbLinks.length > 0) {
             const kbIds = kbLinks.map(k => k.kb_id);
-            const { data: files } = await supabase
-                .from('kb_files')
-                .select('name, content, type')
-                .in('kb_id', kbIds)
-                .limit(20);
+            log.info('KB attached', { kbCount: kbIds.length });
 
-            // FIX: filter out files with null/empty content
-            const filesWithContent = files?.filter(f => f.content && f.content.trim().length > 0) || [];
+            try {
+                // Embed the user message for semantic search
+                const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+                const embedRes = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'models/text-embedding-004',
+                            content: { parts: [{ text: message }] },
+                            taskType: 'RETRIEVAL_QUERY',
+                        })
+                    }
+                );
 
-            log.info('KB files fetched', {
-                totalFiles:        files?.length || 0,
-                filesWithContent:  filesWithContent.length,
-                fileNames:         files?.map(f => f.name) || []
-            });
+                if (embedRes.ok) {
+                    const embedData = await embedRes.json();
+                    const queryVec = embedData.embedding.values;
+                    const padded = [...queryVec, ...new Array(1536 - queryVec.length).fill(0)];
+                    const vectorStr = '[' + padded.join(',') + ']';
 
-            if (filesWithContent.length > 0) {
-                knowledgeContext = '\n\n--- KNOWLEDGE BASE ---\n' +
-                    filesWithContent.map(f => `[${f.name}]\n${f.content}`).join('\n\n') +
-                    '\n--- END KNOWLEDGE BASE ---';
-                log.info('KB context built', { chars: knowledgeContext.length });
+                    // Semantic similarity search in pgvector
+                    const { data: chunks, error: searchErr } = await supabase.rpc('match_kb_chunks', {
+                        query_embedding:      vectorStr,
+                        kb_ids_filter:        kbIds,
+                        match_count:          6,
+                        similarity_threshold: 0.4,
+                    });
+
+                    if (searchErr) {
+                        log.warn('Semantic search failed, falling back to content stuffing', { error: searchErr.message });
+                        // Fallback: load raw content from kb_files
+                        const { data: files } = await supabase
+                            .from('kb_files')
+                            .select('name, content')
+                            .in('kb_id', kbIds)
+                            .not('content', 'is', null)
+                            .limit(10);
+
+                        const filesWithContent = files?.filter(f => f.content?.trim().length > 0) || [];
+                        if (filesWithContent.length > 0) {
+                            knowledgeContext = '\n\n--- KNOWLEDGE BASE ---\n' +
+                                filesWithContent.map(f => `[${f.name}]\n${f.content.slice(0, 3000)}`).join('\n\n') +
+                                '\n--- END KNOWLEDGE BASE ---';
+                        }
+                    } else if (chunks && chunks.length > 0) {
+                        log.info('Semantic search results', { chunks: chunks.length });
+                        knowledgeContext = '\n\n--- RELEVANT KNOWLEDGE BASE CONTENT ---\n' +
+                            chunks.map((c, i) => `[Source ${i+1}: ${c.metadata?.file_name || 'document'}]\n${c.content}`).join('\n\n') +
+                            '\n--- END KNOWLEDGE BASE CONTENT ---';
+                        log.info('RAG context built', { chars: knowledgeContext.length, chunks: chunks.length });
+                    } else {
+                        log.info('No relevant KB chunks found for this query', {});
+                    }
+                } else {
+                    log.warn('Embedding failed for RAG', { status: embedRes.status });
+                }
+            } catch (ragErr) {
+                log.warn('RAG pipeline error', { error: ragErr.message });
             }
         }
 

@@ -406,10 +406,10 @@ function startWidgetRealtimeSubscription(iframeSource, convId) {
             const div = document.createElement('div');
             div.className = 'message bot';
             const t = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            div.innerHTML = \`<div class="msg-avatar" style="background:#10b98133;">👤</div>
+            div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div>
               <div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>
               <div class="msg-bubble" style="border-left:3px solid #10b981;">\${msg.content}</div>
-              <div class="msg-time">\${t}</div></div>\`;
+              <div class="msg-time">\${t}</div></div>`;
             convMsgsEl.appendChild(div);
             convMsgsEl.scrollTop = convMsgsEl.scrollHeight;
           }
@@ -1482,12 +1482,12 @@ async function interceptConversation() {
   const hitlEl = document.getElementById('hitl-banner');
   if (hitlEl) {
     hitlEl.style.display = 'flex';
-    hitlEl.innerHTML = \`
+    hitlEl.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         <span>🟢</span>
         <span>You are now handling this conversation</span>
       </div>
-      <button class="btn btn-sm btn-secondary" onclick="endHITL()">Resume AI</button>\`;
+      <button class="btn btn-sm btn-secondary" onclick="endHITL()">Resume AI</button>`;
   }
   const inputBar = document.getElementById('chat-input-area');
   if (inputBar) inputBar.style.display = 'flex';
@@ -1564,13 +1564,13 @@ async function sendAgentMessage() {
   if (msgsEl) {
     const div = document.createElement('div');
     div.className = 'message bot';
-    div.innerHTML = \`
+    div.innerHTML = `
       <div class="msg-avatar" style="background:#10b98133;">👤</div>
       <div>
         <div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>
         <div class="msg-bubble" style="border-left:3px solid #10b981;">\${text}</div>
         <div class="msg-time">\${time}</div>
-      </div>\`;
+      </div>`;
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
