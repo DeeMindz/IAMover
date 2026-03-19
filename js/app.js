@@ -576,18 +576,6 @@ async function syncInBackground() {
     if (kbsChanged) Store.set('knowledge_bases', kbs);
     else if (!shouldSkipKB) LocalDB.set('knowledge_bases', kbs);
 
-    // Update messages sidebar counter (lightweight — head-only count query)
-    try {
-      const { count: msgCount } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('role', 'user');
-      const msgEl  = document.getElementById('messages-used');
-      const msgBar = document.getElementById('messages-bar');
-      if (msgEl)  msgEl.textContent  = formatNum(msgCount || 0);
-      if (msgBar) msgBar.style.width = `${Math.min((msgCount || 0) / 10, 100)}%`;
-    } catch (_) { /* non-critical */ }
-
     updateSyncIndicator();
   } catch (e) {
     console.warn('Background sync failed:', e);
@@ -879,50 +867,9 @@ function closePanel(id) {
   if (overlay) overlay.classList.remove('open');
 }
 
-function escapeHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 function formatNum(n) {
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
   return n.toString();
-}
-
-// Lightweight markdown renderer for the dashboard conversation panel
-// Handles bold, italic, headers, bullet lists, numbered lists, links, code, hr
-function formatDashboardMarkdown(text) {
-  if (!text) return '';
-  let h = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  // Headers → bold
-  h = h.replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>');
-  // Bold
-  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  h = h.replace(/__(.+?)__/g, '<strong>$1</strong>');
-  // Italic
-  h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  h = h.replace(/_(.+?)_/g, '<em>$1</em>');
-  // Inline code
-  h = h.replace(/`([^`]+)`/g, '<code style="background:var(--bg-elevated);padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>');
-  // Links
-  h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">$1</a>');
-  // Horizontal rule
-  h = h.replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid var(--border);margin:8px 0;">');
-  // Unordered lists
-  h = h.replace(/^[ \t]*[-*] (.+)$/gm, '<li style="margin:2px 0;margin-left:16px;">$1</li>');
-  // Numbered lists
-  h = h.replace(/^[ \t]*\d+\. (.+)$/gm, '<li style="margin:2px 0;margin-left:16px;">$1</li>');
-  // Wrap consecutive <li> in <ul>
-  h = h.replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="margin:6px 0;padding:0;list-style:disc;">$&</ul>');
-  // Newlines → <br>
-  h = h.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
-  return h;
 }
 
 function getColorForId(id) {
@@ -1341,14 +1288,9 @@ function renderConvDetail(id) {
           <span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;white-space:nowrap;">${label}</span>
         </div>`;
       }
-      // Escape and optionally format message content
+      // Regular messages — agent aligns LEFT same as bot
       const isAgent = m.role === 'human-agent';
-      const isBot   = m.role === 'bot';
-      const isUser  = m.role === 'user';
-      // Escape HTML for user messages; render light markdown for bot/agent
-      const safeText = isUser
-        ? String(m.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-        : formatDashboardMarkdown(m.text || '');
+      const isBot = m.role === 'bot';
       return `
       <div class="message ${isAgent ? 'bot' : m.role}">
         <div class="msg-avatar" style="background:${isBot ? 'var(--accent-dim)' : isAgent ? '#10b98133' : '#333'}">
@@ -1356,7 +1298,7 @@ function renderConvDetail(id) {
         </div>
         <div>
           ${isAgent ? '<div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>' : ''}
-          <div class="msg-bubble" style="${isAgent ? 'border-left:3px solid #10b981;' : ''}">${safeText}</div>
+          <div class="msg-bubble" style="${isAgent ? 'border-left:3px solid #10b981;' : ''}">${m.text}</div>
           <div class="msg-time">${m.time}</div>
         </div>
       </div>`;
@@ -1755,29 +1697,18 @@ async function loadKBDetailFiles() {
       return;
     }
     const icons = { pdf: '📄', docx: '📝', doc: '📝', txt: '📃', csv: '📊', xlsx: '📊', url: '🔗', text: '📋' };
-    const statusBadge = {
-      processed:  '<span style="font-size:10px;background:#00e5a022;color:#00e5a0;border:1px solid #00e5a044;border-radius:20px;padding:1px 8px;">✓ Ready</span>',
-      processing: '<span style="font-size:10px;background:#ffb54722;color:#ffb547;border:1px solid #ffb54744;border-radius:20px;padding:1px 8px;">⏳ Processing</span>',
-      failed:     '<span style="font-size:10px;background:#ff4d6a22;color:#ff4d6a;border:1px solid #ff4d6a44;border-radius:20px;padding:1px 8px;">✕ Failed</span>',
-      empty:      '<span style="font-size:10px;background:#88888822;color:#888;border:1px solid #88888844;border-radius:20px;padding:1px 8px;">Empty</span>',
-    };
     listEl.innerHTML = files.map(f => {
       const sizeKB = f.size_bytes ? Math.round(f.size_bytes / 1024) : 0;
       const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : sizeKB > 0 ? `${sizeKB} KB` : '';
       const date = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
       const icon = icons[f.type] || '📄';
-      const badge = statusBadge[f.status] || '<span style="font-size:10px;background:#6c63ff22;color:#6c63ff;border:1px solid #6c63ff44;border-radius:20px;padding:1px 8px;">Saved</span>';
-      const chunks = f.chunk_count ? `· ${f.chunk_count} chunks` : '';
       return `
         <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:12px;">
             <span style="font-size:22px;">${icon}</span>
             <div>
-              <div style="font-weight:600;font-size:13px;">${escapeHtml(f.name)}</div>
-              <div style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-top:3px;">
-                ${badge}
-                <span>${[sizeStr, chunks, date].filter(Boolean).join(' · ')}</span>
-              </div>
+              <div style="font-weight:600;font-size:13px;">${f.name}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${[sizeStr, date].filter(Boolean).join(' · ')}</div>
             </div>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="deleteKBFile('${f.id}','${id}')" style="color:var(--danger);">🗑</button>
@@ -1799,42 +1730,17 @@ function switchKBDetailTab(tab) {
 }
 window.switchKBDetailTab = switchKBDetailTab;
 
-/* ─── KB Processing Pipeline ─────────────────────────────────────── */
-// Called after any KB file is saved to DB — triggers backend to chunk & embed it
-async function triggerKBProcessing(fileId, type = 'file') {
-  try {
-    const endpoint = type === 'url' ? '/api/kb/crawl' : '/api/kb/process';
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kb_file_id: fileId })
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      console.warn(`[KB] Processing failed for ${fileId}:`, err);
-      showToast('File saved but processing failed — try re-uploading', 'error');
-    } else {
-      const data = await res.json();
-      console.log('[KB] Processing complete:', data);
-    }
-  } catch (e) {
-    console.warn('[KB] Processing request error:', e.message);
-  }
-}
-
 async function uploadKBDetailFiles(input) {
   const files = [...input.files];
   if (!files.length) return;
   const kbId = AppState.currentKBId;
   if (!kbId) return;
-  showToast(`Uploading ${files.length} file(s)…`, 'info');
+  showToast(`Uploading ${files.length} file(s)...`, 'info');
   try {
     for (const file of files) {
-      const saved = await KnowledgeBases.uploadFile(kbId, file);
-      // Fire-and-forget processing — chunks & embeds the file for RAG
-      if (saved?.id) triggerKBProcessing(saved.id, 'file');
+      await KnowledgeBases.uploadFile(kbId, file);
     }
-    showToast(`${files.length} file(s) uploaded — processing for AI…`, 'success');
+    showToast(`${files.length} file(s) uploaded!`, 'success');
     LocalDB.clear('knowledge_bases');
     await loadKBDetailFiles();
     const freshKBs = await KnowledgeBases.getAll();
@@ -1854,9 +1760,8 @@ async function saveKBRichText() {
   if (!title || !content) { showToast('Please enter a title and content', 'error'); return; }
   if (!kbId) return;
   try {
-    const saved = await KnowledgeBases.addFile(kbId, { name: title, type: 'text', size_bytes: new Blob([content]).size, content });
-    if (saved?.id) triggerKBProcessing(saved.id, 'file');
-    showToast('Content added — processing for AI…', 'success');
+    await KnowledgeBases.addFile(kbId, { name: title, type: 'text', size_bytes: new Blob([content]).size, content });
+    showToast('Content added!', 'success');
     document.getElementById('kb-text-title').value = '';
     document.getElementById('kb-text-content').value = '';
     LocalDB.clear('knowledge_bases');
@@ -1873,9 +1778,8 @@ async function startKBCrawl() {
   const kbId = AppState.currentKBId;
   if (!kbId) return;
   try {
-    const saved = await KnowledgeBases.addFile(kbId, { name: url, type: 'url', url, size_bytes: 0 });
-    if (saved?.id) triggerKBProcessing(saved.id, 'url');
-    showToast('Crawl started — this may take a minute…', 'info');
+    await KnowledgeBases.addFile(kbId, { name: url, type: 'url', url, size_bytes: 0 });
+    showToast('URL added! Crawling will begin shortly.', 'success');
     document.getElementById('kb-sitemap-url').value = '';
     LocalDB.clear('knowledge_bases');
     await loadKBDetailFiles();
@@ -1884,46 +1788,6 @@ async function startKBCrawl() {
   } catch (e) { showToast('Failed to add URL', 'error'); }
 }
 window.startKBCrawl = startKBCrawl;
-
-// KB side-panel file upload (used from panel-kb, not the KB detail page)
-async function uploadKBPanelFiles(input) {
-  const files = [...input.files];
-  if (!files.length) return;
-  const kbId = AppState.currentKBId;
-  if (!kbId) { showToast('No knowledge base selected', 'error'); return; }
-  showToast(`Uploading ${files.length} file(s)…`, 'info');
-  try {
-    for (const file of files) {
-      const saved = await KnowledgeBases.uploadFile(kbId, file);
-      if (saved?.id) triggerKBProcessing(saved.id, 'file');
-    }
-    showToast(`${files.length} file(s) uploaded — processing for AI…`, 'success');
-    LocalDB.clear('knowledge_bases');
-    // Refresh panel file list
-    const panelFilesEl = document.getElementById('kb-panel-files');
-    if (panelFilesEl) {
-      const freshFiles = await KnowledgeBases.getFiles(kbId);
-      const icons = { pdf:'📄', docx:'📝', doc:'📝', txt:'📃', csv:'📊', xlsx:'📊', url:'🔗', text:'📋' };
-      panelFilesEl.innerHTML = freshFiles.length === 0
-        ? '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px;">No files yet.</div>'
-        : freshFiles.map(f => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-            <span style="font-size:18px;">${icons[f.type] || '📄'}</span>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.name}</div>
-              <div style="font-size:11px;color:var(--text-muted);">${f.status || 'saved'}</div>
-            </div>
-          </div>`).join('');
-    }
-    const freshKBs = await KnowledgeBases.getAll();
-    Store.set('knowledge_bases', freshKBs);
-  } catch (e) {
-    console.error(e);
-    showToast('Upload failed', 'error');
-  }
-  input.value = '';
-}
-window.uploadKBPanelFiles = uploadKBPanelFiles;
 
 function renameCurrentKB() { renameKB(AppState.currentKBId); }
 window.renameCurrentKB = renameCurrentKB;
@@ -2389,6 +2253,68 @@ function renderLivePreview(bot) {
 
 <script>
   let isSending = false;
+  let _realtimeSub = null;
+
+  // ── Supabase Realtime — subscribe directly inside the widget ──────
+  // This is the ONLY reliable way to receive agent messages and system
+  // notifications, whether the widget is in a preview iframe or a real
+  // embedded page. postMessage from the parent only works in preview.
+  function startRealtimeSubscription(convId) {
+    if (_realtimeSub) { try { _realtimeSub.unsubscribe(); } catch(e){} _realtimeSub = null; }
+    if (!convId) return;
+    var SUPA_URL = 'https://ekdsfvjsbhoxjszciquq.supabase.co';
+    var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrZHNmdmpzYmhveGpzemNpcXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTM1ODcsImV4cCI6MjA4OTE4OTU4N30.otpg9pOci8B9nN33APefE0ulHAlfJ-nVMvNSvrIf_xQ';
+    // Dynamically load Supabase CDN if not already loaded
+    function doSubscribe(sb) {
+      var client = sb.createClient(SUPA_URL, SUPA_KEY);
+      _realtimeSub = client
+        .channel('widget_messages_' + convId)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'messages',
+          filter: 'conversation_id=eq.' + convId
+        }, function(payload) {
+          var msg = payload.new;
+          if (msg.role === 'human-agent') {
+            var t = document.getElementById('typing-indicator');
+            if (t) t.remove();
+            showAgentMessage(msg.content);
+            isSending = false;
+          }
+          if (msg.role === 'system') {
+            addSystemMsg(msg.content);
+            var msgs = document.getElementById('chat-messages');
+            if (msgs) msgs.scrollTop = msgs.scrollHeight;
+          }
+        })
+        .subscribe();
+    }
+    if (window.supabase && window.supabase.createClient) {
+      doSubscribe(window.supabase);
+    } else {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.onload = function() { doSubscribe(window.supabase); };
+      document.head.appendChild(s);
+    }
+  }
+
+  function showAgentMessage(content) {
+    var msgs = document.getElementById('chat-messages');
+    if (!msgs) return;
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+    var label = document.createElement('div');
+    label.textContent = 'Support Agent';
+    label.style.cssText = 'font-size:10px;color:#10b981;margin-left:4px;font-weight:600;';
+    var agentMsg = document.createElement('div');
+    agentMsg.className = 'msg bot';
+    agentMsg.style.borderLeft = '3px solid #10b981';
+    agentMsg.textContent = content;
+    wrap.appendChild(label);
+    wrap.appendChild(agentMsg);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
 
   function openChat() {
     document.getElementById('launcher').classList.add('hidden');
@@ -2466,11 +2392,14 @@ window.addEventListener('message', function (e) {
 
   if (e.data.type === 'IAM_CONV_CREATED') {
     window._previewConvId = e.data.conv_id;
+    // Start Supabase Realtime subscription inside the widget so agent
+    // messages and system notifications arrive whether in preview or real embed
+    startRealtimeSubscription(e.data.conv_id);
   }
 
   // Load previous chat history
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
-    const msgs = document.getElementById('chat-messages');
+    var msgs = document.getElementById('chat-messages');
     msgs.innerHTML = '';
     e.data.messages.forEach(function(m) {
       if (m.role === 'system') {
@@ -2478,6 +2407,7 @@ window.addEventListener('message', function (e) {
       } else {
         var div = document.createElement('div');
         div.className = 'msg ' + (m.role === 'bot' || m.role === 'human-agent' ? 'bot' : 'user');
+        if (m.role === 'human-agent') div.style.borderLeft = '3px solid #10b981';
         div.textContent = m.content;
         msgs.appendChild(div);
       }
@@ -2501,32 +2431,20 @@ window.addEventListener('message', function (e) {
     isSending = false;
   }
 
-  // Human agent message — show like a bot message (same side) but with agent label
+  // Human agent message via postMessage (preview iframe fallback)
+  // Real embedded widgets receive this via Supabase Realtime instead
   if (e.data.type === 'IAM_AGENT_MESSAGE') {
-    var msgs = document.getElementById('chat-messages');
     var t = document.getElementById('typing-indicator');
     if (t) t.remove();
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
-    var label = document.createElement('div');
-    label.textContent = 'Support Agent';
-    label.style.cssText = 'font-size:10px;color:#888;margin-left:4px;';
-    var agentMsg = document.createElement('div');
-    agentMsg.className = 'msg bot';
-    agentMsg.style.borderLeft = '3px solid #10b981';
-    agentMsg.textContent = e.data.content;
-    wrap.appendChild(label);
-    wrap.appendChild(agentMsg);
-    msgs.appendChild(wrap);
-    msgs.scrollTop = msgs.scrollHeight;
+    showAgentMessage(e.data.content);
     isSending = false;
   }
 
-  // System notification message
+  // System notification message via postMessage (preview iframe fallback)
   if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
     var msgs = document.getElementById('chat-messages');
     addSystemMsg(e.data.content);
-    msgs.scrollTop = msgs.scrollHeight;
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
   }
 });
 
@@ -3355,7 +3273,6 @@ window.openKB = openKBDetail; // alias for any old references
 window.loadKBDetailFiles = loadKBDetailFiles;
 window.switchKBDetailTab = switchKBDetailTab;
 window.uploadKBDetailFiles = uploadKBDetailFiles;
-window.uploadKBPanelFiles = uploadKBPanelFiles;
 window.saveKBRichText = saveKBRichText;
 window.startKBCrawl = startKBCrawl;
 window.deleteKBFile = deleteKBFile;
@@ -3370,7 +3287,6 @@ window.attachKB = attachKB;
 window.detachKB = detachKB;
 window.renderAttachedKBs = renderAttachedKBs;
 window.addKnowledgeBase = addKnowledgeBase;
-window.uploadKBPanelFiles = uploadKBPanelFiles;
 // Settings / auth
 window.saveWorkspaceSettings = saveWorkspaceSettings;
 window.handleSignOut = handleSignOut;
