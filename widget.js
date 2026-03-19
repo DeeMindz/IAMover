@@ -224,11 +224,16 @@
   function hideTyping() { var t=document.getElementById('iam-typing'); if(t) t.remove(); }
 
   // ── Realtime ──────────────────────────────────────────────────────
+  var convRowSub = null; // second channel: conversation row changes
+
   function startRealtime(cId) {
     if (realtimeSub) { try { realtimeSub.unsubscribe(); } catch(e) {} realtimeSub = null; }
+    if (convRowSub) { try { convRowSub.unsubscribe(); } catch(e) {} convRowSub = null; }
     if (!cId || !supaClient) return;
+
+    // Channel 1: new messages
     realtimeSub = supaClient
-      .channel('iam_' + cId)
+      .channel('iam_msgs_' + cId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'conversation_id=eq.' + cId }, function(payload) {
         var msg = payload.new;
         if (msg.role === 'human-agent') { hideTyping(); appendAgent(msg.content); isSending = false; }
@@ -239,7 +244,58 @@
           if (!last || last.textContent.trim() !== msg.content.trim()) { hideTyping(); appendBot(msg.content); isSending = false; }
         }
       })
-      .subscribe(function(s) { console.log('[IAM] Realtime:', s); });
+      .subscribe(function(s) { console.log('[IAM] Messages realtime:', s); });
+
+    // Channel 2: conversation row changes — typing indicator + HITL status
+    convRowSub = supaClient
+      .channel('iam_conv_' + cId)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations', filter: 'id=eq.' + cId }, function(payload) {
+        var conv = payload.new;
+
+        // Agent typing indicator
+        if (conv.agent_typing) {
+          showAgentTyping();
+        } else {
+          hideAgentTyping();
+        }
+
+        // hitl_active flipped to false — bot has resumed
+        // The system message (agent_left) will also arrive via messages channel,
+        // but this gives instant feedback from the row change
+        if (conv.hitl_active === false) {
+          hideAgentTyping();
+          // Only show pill if not already shown by system message
+          var existing = msgsEl.querySelectorAll('.iam-system span');
+          var name = botConfig.displayName || botConfig.name || 'Bot';
+          var resumeLabel = name + ' has resumed';
+          var alreadyShown = false;
+          existing.forEach(function(el) { if (el.textContent === resumeLabel) alreadyShown = true; });
+          if (!alreadyShown) appendSystem('agent_left');
+        }
+      })
+      .subscribe(function(s) { console.log('[IAM] Conv realtime:', s); });
+  }
+
+  function showAgentTyping() {
+    if (document.getElementById('iam-agent-typing')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'iam-agent-typing';
+    wrap.className = 'iam-agent-wrap';
+    var label = document.createElement('div');
+    label.className = 'iam-agent-label';
+    label.textContent = 'Support Agent';
+    var dots = document.createElement('div');
+    dots.className = 'iam-typing';
+    dots.innerHTML = '<span></span><span></span><span></span>';
+    wrap.appendChild(label);
+    wrap.appendChild(dots);
+    msgsEl.appendChild(wrap);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  function hideAgentTyping() {
+    var el = document.getElementById('iam-agent-typing');
+    if (el) el.remove();
   }
 
   function initSupabase(cb) {
@@ -321,6 +377,7 @@
   function startNewConversation() {
     hideNewConvConfirm();
     if (realtimeSub) { try { realtimeSub.unsubscribe(); } catch(e) {} realtimeSub = null; }
+    if (convRowSub) { try { convRowSub.unsubscribe(); } catch(e) {} convRowSub = null; }
     var newVid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2,9);
     localStorage.setItem('iam_visitor_id', newVid);
     convId = null; isSending = false; msgsEl.innerHTML = '';
