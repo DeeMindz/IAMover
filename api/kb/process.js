@@ -57,6 +57,7 @@ async function embedText(text) {
                 model: 'models/gemini-embedding-001',
                 content: { parts: [{ text }] },
                 taskType: 'RETRIEVAL_DOCUMENT',
+                outputDimensionality: 1536,
             })
         }
     );
@@ -197,8 +198,8 @@ export default async function handler(req, res) {
             try {
                 const embedding = await embedText(chunk);
 
-                // Format as pgvector string: [0.1,0.2,...] — gemini-embedding-001 returns 3072 dims
-                const padded = [...embedding, ...new Array(3072 - embedding.length).fill(0)];
+                // Format as pgvector string: [0.1,0.2,...] — truncated to 1536 dims via outputDimensionality
+                const padded = [...embedding, ...new Array(1536 - embedding.length).fill(0)];
                 const vectorStr = '[' + padded.join(',') + ']';
 
                 await supabase.from('kb_chunks').insert({
@@ -209,7 +210,7 @@ export default async function handler(req, res) {
                     chunk_index:          i,
                     token_count:          Math.round(chunk.length / 4),
                     embedding_model:      'gemini-embedding-001',
-                    embedding_dimensions: 3072,
+                    embedding_dimensions: 1536,
                     metadata: {
                         file_name:  file.name,
                         file_type:  file.type,

@@ -142,6 +142,7 @@ export default async function handler(req, res) {
                             model: 'models/gemini-embedding-001',
                             content: { parts: [{ text: message }] },
                             taskType: 'RETRIEVAL_QUERY',
+                            outputDimensionality: 1536,
                         })
                     }
                 );
@@ -149,7 +150,7 @@ export default async function handler(req, res) {
                 if (embedRes.ok) {
                     const embedData = await embedRes.json();
                     const queryVec = embedData.embedding.values;
-                    const padded = [...queryVec, ...new Array(3072 - queryVec.length).fill(0)];
+                    const padded = [...queryVec, ...new Array(1536 - queryVec.length).fill(0)];
                     const vectorStr = '[' + padded.join(',') + ']';
 
                     // Semantic similarity search in pgvector

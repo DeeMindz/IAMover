@@ -20,7 +20,8 @@ async function embedQuery(text) {
             body: JSON.stringify({
                 model: 'models/gemini-embedding-001',
                 content: { parts: [{ text }] },
-                taskType: 'RETRIEVAL_QUERY', // different task type for queries vs documents
+                taskType: 'RETRIEVAL_QUERY',
+                outputDimensionality: 1536,
             })
         }
     );
@@ -50,8 +51,8 @@ export default async function handler(req, res) {
         // Embed the user query
         const queryEmbedding = await embedQuery(query);
 
-        // Pad to 3072 dimensions to match gemini-embedding-001 output
-        const padded = [...queryEmbedding, ...new Array(3072 - queryEmbedding.length).fill(0)];
+        // Pad to 1536 dimensions (outputDimensionality truncates gemini-embedding-001)
+        const padded = [...queryEmbedding, ...new Array(1536 - queryEmbedding.length).fill(0)];
         const vectorStr = '[' + padded.join(',') + ']';
 
         // Semantic search using pgvector cosine similarity
