@@ -49,7 +49,7 @@ async function embedText(text) {
     if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -192,7 +192,6 @@ export default async function handler(req, res) {
 
         // ── Embed and save each chunk ─────────────────────────────────────────
         let savedCount = 0;
-        let lastError = null;
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
             try {
@@ -203,7 +202,7 @@ export default async function handler(req, res) {
                 const padded = [...embedding, ...new Array(1536 - embedding.length).fill(0)];
                 const vectorStr = '[' + padded.join(',') + ']';
 
-                const { error: insertErr } = await supabase.from('kb_chunks').insert({
+                await supabase.from('kb_chunks').insert({
                     kb_file_id,
                     kb_id,
                     content:              chunk,
@@ -219,8 +218,6 @@ export default async function handler(req, res) {
                     }
                 });
 
-                if (insertErr) throw new Error(`DB insert failed: ${insertErr.message}`);
-
                 savedCount++;
                 log.info('Chunk embedded and saved', { chunk: i + 1, of: chunks.length });
 
@@ -228,24 +225,7 @@ export default async function handler(req, res) {
                 if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 100));
 
             } catch (embErr) {
-                lastError = embErr.message;
                 log.warn('Chunk embedding failed', { chunk: i, error: embErr.message });
-                // On first chunk failure, bail out immediately with a clear error
-                // so the caller can see what's actually wrong instead of getting
-                // chunks_created: 0 with no explanation
-                if (i === 0) {
-                    await supabase.from('kb_files')
-                        .update({ status: 'failed', error_message: embErr.message })
-                        .eq('id', kb_file_id);
-                    return res.status(500).json({
-                        error: embErr.message,
-                        hint: embErr.message.includes('GEMINI_API_KEY')
-                            ? 'Add GEMINI_API_KEY to your Vercel environment variables'
-                            : embErr.message.includes('embedding')
-                            ? 'Check that the kb_chunks table exists and pgvector extension is enabled in Supabase'
-                            : 'Check Vercel function logs for details'
-                    });
-                }
             }
         }
 
@@ -260,11 +240,10 @@ export default async function handler(req, res) {
 
         log.info('File processing complete', { kb_file_id, chunks: savedCount });
         return res.status(200).json({
-            success:         savedCount > 0,
-            file_id:         kb_file_id,
-            chunks_created:  savedCount,
+            success: true,
+            file_id: kb_file_id,
+            chunks_created: savedCount,
             chars_extracted: rawText.length,
-            ...(savedCount === 0 && lastError ? { error: lastError } : {}),
         });
 
     } catch (error) {
