@@ -2256,17 +2256,25 @@ function renderLivePreview(bot) {
   var _realtimeSub = null;
 
   // ── Supabase Realtime ─────────────────────────────────────────────
-  // Subscribes directly inside the widget so agent messages and system
-  // notifications arrive in real-time on any page — no parent postMessage needed.
+  // Uses a custom storageKey to avoid GoTrueClient conflict with the
+  // parent dashboard window which shares the same browser storage.
   function startRealtimeSubscription(convId) {
     if (_realtimeSub) { try { _realtimeSub.unsubscribe(); } catch(e) {} _realtimeSub = null; }
     if (!convId) return;
     var SUPA_URL = 'https://ekdsfvjsbhoxjszciquq.supabase.co';
     var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrZHNmdmpzYmhveGpzemNpcXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTM1ODcsImV4cCI6MjA4OTE4OTU4N30.otpg9pOci8B9nN33APefE0ulHAlfJ-nVMvNSvrIf_xQ';
     function doSubscribe(sb) {
-      var client = sb.createClient(SUPA_URL, SUPA_KEY);
+      // storageKey namespaced to widget to prevent GoTrueClient multi-instance warning
+      var client = sb.createClient(SUPA_URL, SUPA_KEY, {
+        auth: {
+          storageKey: 'iam-widget-' + convId,
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        }
+      });
       _realtimeSub = client
-        .channel('widget_' + convId)
+        .channel('widget_conv_' + convId)
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'messages',
           filter: 'conversation_id=eq.' + convId
@@ -2284,7 +2292,9 @@ function renderLivePreview(bot) {
             if (msgs) msgs.scrollTop = msgs.scrollHeight;
           }
         })
-        .subscribe();
+        .subscribe(function(status) {
+          console.log('[IAM Widget] Realtime status:', status, 'conv:', convId);
+        });
     }
     if (window.supabase && window.supabase.createClient) {
       doSubscribe(window.supabase);
@@ -2321,7 +2331,6 @@ function renderLivePreview(bot) {
     if (!window._previewConvId) {
       window.parent.postMessage({ type: 'IAM_CONV_CREATE', bot_id: '${bot.id}' }, '*');
     } else {
-      // Returning visitor — subscribe immediately so agent messages arrive live
       startRealtimeSubscription(window._previewConvId);
     }
   }
@@ -2331,26 +2340,20 @@ function renderLivePreview(bot) {
     document.getElementById('launcher').classList.remove('hidden');
   }
 
-  // ── Markdown renderer ─────────────────────────────────────────────
   function formatMarkdown(text) {
     if (!text) return '';
-    var h = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
-    h = h.replace(/^## (.+)$/gm, '<strong>$1</strong>');
-    h = h.replace(/^# (.+)$/gm,  '<strong>$1</strong>');
-    h = h.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
-    h = h.replace(/__(.+?)__/g,         '<strong>$1</strong>');
-    h = h.replace(/[*](.+?)[*]/g,       '<em>$1</em>');
-    h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-    h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-    h = h.replace(/<li/g, function(m,o,s){ var p=s.lastIndexOf('<ul',o),pe=s.lastIndexOf('</ul>',o); if(p===-1||pe>p) return '<ul style="margin:6px 0;padding-left:18px;"><li'; return m; });
-    h = h.replace(/(<[/]li>)(?![\s\S]*?<li)/g, '$1</ul>');
-    var nl = String.fromCharCode(10);
-    h = h.split(nl+nl).join('<br><br>');
-    h = h.split(nl).join('<br>');
+    var h = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    h = h.replace(/^### (.+)$/gm,'<strong>$1</strong>');
+    h = h.replace(/^## (.+)$/gm,'<strong>$1</strong>');
+    h = h.replace(/^# (.+)$/gm,'<strong>$1</strong>');
+    h = h.replace(/[*][*](.+?)[*][*]/g,'<strong>$1</strong>');
+    h = h.replace(/__(.+?)__/g,'<strong>$1</strong>');
+    h = h.replace(/[*](.+?)[*]/g,'<em>$1</em>');
+    h = h.replace(/^[ ]*[-][ ]+(.+)$/gm,'<li style="margin:2px 0;">$1</li>');
+    h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm,'<li style="margin:2px 0;">$1</li>');
+    h = h.replace(/<li/g,function(m,o,s){var p=s.lastIndexOf('<ul',o),pe=s.lastIndexOf('</ul>',o);if(p===-1||pe>p)return '<ul style="margin:6px 0;padding-left:18px;"><li';return m;});
+    h = h.replace(/(<[/]li>)(?![\s\S]*?<li)/g,'$1</ul>');
+    var nl=String.fromCharCode(10);h=h.split(nl+nl).join('<br><br>');h=h.split(nl).join('<br>');
     return h;
   }
 
@@ -2380,16 +2383,12 @@ function renderLivePreview(bot) {
     }, '*');
   }
 
-  // ── Message listener (postMessage from parent dashboard) ──────────
   window.addEventListener('message', function(e) {
     if (!e.data) return;
-
     if (e.data.type === 'IAM_CONV_CREATED') {
       window._previewConvId = e.data.conv_id;
-      // Always start realtime — works for new and returning visitors
       startRealtimeSubscription(e.data.conv_id);
     }
-
     if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages && e.data.messages.length) {
       var msgs = document.getElementById('chat-messages');
       msgs.innerHTML = '';
@@ -2403,10 +2402,8 @@ function renderLivePreview(bot) {
         msgs.appendChild(div);
       });
       msgs.scrollTop = msgs.scrollHeight;
-      // Ensure realtime is running for returning visitors
       if (window._previewConvId) startRealtimeSubscription(window._previewConvId);
     }
-
     if (e.data.type === 'IAM_BOT_RESPONSE') {
       var msgs = document.getElementById('chat-messages');
       var t = document.getElementById('typing-indicator');
@@ -2421,8 +2418,6 @@ function renderLivePreview(bot) {
       if (e.data.conv_id) window._previewConvId = e.data.conv_id;
       isSending = false;
     }
-
-    // Fallback handlers — used in preview iframe context
     if (e.data.type === 'IAM_AGENT_MESSAGE') {
       var t = document.getElementById('typing-indicator');
       if (t) t.remove();
@@ -2437,31 +2432,19 @@ function renderLivePreview(bot) {
   function addSystemMsg(content) {
     var msgs = document.getElementById('chat-messages');
     if (!msgs) return;
-    var label = content === 'agent_joined'
-      ? '&#128100; A live agent has joined'
-      : '${botName} has resumed';
+    var label = content === 'agent_joined' ? '&#128100; A live agent has joined' : '${botName} has resumed';
     var div = document.createElement('div');
     div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
     div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
     msgs.appendChild(div);
   }
 
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
-  }
-
-  function showNewConvConfirm() {
-    var footer = document.getElementById('new-conv-confirm');
-    if (footer) footer.style.display = 'flex';
-  }
-  function cancelNewConv() {
-    var footer = document.getElementById('new-conv-confirm');
-    if (footer) footer.style.display = 'none';
-  }
+  function handleKey(e) { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();} }
+  function showNewConvConfirm() { var f=document.getElementById('new-conv-confirm'); if(f) f.style.display='flex'; }
+  function cancelNewConv()      { var f=document.getElementById('new-conv-confirm'); if(f) f.style.display='none'; }
   function confirmNewConv() {
-    var footer = document.getElementById('new-conv-confirm');
-    if (footer) footer.style.display = 'none';
-    if (_realtimeSub) { try { _realtimeSub.unsubscribe(); } catch(e) {} _realtimeSub = null; }
+    var f=document.getElementById('new-conv-confirm'); if(f) f.style.display='none';
+    if (_realtimeSub) { try { _realtimeSub.unsubscribe(); } catch(e) {} _realtimeSub=null; }
     window._previewConvId = null;
     var msgs = document.getElementById('chat-messages');
     msgs.innerHTML = '<div class="msg bot">${greeting}</div>';
