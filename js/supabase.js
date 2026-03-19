@@ -204,10 +204,14 @@ export const KnowledgeBases = {
         .map(f => f.storage_path)
 
       if (storagePaths.length > 0) {
-        const { error: storageErr } = await supabase.storage
+        const { data: removed, error: storageErr } = await supabase.storage
           .from('knowledge-files')
           .remove(storagePaths)
-        if (storageErr) console.warn('Storage delete partial error:', storageErr.message)
+        if (storageErr) {
+          console.warn('[KB] Storage delete failed:', storageErr.message)
+        } else {
+          console.log('[KB] Storage files deleted:', removed?.length || 0)
+        }
       }
     }
 

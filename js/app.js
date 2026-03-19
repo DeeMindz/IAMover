@@ -1187,12 +1187,6 @@ async function renderConversations() {
 
   if (topbarName) topbarName.textContent = AppState.currentBot.name;
 
-  // Restore last active conversation from localStorage on refresh
-  if (!AppState.activeConversation) {
-    const saved = LocalDB.get('activeConversation');
-    if (saved) AppState.activeConversation = saved;
-  }
-
   // Always fetch fresh from DB — no caching to avoid stale/duplicate data
   try {
     const dbConvs = await Conversations.getAll(AppState.currentBot.id);
@@ -1215,17 +1209,13 @@ async function renderConversations() {
         messages: []
       }));
 
-    AppState.conversations = mappedConvs;
-
-    // Restore HITL state from DB — must happen before any rendering
+    // Restore HITL state from DB after page refresh
     const activeHITL = mappedConvs.find(c => c.hitl_active);
-    if (activeHITL) {
-      AppState.hitlActive = activeHITL.hitl_active;
-      // If we had this conversation active, keep it active
-      if (!AppState.activeConversation) {
-        AppState.activeConversation = activeHITL.id;
-      }
+    if (activeHITL && AppState.activeConversation === activeHITL.id) {
+      AppState.hitlActive = true;
     }
+
+    AppState.conversations = mappedConvs;
 
   } catch (e) {
     console.error('Failed to load conversations:', e);
@@ -1256,16 +1246,6 @@ async function renderConversations() {
       </div>
     `;
   }).join('');
-
-  // Auto-load the active conversation on refresh — don't wait for a click
-  if (AppState.activeConversation) {
-    await loadConversationMessages(AppState.activeConversation);
-    // Re-subscribe to realtime if HITL was active
-    if (AppState.hitlActive) {
-      subscribeToConversation(AppState.activeConversation);
-      startWidgetRealtimeSubscription(null, AppState.activeConversation);
-    }
-  }
 }
 
 // Separate click handler — does NOT re-render full list (prevents disappearing)
@@ -1276,8 +1256,6 @@ async function selectConversation(convId) {
   if (clicked) clicked.classList.add('active');
 
   AppState.activeConversation = convId;
-  // Persist so it survives page refresh
-  LocalDB.set('activeConversation', convId);
   await loadConversationMessages(convId);
 }
 window.selectConversation = selectConversation;
@@ -1305,7 +1283,7 @@ function renderConvDetail(id) {
         const isJoined = m.text === 'agent_joined';
         const label = isJoined
           ? '👤 A live agent has joined the conversation'
-          : `${botName} has resumed`;
+          : '🤖 AI assistant has resumed';
         return `<div style="display:flex;align-items:center;justify-content:center;margin:10px 0;">
           <span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;white-space:nowrap;">${label}</span>
         </div>`;
@@ -1313,12 +1291,10 @@ function renderConvDetail(id) {
       // Regular messages — agent aligns LEFT same as bot
       const isAgent = m.role === 'human-agent';
       const isBot = m.role === 'bot';
-      const botColor = botObj?.color || botObj?.theme?.primaryColor || '#6c63ff';
-      const botInitial = botName.charAt(0).toUpperCase();
       return `
       <div class="message ${isAgent ? 'bot' : m.role}">
-        <div class="msg-avatar" style="background:${isBot ? botColor + '33' : isAgent ? '#10b98133' : '#333'}; color:${isBot ? botColor : isAgent ? '#10b981' : '#fff'}; font-weight:700; font-size:12px;">
-          ${isBot ? botInitial : isAgent ? '👤' : ''}
+        <div class="msg-avatar" style="background:${isBot ? 'var(--accent-dim)' : isAgent ? '#10b98133' : '#333'}">
+          ${isBot ? '🤖' : isAgent ? '👤' : ''}
         </div>
         <div>
           ${isAgent ? '<div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>' : ''}
@@ -1554,11 +1530,9 @@ async function endHITL() {
   // Append system message directly without full re-render
   const msgsEl = document.getElementById('conv-messages');
   if (msgsEl) {
-    const botObj = AppState.bots.find(b => b.id === AppState.conversations.find(c => c.id === convId)?.botId);
-    const botName = botObj?.name || 'Bot';
     const div = document.createElement('div');
     div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
-    div.innerHTML = `<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">${botName} has resumed</span>`;
+    div.innerHTML = '<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">🤖 AI assistant has resumed</span>';
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -1861,9 +1835,12 @@ async function confirmDeleteKB(id) {
 
 async function deleteKnowledgeBase(id) {
   try {
+    // DB first — removes kb_files, kb_chunks, bot_knowledge_bases via cascade
+    // and deletes storage files via KnowledgeBases.delete()
+    await KnowledgeBases.delete(id);
+    // Only remove from Store AFTER DB confirms success — prevents re-fetch race
     Store.removeItem('knowledge_bases', id);
     LocalDB.clear('knowledge_bases');
-    await KnowledgeBases.delete(id);
     showToast('Knowledge base deleted', 'success');
     if (AppState.currentKBId === id) {
       AppState.currentKBId = null;
@@ -2279,81 +2256,22 @@ function renderLivePreview(bot) {
 
 <script>
   let isSending = false;
-  let _realtimeSub = null;
-
-  // ── Supabase Realtime — subscribe directly inside the widget ──────
-  // This is the ONLY reliable way to receive agent messages and system
-  // notifications, whether the widget is in a preview iframe or a real
-  // embedded page. postMessage from the parent only works in preview.
-  function startRealtimeSubscription(convId) {
-    if (_realtimeSub) { try { _realtimeSub.unsubscribe(); } catch(e){} _realtimeSub = null; }
-    if (!convId) return;
-    var SUPA_URL = 'https://ekdsfvjsbhoxjszciquq.supabase.co';
-    var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrZHNmdmpzYmhveGpzemNpcXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTM1ODcsImV4cCI6MjA4OTE4OTU4N30.otpg9pOci8B9nN33APefE0ulHAlfJ-nVMvNSvrIf_xQ';
-    // Dynamically load Supabase CDN if not already loaded
-    function doSubscribe(sb) {
-      var client = sb.createClient(SUPA_URL, SUPA_KEY);
-      _realtimeSub = client
-        .channel('widget_messages_' + convId)
-        .on('postgres_changes', {
-          event: 'INSERT', schema: 'public', table: 'messages',
-          filter: 'conversation_id=eq.' + convId
-        }, function(payload) {
-          var msg = payload.new;
-          if (msg.role === 'human-agent') {
-            var t = document.getElementById('typing-indicator');
-            if (t) t.remove();
-            showAgentMessage(msg.content);
-            isSending = false;
-          }
-          if (msg.role === 'system') {
-            addSystemMsg(msg.content);
-            var msgs = document.getElementById('chat-messages');
-            if (msgs) msgs.scrollTop = msgs.scrollHeight;
-          }
-        })
-        .subscribe();
-    }
-    if (window.supabase && window.supabase.createClient) {
-      doSubscribe(window.supabase);
-    } else {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-      s.onload = function() { doSubscribe(window.supabase); };
-      document.head.appendChild(s);
-    }
-  }
-
-  function showAgentMessage(content) {
-    var msgs = document.getElementById('chat-messages');
-    if (!msgs) return;
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
-    var label = document.createElement('div');
-    label.textContent = 'Support Agent';
-    label.style.cssText = 'font-size:10px;color:#10b981;margin-left:4px;font-weight:600;';
-    var agentMsg = document.createElement('div');
-    agentMsg.className = 'msg bot';
-    agentMsg.style.borderLeft = '3px solid #10b981';
-    agentMsg.textContent = content;
-    wrap.appendChild(label);
-    wrap.appendChild(agentMsg);
-    msgs.appendChild(wrap);
-    msgs.scrollTop = msgs.scrollHeight;
-  }
 
   function openChat() {
     document.getElementById('launcher').classList.add('hidden');
     document.getElementById('greeting-popup').classList.add('hidden');
     document.getElementById('chat-window').classList.remove('hidden');
 
-    // Create conversation only if not already created
-    // Parent window will attach visitor ID from localStorage
     if (!window._previewConvId) {
+      // New visitor — request conversation creation from parent
       window.parent.postMessage({ 
         type:   'IAM_CONV_CREATE', 
         bot_id: '${bot.id}',
       }, '*');
+    } else {
+      // Returning visitor — convId already known, start realtime immediately
+      // so agent messages arrive without needing a page reload
+      startRealtimeSubscription(window._previewConvId);
     }
   }
   function closeChat() {
@@ -2418,12 +2336,11 @@ window.addEventListener('message', function (e) {
 
   if (e.data.type === 'IAM_CONV_CREATED') {
     window._previewConvId = e.data.conv_id;
-    // Start Supabase Realtime subscription inside the widget so agent
-    // messages and system notifications arrive whether in preview or real embed
+    // Always start realtime — covers new visitors, returning visitors, and mode switches
     startRealtimeSubscription(e.data.conv_id);
   }
 
-  // Load previous chat history
+  // Load previous chat history (returning visitor)
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
     var msgs = document.getElementById('chat-messages');
     msgs.innerHTML = '';
@@ -2435,15 +2352,14 @@ window.addEventListener('message', function (e) {
       } else {
         var div = document.createElement('div');
         div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-        if (m.role === 'bot') {
-          div.innerHTML = formatMarkdown(m.content);
-        } else {
-          div.textContent = m.content;
-        }
+        if (m.role === 'bot') { div.innerHTML = formatMarkdown(m.content); }
+        else { div.textContent = m.content; }
         msgs.appendChild(div);
       }
     });
     msgs.scrollTop = msgs.scrollHeight;
+    // Ensure realtime is running for returning visitors
+    if (window._previewConvId) startRealtimeSubscription(window._previewConvId);
   }
 
   // Bot AI response
@@ -2462,30 +2378,40 @@ window.addEventListener('message', function (e) {
     isSending = false;
   }
 
-  // Human agent message via postMessage (preview iframe fallback)
-  // Real embedded widgets receive this via Supabase Realtime instead
+  // Human agent message — show like a bot message (same side) but with agent label
   if (e.data.type === 'IAM_AGENT_MESSAGE') {
+    var msgs = document.getElementById('chat-messages');
     var t = document.getElementById('typing-indicator');
     if (t) t.remove();
-    showAgentMessage(e.data.content);
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+    var label = document.createElement('div');
+    label.textContent = 'Support Agent';
+    label.style.cssText = 'font-size:10px;color:#888;margin-left:4px;';
+    var agentMsg = document.createElement('div');
+    agentMsg.className = 'msg bot';
+    agentMsg.style.borderLeft = '3px solid #10b981';
+    agentMsg.textContent = e.data.content;
+    wrap.appendChild(label);
+    wrap.appendChild(agentMsg);
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
     isSending = false;
   }
 
-  // System notification message via postMessage (preview iframe fallback)
+  // System notification message
   if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
     var msgs = document.getElementById('chat-messages');
     addSystemMsg(e.data.content);
-    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    msgs.scrollTop = msgs.scrollHeight;
   }
 });
 
 function addSystemMsg(content) {
   var msgs = document.getElementById('chat-messages');
-  if (!msgs) return;
-  var isJoined = content === 'agent_joined';
-  var label = isJoined
-    ? '👤 A live agent has joined'
-    : '${botName} has resumed';
+  var label = content === 'agent_joined'
+    ? '&#128100; A live agent has joined'
+    : '&#129302; AI assistant has resumed';
   var div = document.createElement('div');
   div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
   div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
@@ -2619,15 +2545,77 @@ function confirmNewConv() {
     </body>
     <script>
       let fpSending = false;
+      let _fpRealtimeSub = null;
 
-      // Create conversation on load (only if not already created)
-      // Parent window will attach visitor ID from localStorage
+      // ── Supabase Realtime — same as widget mode ───────────────────
+      function startRealtimeSubscription(convId) {
+        if (_fpRealtimeSub) { try { _fpRealtimeSub.unsubscribe(); } catch(e){} _fpRealtimeSub = null; }
+        if (!convId) return;
+        var SUPA_URL = 'https://ekdsfvjsbhoxjszciquq.supabase.co';
+        var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrZHNmdmpzYmhveGpzemNpcXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTM1ODcsImV4cCI6MjA4OTE4OTU4N30.otpg9pOci8B9nN33APefE0ulHAlfJ-nVMvNSvrIf_xQ';
+        function doSubscribe(sb) {
+          var client = sb.createClient(SUPA_URL, SUPA_KEY);
+          _fpRealtimeSub = client
+            .channel('fp_messages_' + convId)
+            .on('postgres_changes', {
+              event: 'INSERT', schema: 'public', table: 'messages',
+              filter: 'conversation_id=eq.' + convId
+            }, function(payload) {
+              var msg = payload.new;
+              if (msg.role === 'human-agent') { showAgentMessage(msg.content); fpSending = false; }
+              if (msg.role === 'system') { addSystemMsg(msg.content); }
+            })
+            .subscribe();
+        }
+        if (window.supabase && window.supabase.createClient) { doSubscribe(window.supabase); }
+        else {
+          var s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+          s.onload = function() { doSubscribe(window.supabase); };
+          document.head.appendChild(s);
+        }
+      }
+
+      function showAgentMessage(content) {
+        var msgs = document.querySelector('.chat-messages');
+        if (!msgs) return;
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+        var label = document.createElement('div');
+        label.textContent = 'Support Agent';
+        label.style.cssText = 'font-size:10px;color:#10b981;margin-left:4px;font-weight:600;';
+        var agentMsg = document.createElement('div');
+        agentMsg.className = 'msg bot';
+        agentMsg.style.borderLeft = '3px solid #10b981';
+        agentMsg.textContent = content;
+        wrap.appendChild(label);
+        wrap.appendChild(agentMsg);
+        msgs.appendChild(wrap);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+
+      function addSystemMsg(content) {
+        var msgs = document.querySelector('.chat-messages');
+        if (!msgs) return;
+        var isJoined = content === 'agent_joined';
+        var label = isJoined ? '👤 A live agent has joined' : '${botName} has resumed';
+        var div = document.createElement('div');
+        div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
+        div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
+        msgs.appendChild(div);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+
+      // Create conversation on load — or re-subscribe if returning visitor
       if (!window._fpConvId) {
         window.parent.postMessage({
           type: 'IAM_CONV_CREATE',
           bot_id: '${bot.id}',
         }, '*');
-  }
+      } else {
+        // Returning visitor — start realtime immediately
+        startRealtimeSubscription(window._fpConvId);
+      }
 
       // Markdown renderer
       function formatMarkdown(text) {
@@ -2683,20 +2671,24 @@ window.addEventListener('message', function (e) {
 
   if (e.data.type === 'IAM_CONV_CREATED') {
     window._fpConvId = e.data.conv_id;
+    startRealtimeSubscription(e.data.conv_id);
   }
 
   // Handle loading previous chat history (from mode switch)
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
     const msgs = document.querySelector('.chat-messages');
-    // Clear any greeting message and rebuild from history
     msgs.innerHTML = '';
     e.data.messages.forEach(m => {
+      if (m.role === 'human-agent') { showAgentMessage(m.content); return; }
+      if (m.role === 'system') { addSystemMsg(m.content); return; }
       const div = document.createElement('div');
       div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-      div.textContent = m.content;
+      if (m.role === 'bot') { div.innerHTML = formatMarkdown(m.content); }
+      else { div.textContent = m.content; }
       msgs.appendChild(div);
     });
     msgs.scrollTop = msgs.scrollHeight;
+    if (window._fpConvId) startRealtimeSubscription(window._fpConvId);
   }
 
   if (e.data.type === 'IAM_BOT_RESPONSE') {
@@ -2710,6 +2702,15 @@ window.addEventListener('message', function (e) {
     msgs.scrollTop = msgs.scrollHeight;
     if (e.data.conv_id) window._fpConvId = e.data.conv_id;
     fpSending = false;
+  }
+
+  if (e.data.type === 'IAM_AGENT_MESSAGE') {
+    showAgentMessage(e.data.content);
+    fpSending = false;
+  }
+
+  if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
+    addSystemMsg(e.data.content);
   }
 });
     </script >
