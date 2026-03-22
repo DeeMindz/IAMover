@@ -38,8 +38,6 @@
   var _hitlActive    = false;
   var _shownSysMsgs  = {};
   var _shownMsgIds   = {};
-
-  // Pre-chat form state
   var _preChatDone  = false;
   var _preChatName  = '';
   var _preChatEmail = '';
@@ -65,11 +63,12 @@
     IS_INLINE ? '' : '#iam-launcher{position:fixed;' + pos + 'width:58px;height:58px;background:' + COLOR + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s;overflow:hidden;}',
     IS_INLINE ? '' : '#iam-launcher:hover{transform:scale(1.08);}',
     IS_INLINE ? '' : '#iam-launcher img{width:100%;height:100%;object-fit:cover;border-radius:50%;}',
-    IS_INLINE ? '' : (function(){ var r=POSITION.indexOf('right')!==-1; var t=POSITION.indexOf('top')!==-1; return '#iam-greeting-popup{position:fixed;' + (t?'top:90px;':'bottom:90px;') + (r?'right:24px;':'left:24px;') + 'background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:230px;font-size:13px;color:#333;z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,sans-serif;animation:iamPopIn .3s ease;cursor:pointer;line-height:1.4;}'; })(),
-    IS_INLINE ? '' : (function(){ var r=POSITION.indexOf('right')!==-1; var t=POSITION.indexOf('top')!==-1; var s=r?'right:18px;':'left:18px;'; var a=t?'top:-6px;border-bottom:6px solid #fff;':'bottom:-6px;border-top:6px solid #fff;'; return '#iam-greeting-popup::after{content:"";position:absolute;'+a+s+'width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;}'; })(),
+    IS_INLINE ? '' : (function(){ var r=POSITION.indexOf('right')!==-1,t=POSITION.indexOf('top')!==-1; return '#iam-greeting-popup{position:fixed;'+(t?'top:90px;':'bottom:90px;')+(r?'right:24px;':'left:24px;')+'background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:230px;font-size:13px;color:#333;z-index:2147483646;font-family:-apple-system,sans-serif;animation:iamPopIn .3s ease;cursor:pointer;line-height:1.4;}'; })(),
+    IS_INLINE ? '' : (function(){ var r=POSITION.indexOf('right')!==-1,t=POSITION.indexOf('top')!==-1; return '#iam-greeting-popup::after{content:"";position:absolute;'+(t?'top:-6px;border-bottom:6px solid #fff;':'bottom:-6px;border-top:6px solid #fff;')+(r?'right:18px;':'left:18px;')+'width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;}'; })(),
     IS_INLINE ? '' : '@keyframes iamPopIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
+
     IS_INLINE
-      ? '#iam-window{position:relative;width:100%;height:100%;background:#fff;border-radius:18px;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}'
+      ? '#iam-window{position:relative;width:100%;height:100%;background:#fff;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}'
       : '#iam-window{position:fixed;' + pos + 'width:360px;height:530px;background:#fff;border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamOpen .25s cubic-bezier(.34,1.56,.64,1);}',
     '@keyframes iamOpen{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}',
     '#iam-header{padding:14px 16px;display:flex;align-items:center;gap:10px;color:#fff;flex-shrink:0;}',
@@ -151,21 +150,22 @@
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">✕</button>',
     '</div>',
-    '<div id="iam-prechat" style="display:none;margin:8px 8px 0;background:#fff;border:1.5px solid #e8e8f0;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(108,99,255,.08);flex-shrink:0;">',
-    '  <div style="background:' + COLOR + '18;padding:12px 16px 10px;border-bottom:1px solid #eee;">',
-    '    <div style="font-weight:700;font-size:13px;color:#333;">Quick intro</div>',
-    '    <div style="font-size:12px;color:#888;margin-top:2px;">Completely optional — feel free to skip.</div>',
-    '  </div>',
-    '  <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">',
-    '    <input id="iam-pc-name" placeholder="Your name" autocomplete="name" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
-    '    <input id="iam-pc-email" type="email" placeholder="Email address" autocomplete="email" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
-    '    <div style="display:flex;gap:8px;">',
-    '      <button id="iam-prechat-skip" style="background:transparent;border:1.5px solid #e0e0e0;color:#999;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:inherit;">Skip</button>',
-    '      <button id="iam-prechat-submit" style="flex:1;background:' + COLOR + ';color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Start Chat →</button>',
+    '<div id="iam-messages">',
+    '  <div id="iam-prechat" style="display:none;margin:4px 2px 6px;background:#fff;border:1.5px solid #e8e8f0;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(108,99,255,.08);">',
+    '    <div style="background:' + COLOR + '18;padding:12px 16px 10px;border-bottom:1px solid #eee;">',
+    '      <div style="font-weight:700;font-size:13px;color:#333;">Quick intro</div>',
+    '      <div style="font-size:12px;color:#888;margin-top:2px;">Completely optional — feel free to skip.</div>',
+    '    </div>',
+    '    <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">',
+    '      <input id="iam-pc-name" placeholder="Your name" autocomplete="name" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
+    '      <input id="iam-pc-email" type="email" placeholder="Email address" autocomplete="email" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
+    '      <div style="display:flex;gap:8px;">',
+    '        <button id="iam-prechat-skip" style="background:transparent;border:1.5px solid #e0e0e0;color:#999;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:inherit;">Skip</button>',
+    '        <button id="iam-prechat-submit" style="flex:1;background:' + COLOR + ';color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Start Chat &#8594;</button>',
+    '      </div>',
     '    </div>',
     '  </div>',
     '</div>',
-    '<div id="iam-messages"></div>',
     '<div id="iam-input-area">',
     '  <input id="iam-input" placeholder="Type a message…" autocomplete="off" />',
     '  <button id="iam-send">↑</button>',
@@ -219,12 +219,10 @@
     if (avatar) {
       if (cfg.avatarUrl) {
         avatar.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.parentNode.textContent=\'' + initial + '\'" />';
-        if (launcher) launcher.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.style.display=\'none\'" />';
+        if (launcher) launcher.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.parentNode.innerHTML=\'💬\'" />';
       } else {
         avatar.textContent = initial;
-        if (launcher) {
-          launcher.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-        }
+        if (launcher) launcher.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
       }
     }
     // Update greeting popup text once config loads
@@ -365,6 +363,7 @@
     .then(function(r) { return r.json(); })
     .then(function(data) {
       convId = data.conversation_id;
+      if (_preChatDone&&(_preChatName||_preChatEmail)) savePrechatLead(_preChatName,_preChatEmail);
       // If pre-chat was submitted before convId was ready, save lead now
       if (_preChatDone && (_preChatName || _preChatEmail)) {
         savePrechatLead(_preChatName, _preChatEmail);
@@ -398,19 +397,15 @@
           }).catch(function() { startStatusCheck(convId); if (cb) cb(); });
 
       } else {
-        // New visitor — preserve iam-prechat card when clearing messages
-        Array.from(msgsEl.children).forEach(function(child) {
-          if (child.id !== 'iam-prechat') child.remove();
-        });
+        // New visitor
+        msgsEl.innerHTML = '';
         _shownMsgIds = {}; _shownSysMsgs = {};
         _lastMsgAt = new Date().toISOString();
+        appendBot(botConfig.greeting);
         startStatusCheck(convId);
-        // Show pre-chat card. Greeting appears AFTER form is dismissed.
+        // Show pre-chat form before they can type
         if (!_preChatDone) {
           showPreChat();
-          // Don't show greeting yet — skipPreChat/submitPreChat will append it
-        } else {
-          appendBot(botConfig.greeting);
         }
         if (cb) cb();
       }
@@ -459,43 +454,26 @@
     // Generate fresh visitor ID for new conversation
     var newVid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2,9);
     localStorage.setItem('iam_visitor_id', newVid);
-    Array.from(msgsEl.children).forEach(function(child) {
-      if (child.id !== 'iam-prechat') child.remove();
-    });
-    _preChatDone = false; // show form again for new conversation
-    appendBot(botConfig.greeting);
-    createConversation(function() { input.focus(); });
+    Array.from(msgsEl.children).forEach(function(c){if(c.id!=='iam-prechat')c.remove();});
+    _preChatDone=false;
+    createConversation(function(){input.focus();});
   }
 
   // ── Open / close ──────────────────────────────────────────────────
   function showPreChat() {
-    // Re-query each time in case DOM was reset
-    preChatEl = document.getElementById('iam-prechat');
-    pcNameEl  = document.getElementById('iam-pc-name');
-    pcEmailEl = document.getElementById('iam-pc-email');
-    pcSubmit  = document.getElementById('iam-prechat-submit');
-    pcSkip    = document.getElementById('iam-prechat-skip');
-    if (!preChatEl) return;
-    preChatEl.style.display = 'block';
-    [pcNameEl, pcEmailEl].forEach(function(el) {
-      if (!el) return;
-      el.onfocus = function(){ el.style.borderColor = COLOR; };
-      el.onblur  = function(){ el.style.borderColor = '#e8e8f0'; };
-    });
+    if (preChatEl) { preChatEl.style.display = 'flex'; preChatEl.style.flexDirection = 'column'; }
+    if (msgsEl)    msgsEl.style.display = 'none';
     if (pcSubmit)  pcSubmit.onclick = submitPreChat;
     if (pcSkip)    pcSkip.onclick   = skipPreChat;
     if (pcEmailEl) pcEmailEl.onkeydown = function(e) { if (e.key === 'Enter') submitPreChat(); };
     if (pcNameEl)  pcNameEl.onkeydown  = function(e) { if (e.key === 'Enter' && pcEmailEl) pcEmailEl.focus(); };
-    setTimeout(function(){ if (pcNameEl) pcNameEl.focus(); }, 150);
+    setTimeout(function() { if (pcNameEl) pcNameEl.focus(); }, 150);
   }
 
   function skipPreChat() {
     _preChatDone = true;
-    var pc = document.getElementById('iam-prechat');
-    if (pc) pc.style.display = 'none';
-    // Now show the greeting below the (hidden) form
-    appendBot(botConfig.greeting);
-    setTimeout(function(){ if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
+    if (preChatEl) preChatEl.style.display = 'none';
+    if (msgsEl)    msgsEl.style.display    = 'flex';
     input.focus();
   }
 
@@ -503,17 +481,8 @@
     _preChatName  = pcNameEl  ? pcNameEl.value.trim()  : '';
     _preChatEmail = pcEmailEl ? pcEmailEl.value.trim() : '';
     _preChatDone  = true;
-    if (_preChatName || _preChatEmail) savePrechatLead(_preChatName, _preChatEmail);
-    // Personalize the greeting that's already in the messages
-    if (_preChatName) {
-      var msgs = msgsEl ? msgsEl.querySelectorAll('.iam-msg.bot') : [];
-      if (msgs.length > 0) {
-        var base = botConfig.greeting || 'Hi! How can I help you today?';
-        // Replace opening "Hi" with personalised version
-        var personal = base.replace(/^(hi|hello|hey)[\s!,]*/i, 'Hi ' + _preChatName + ', ');
-        if (personal === base) personal = 'Hi ' + _preChatName + '! ' + base; // fallback
-        msgs[0].innerHTML = md(personal);
-      }
+    if (_preChatName || _preChatEmail) {
+      savePrechatLead(_preChatName, _preChatEmail);
     }
     skipPreChat();
   }
@@ -529,6 +498,49 @@
       .catch(function(e) { console.warn('[IAM] Lead save failed:', e); });
   }
 
+  function showPreChat() {
+    if (!preChatEl) return;
+    preChatEl.style.display = 'block';
+    [pcNameEl, pcEmailEl].forEach(function(el) {
+      if (!el) return;
+      el.onfocus = function(){ el.style.borderColor = COLOR; };
+      el.onblur  = function(){ el.style.borderColor = '#e8e8f0'; };
+    });
+    if (pcSubmit) pcSubmit.onclick = submitPreChat;
+    if (pcSkip)   pcSkip.onclick   = skipPreChat;
+    if (pcEmailEl) pcEmailEl.onkeydown = function(e){ if(e.key==='Enter') submitPreChat(); };
+    if (pcNameEl)  pcNameEl.onkeydown  = function(e){ if(e.key==='Enter'&&pcEmailEl) pcEmailEl.focus(); };
+    setTimeout(function(){ if(pcNameEl) pcNameEl.focus(); }, 150);
+  }
+  function skipPreChat() {
+    _preChatDone = true;
+    if (preChatEl) preChatEl.style.display = 'none';
+    appendBot(botConfig.greeting);
+    setTimeout(function(){ if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
+    input.focus();
+  }
+  function submitPreChat() {
+    _preChatName  = pcNameEl  ? pcNameEl.value.trim()  : '';
+    _preChatEmail = pcEmailEl ? pcEmailEl.value.trim() : '';
+    _preChatDone  = true;
+    if (_preChatName||_preChatEmail) savePrechatLead(_preChatName, _preChatEmail);
+    if (preChatEl) preChatEl.style.display = 'none';
+    var base = botConfig.greeting || 'Hi! How can I help you today?';
+    var greet = _preChatName
+      ? base.replace(/^(hi|hello|hey)[\s!,]*/i, 'Hi '+_preChatName+', ') || ('Hi '+_preChatName+'! '+base)
+      : base;
+    if (greet === base && _preChatName) greet = 'Hi ' + _preChatName + '! ' + base;
+    appendBot(greet);
+    setTimeout(function(){ if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
+    input.focus();
+  }
+  function savePrechatLead(name, email) {
+    if (!convId) return;
+    fetch(API_BASE+'/api/conversation/capture-lead', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({bot_id:BOT_ID,conversation_id:convId,name:name||null,email:email||null})
+    }).then(function(r){return r.json();}).then(function(d){console.log('[IAM] Lead saved:',d.action);}).catch(function(){});
+  }
   function openWidget() {
     // Hide greeting popup
     if (greetingPopup) greetingPopup.style.display = 'none';
