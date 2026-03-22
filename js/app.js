@@ -1703,7 +1703,7 @@ async function openKBDetail(id) {
 
   const breadcrumb = document.getElementById('breadcrumb');
   if (breadcrumb) {
-    breadcrumb.innerHTML = `<span onclick="navigate('knowledge')" style="cursor:pointer;">Knowledge Bases</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">${kb.name}</span>`;
+    breadcrumb.innerHTML = `<span onclick="AppState.returnToBotId ? (function(){ var bid=AppState.returnToBotId; AppState.returnToBotId=null; navigate('bot-config',{botId:bid,section:'knowledge'}); })() : navigate('knowledge')" style="cursor:pointer;">Knowledge Bases</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-current">${kb.name}</span>`;
   }
   document.title = kb.name + ' — IAM Platform';
 
@@ -1920,12 +1920,22 @@ function renderAttachedKBs(bot) {
     return;
   }
   container.innerHTML = attached.map(kb => `
-    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">
-      <div style="display:flex;align-items:center;gap:10px;"><span>📚</span><span style="font-weight:500;">${kb.name}</span></div>
-      <button class="btn btn-ghost btn-sm btn-icon" onclick="detachKB('${kb.id}')">✕</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">🗂</span>
+        <div>
+          <div style="font-weight:600;font-size:13px;">${kb.name}</div>
+          <div style="font-size:11px;color:var(--text-muted);">${(kb.file_count || 0)} files · ${(kb.chunk_count || 0)} chunks</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm btn-secondary" onclick="editKBFromBot('${kb.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="detachKB('${kb.id}')">Detach</button>
+      </div>
     </div>
   `).join('');
 }
+
 window.renderAttachedKBs = renderAttachedKBs;
 
 function openAttachKBModal() {
@@ -1951,6 +1961,51 @@ function openAttachKBModal() {
   openModal('modal-attach-kb');
 }
 window.openAttachKBModal = openAttachKBModal;
+
+async // Create a new KB from bot config — auto-attach to current bot
+async function createKBFromBot() {
+  const bot = AppState.currentBot;
+  if (!bot) return;
+  const name = prompt('Knowledge base name:');
+  if (!name?.trim()) return;
+  try {
+    const { data: kb, error } = await supabase
+      .from('knowledge_bases')
+      .insert({ name: name.trim(), user_id: AppState.user?.id })
+      .select()
+      .single();
+    if (error || !kb) throw error || new Error('Failed to create KB');
+
+    // Auto-attach to current bot
+    await supabase.from('bot_knowledge_bases').insert({ bot_id: bot.id, kb_id: kb.id });
+    if (!bot.knowledge_base_ids) bot.knowledge_base_ids = [];
+    bot.knowledge_base_ids.push(kb.id);
+
+    // Add to local store
+    const allKBs = Store.get('knowledge_bases') || [];
+    allKBs.push(kb);
+    Store.set('knowledge_bases', allKBs);
+
+    renderAttachedKBs(bot);
+    showToast(`"${kb.name}" created and attached`, 'success');
+
+    // Navigate to KB edit view with bot context
+    AppState.returnToBotId = bot.id;
+    navigate('kb-detail', { kbId: kb.id });
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to create knowledge base', 'error');
+  }
+}
+window.createKBFromBot = createKBFromBot;
+
+// Edit an existing KB from bot config — remembers to return to bot
+function editKBFromBot(kbId) {
+  const bot = AppState.currentBot;
+  if (bot) AppState.returnToBotId = bot.id;
+  navigate('kb-detail', { kbId });
+}
+window.editKBFromBot = editKBFromBot;
 
 async function attachKB(kbId) {
   const bot = AppState.currentBot;

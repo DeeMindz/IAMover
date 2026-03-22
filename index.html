@@ -828,7 +828,7 @@
 
               <div class="form-group">
                 <label class="form-label">Fallback Message</label>
-                <input class="form-control" id="cfg-fallback-message"
+                <input class="form-control"
                   value="I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?" />
                 <div class="form-hint">Shown when the bot cannot answer confidently</div>
               </div>
@@ -836,19 +836,19 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Max Response Length</label>
-                  <select class="form-control" id="cfg-max-response">
-                    <option value="short">Short (1-2 sentences)</option>
-                    <option value="medium" selected>Medium (1 paragraph)</option>
-                    <option value="long">Long (multiple paragraphs)</option>
+                  <select class="form-control">
+                    <option>Short (1-2 sentences)</option>
+                    <option selected>Medium (1 paragraph)</option>
+                    <option>Long (multiple paragraphs)</option>
                   </select>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Response Temperature</label>
-                  <select class="form-control" id="cfg-temperature">
-                    <option value="0.1">0.1 — Very precise</option>
-                    <option value="0.5" selected>0.5 — Balanced</option>
-                    <option value="0.8">0.8 — Creative</option>
-                    <option value="1.0">1.0 — Very creative</option>
+                  <select class="form-control">
+                    <option>0.1 — Very precise</option>
+                    <option selected>0.5 — Balanced</option>
+                    <option>0.8 — Creative</option>
+                    <option>1.0 — Very creative</option>
                   </select>
                 </div>
               </div>
@@ -861,79 +861,25 @@
               <div class="card-title">Knowledge Base</div>
             </div>
             <div class="card-body">
-              <div class="form-group">
-                <label class="form-label">Attached Knowledge Bases</label>
-                <div id="bot-attached-kbs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
-                  <!-- Rendered dynamically by renderAttachedKBs() -->
-                  <div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No knowledge bases attached yet.
-                  </div>
-                </div>
-                <button class="btn btn-secondary" onclick="openAttachKBModal()">+ Attach Knowledge Base</button>
-              </div>
 
-              <div class="divider"></div>
-
-              <div>
-                <div class="form-label" style="margin-bottom:12px;">Quick Add Content</div>
-                <div class="tabs mb-4">
-                  <div class="tab-btn active" onclick="switchKBTab(this,'files')">📎 Files</div>
-                  <div class="tab-btn" onclick="switchKBTab(this,'text')">📝 Rich Text</div>
-                  <div class="tab-btn" onclick="switchKBTab(this,'sitemap')">🗺 Sitemap</div>
-                </div>
-
-                <div id="kb-tab-files">
-                  <div class="upload-zone" onclick="document.getElementById('file-upload').click()">
-                    <div class="upload-icon">📎</div>
-                    <div class="upload-title">Drop files here or click to upload</div>
-                    <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX up to 50MB each</div>
-                  </div>
-                  <input type="file" id="file-upload" multiple style="display:none;"
-                    onchange="handleFileUpload(this)" />
-                </div>
-
-                <div id="kb-tab-text" style="display:none;">
-                  <div class="form-group">
-                    <label class="form-label">Content Title</label>
-                    <input class="form-control" placeholder="e.g. Pricing FAQ" />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Content</label>
-                    <textarea class="form-control" rows="8" placeholder="Paste or type your content here…"></textarea>
-                  </div>
-                  <button class="btn btn-primary" onclick="showToast('Content added to knowledge base','success')">Add
-                    Content</button>
-                </div>
-
-                <div id="kb-tab-sitemap" style="display:none;">
-                  <div class="form-group">
-                    <label class="form-label">Website URL or Sitemap URL</label>
-                    <input class="form-control"
-                      placeholder="https://yoursite.com or https://yoursite.com/sitemap.xml" />
-                    <div class="form-hint">We'll crawl your website and add pages to the knowledge base</div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Max Pages</label>
-                      <select class="form-control">
-                        <option>25</option>
-                        <option selected>50</option>
-                        <option>100</option>
-                        <option>250</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Crawl Depth</label>
-                      <select class="form-control">
-                        <option>1</option>
-                        <option selected>2</option>
-                        <option>3</option>
-                      </select>
-                    </div>
-                  </div>
-                  <button class="btn btn-primary"
-                    onclick="showToast('Crawl started — this may take a few minutes','info')">Start Crawl</button>
+              <!-- Attached KBs list -->
+              <div class="form-group" style="margin-bottom:20px;">
+                <label class="form-label" style="margin-bottom:10px;">Attached Knowledge Bases</label>
+                <div id="bot-attached-kbs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+                  <div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No knowledge bases attached yet.</div>
                 </div>
               </div>
+
+              <!-- Action buttons -->
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="createKBFromBot()">+ Create New Knowledge Base</button>
+                <button class="btn btn-secondary" onclick="openAttachKBModal()">Attach Existing KB</button>
+              </div>
+
+              <div class="form-hint" style="margin-top:10px;">
+                Knowledge bases store the content your bot uses to answer questions. Create a new one or attach an existing one from your library.
+              </div>
+
             </div>
           </div>
 
