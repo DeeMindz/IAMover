@@ -228,28 +228,12 @@
   var _lastMsgAt     = null;  // ISO timestamp cursor — only fetch after this
   var _hitlActive    = false; // local HITL state for the widget
   var _shownSysMsgs  = {}; // tracks system messages shown to prevent duplicates
+  var _shownMsgIds   = {}; // tracks individual message ids shown
 
   function startPolling(cId) {
-    stopPolling();
+    if (_pollInterval) return; // already polling — never start twice
     _hitlActive = true;
-    _shownSysMsgs = {}; // reset system msg dedup for new HITL session
-
-    // If we already have a cursor, don't do the initial fetch —
-    // the history is already loaded and _lastMsgAt is set correctly
-    if (!_lastMsgAt) {
-      // No cursor yet — fetch to establish it before starting interval
-      var url0 = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
-      fetch(url0)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data.messages && data.messages.length) {
-            _lastMsgAt = data.messages[data.messages.length - 1].created_at;
-          } else {
-            _lastMsgAt = new Date().toISOString();
-          }
-        })
-        .catch(function() { _lastMsgAt = new Date().toISOString(); });
-    }
+    // Don't reset _shownSysMsgs here — history renderer already populated it
 
     _pollInterval = setInterval(function() {
       var url = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
@@ -258,53 +242,30 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
           if (!data.messages) return;
-
-          // Process each new message
           data.messages.forEach(function(m) {
-            // Advance the cursor to the latest message we've seen
-            if (!_lastMsgAt || m.created_at > _lastMsgAt) {
-              _lastMsgAt = m.created_at;
-            }
+            if (!_lastMsgAt || m.created_at > _lastMsgAt) _lastMsgAt = m.created_at;
+
             if (m.role === 'human-agent') {
-              hideTyping();
-              // Dedup — avoid showing a message already appended optimistically
-              var agentMsgs = msgsEl.querySelectorAll('.iam-agent-bubble');
-              var alreadyShown = false;
-              agentMsgs.forEach(function(el) { if (el.textContent.trim() === m.content.trim()) alreadyShown = true; });
-              if (!alreadyShown) appendAgent(m.content);
+              // Dedup by message id
+              if (_shownMsgIds[m.id]) return;
+              _shownMsgIds[m.id] = true;
+              appendAgent(m.content);
               isSending = false;
             }
             if (m.role === 'system') {
-              // Only show each system message once across all polls
-              if (!_shownSysMsgs[m.content]) {
-                _shownSysMsgs[m.content] = true;
-                appendSystem(m.content);
-              }
+              if (_shownSysMsgs[m.content]) return;
+              _shownSysMsgs[m.content] = true;
+              appendSystem(m.content);
               if (m.content === 'agent_left') { _hitlActive = false; stopPolling(); }
             }
             if (m.role === 'bot') {
-              var bots = msgsEl.querySelectorAll('.iam-msg.bot');
-              var last = bots[bots.length - 1];
-              if (!last || last.textContent.trim() !== m.content.trim()) {
-                hideTyping();
-                appendBot(m.content);
-                isSending = false;
-              }
+              if (_shownMsgIds[m.id]) return;
+              _shownMsgIds[m.id] = true;
+              appendBot(m.content);
+              isSending = false;
             }
           });
-
-          // Agent typing indicator from conversation row
-          if (data.agent_typing === true && _pollInterval) {
-            showAgentTyping();
-          } else {
-            hideAgentTyping();
-          }
-
-          // If HITL ended (agent resumed bot), stop polling
-          if (!data.hitl_active && _hitlActive) {
-            _hitlActive = false;
-            stopPolling();
-          }
+          if (data.hitl_active === false) { _hitlActive = false; stopPolling(); }
         })
         .catch(function(e) { console.warn('[IAM] Poll error:', e); });
     }, 2000);
@@ -317,28 +278,6 @@
       _pollInterval = null;
       console.log('[IAM] HITL polling stopped');
     }
-  }
-
-  function showAgentTyping() {
-    if (document.getElementById('iam-agent-typing')) return;
-    var wrap = document.createElement('div');
-    wrap.id = 'iam-agent-typing';
-    wrap.className = 'iam-agent-wrap';
-    var label = document.createElement('div');
-    label.className = 'iam-agent-label';
-    label.textContent = 'Support Agent';
-    var dots = document.createElement('div');
-    dots.className = 'iam-typing';
-    dots.innerHTML = '<span></span><span></span><span></span>';
-    wrap.appendChild(label);
-    wrap.appendChild(dots);
-    msgsEl.appendChild(wrap);
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-  }
-
-  function hideAgentTyping() {
-    var el = document.getElementById('iam-agent-typing');
-    if (el) el.remove();
   }
 
   // ── Create conversation ───────────────────────────────────────────
@@ -363,11 +302,12 @@
             if (d.messages && d.messages.length) {
               msgsEl.innerHTML = '';
               d.messages.forEach(function(m) {
-                if (m.role === 'system') appendSystem(m.content);
+                // Mark as shown so poll dedup never re-adds them
+                if (m.id) _shownMsgIds[m.id] = true;
+                if (m.role === 'system') { _shownSysMsgs[m.content] = true; appendSystem(m.content); }
                 else if (m.role === 'human-agent') appendAgent(m.content);
                 else if (m.role === 'bot')  appendBot(m.content);
                 else if (m.role === 'user') appendUser(m.content);
-                // Track latest message timestamp for polling cursor
                 if (!_lastMsgAt || m.created_at > _lastMsgAt) _lastMsgAt = m.created_at;
               });
             }

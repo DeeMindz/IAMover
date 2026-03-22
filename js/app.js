@@ -2365,17 +2365,19 @@ window.addEventListener('message', function (e) {
 
   if (e.data.type === 'IAM_HITL_ACTIVE' && e.data.conv_id) {
     window._previewConvId = e.data.conv_id;
-    stopStatusCheck(); // upgrade from status check to HITL polling
-    // Keep _lastMsgAt so first poll only fetches NEW messages
-    startHITLPolling(e.data.conv_id);
+    stopStatusCheck();
+    if (!window._pollInterval) startHITLPolling(e.data.conv_id);
     isSending = false;
   }
 
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages && e.data.messages.length) {
     var msgs = document.getElementById('chat-messages');
     msgs.innerHTML = '';
+    window._shownMsgIds  = {};
+    window._shownSysMsgs = {};
     e.data.messages.forEach(function(m) {
-      if (m.role === 'system') { addSystemMsg(m.content); }
+      if (m.id) window._shownMsgIds[m.id] = true;
+      if (m.role === 'system') { window._shownSysMsgs[m.content] = true; addSystemMsg(m.content); }
       else if (m.role === 'human-agent') { showAgentMsg(m.content); }
       else {
         var d = document.createElement('div');
@@ -2387,7 +2389,6 @@ window.addEventListener('message', function (e) {
       if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
     });
     msgs.scrollTop = msgs.scrollHeight;
-    // Re-start status check for returning visitor (conv already exists)
     if (window._previewConvId) startStatusCheck(window._previewConvId);
   }
 
@@ -2453,30 +2454,12 @@ function stopStatusCheck() {
 }
 
 function startHITLPolling(cId) {
-  stopHITLPolling();
+  if (window._pollInterval) return; // already polling — never start twice
+  // Don't reset window._lastMsgAt — history already set it correctly
+  window._shownMsgIds  = window._shownMsgIds  || {};
+  window._shownSysMsgs = window._shownSysMsgs || {};
+
   var BASE = '${window.location.origin}';
-
-  // First: immediate fetch to set cursor and show any missed messages
-  fetch(BASE + '/api/conversation/messages?conversation_id=' + cId)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.messages && data.messages.length) {
-        var shown = {};
-        document.querySelectorAll('.msg.bot, .msg.user').forEach(function(el) { shown[el.textContent.trim()] = true; });
-        data.messages.forEach(function(m) {
-          if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
-          if (m.role === 'human-agent' && !shown[m.content.trim()]) {
-            showAgentMsg(m.content); shown[m.content.trim()] = true;
-          }
-          if (m.role === 'system') addSystemMsg(m.content);
-        });
-      } else {
-        window._lastMsgAt = new Date().toISOString();
-      }
-    })
-    .catch(function() { window._lastMsgAt = new Date().toISOString(); });
-
-  // Then poll every 2s for new messages only
   window._pollInterval = setInterval(function() {
     var url = BASE + '/api/conversation/messages?conversation_id=' + cId;
     if (window._lastMsgAt) url += '&after=' + encodeURIComponent(window._lastMsgAt);
@@ -2487,19 +2470,20 @@ function startHITLPolling(cId) {
         data.messages.forEach(function(m) {
           if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
           if (m.role === 'human-agent') {
+            if (window._shownMsgIds[m.id]) return;
+            window._shownMsgIds[m.id] = true;
             var t = document.getElementById('typing-indicator'); if (t) t.remove();
             showAgentMsg(m.content); isSending = false;
           }
           if (m.role === 'system') {
-            // Dedup system messages — only show each content type once
-            var sysKey = 'sys_' + m.content;
-            if (!shown[sysKey]) {
-              addSystemMsg(m.content);
-              shown[sysKey] = true;
-            }
+            if (window._shownSysMsgs[m.content]) return;
+            window._shownSysMsgs[m.content] = true;
+            addSystemMsg(m.content);
             if (m.content === 'agent_left') stopHITLPolling();
           }
           if (m.role === 'bot') {
+            if (window._shownMsgIds[m.id]) return;
+            window._shownMsgIds[m.id] = true;
             var t2 = document.getElementById('typing-indicator'); if (t2) t2.remove();
             var d = document.createElement('div'); d.className = 'msg bot';
             d.innerHTML = formatMarkdown(m.content);
