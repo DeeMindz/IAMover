@@ -397,15 +397,15 @@
           }).catch(function() { startStatusCheck(convId); if (cb) cb(); });
 
       } else {
-        // New visitor
-        msgsEl.innerHTML = '';
+        // New visitor — safe clear: keep iam-prechat card, destroy only messages
+        Array.from(msgsEl.children).forEach(function(c){ if(c.id!=='iam-prechat') c.remove(); });
         _shownMsgIds = {}; _shownSysMsgs = {};
         _lastMsgAt = new Date().toISOString();
-        appendBot(botConfig.greeting);
         startStatusCheck(convId);
-        // Show pre-chat form before they can type
         if (!_preChatDone) {
-          showPreChat();
+          showPreChat(); // greeting appended inside skipPreChat/submitPreChat
+        } else {
+          appendBot(botConfig.greeting);
         }
         if (cb) cb();
       }
