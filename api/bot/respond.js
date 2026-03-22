@@ -54,7 +54,6 @@ const OPENAI_MODEL_MAP = {
 // Runs after the main response — does not block user-facing latency.
 async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
     try {
-        // Load full conversation for extraction context
         const { data: msgs } = await supabase
             .from('messages')
             .select('role, content')
@@ -72,7 +71,7 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
         const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
         if (!apiKey) return;
 
-        // Use gemini-1.5-flash — stable, fast, cheap. gemini-2.0-flash doesn't exist in v1beta.
+        // gemini-1.5-flash: stable, fast, cheap — gemini-2.0-flash does NOT exist in v1beta
         const extractRes = await fetch(
             'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
             {
@@ -83,7 +82,7 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
                         'Extract contact information from this conversation. Return ONLY valid JSON or the word none.\n\n' +
                         'Conversation:\n' + conversationText + '\n\n' +
                         'Return JSON: {"name":"...","email":"...","phone":"...","company":"..."}\n' +
-                        'Only include fields clearly stated by the user. Omit fields not mentioned. Return none if nothing found.'
+                        'Only include fields clearly stated by the user. Omit fields not mentioned. Return none if no contact info found.'
                     }] }],
                     generationConfig: { maxOutputTokens: 200, temperature: 0 }
                 })
@@ -91,12 +90,12 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
         );
 
         if (!extractRes.ok) {
-            log.warn('Lead extraction API failed', { status: extractRes.status });
+            log.warn('Lead extraction API failed', { status: extractRes.status, text: await extractRes.text() });
             return;
         }
 
-        const extractData = await extractRes.json();
-        const raw = (extractData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+        const exData = await extractRes.json();
+        const raw = (exData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
         if (!raw || raw.toLowerCase() === 'none') return;
 
         let extracted;
@@ -106,18 +105,15 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
 
         if (!extracted.email && !extracted.name) return;
 
-        log.info('Lead data extracted', { conversation_id, name: extracted.name, email: extracted.email });
+        log.info('Lead extracted', { conversation_id, name: extracted.name, email: extracted.email });
 
-        // ── Deduplication strategy ────────────────────────────────────────────
-        // Priority 1: match by email across ALL leads (email is the primary key)
-        // Priority 2: match by this conversation_id (same session, no email yet)
+        // Dedup: email is the primary key globally, fallback to conversation_id
         let existingLead = null;
 
         if (extracted.email) {
-            // Email is the canonical identifier — check globally across all bots
             const { data: byEmail } = await supabase
                 .from('leads')
-                .select('id, bot_id, conversation_id, name, email, phone, company')
+                .select('id, conversation_id, name, email, phone, company')
                 .eq('email', extracted.email)
                 .limit(1)
                 .maybeSingle();
@@ -125,10 +121,9 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
         }
 
         if (!existingLead) {
-            // Fallback: same conversation (name-only capture)
             const { data: byConv } = await supabase
                 .from('leads')
-                .select('id, bot_id, conversation_id, name, email, phone, company')
+                .select('id, conversation_id, name, email, phone, company')
                 .eq('conversation_id', conversation_id)
                 .limit(1)
                 .maybeSingle();
@@ -136,24 +131,22 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
         }
 
         if (existingLead) {
-            // Update — only fill in fields that are missing
             const updates = {};
             if (extracted.name    && !existingLead.name)    updates.name    = extracted.name;
             if (extracted.email   && !existingLead.email)   updates.email   = extracted.email;
             if (extracted.phone   && !existingLead.phone)   updates.phone   = extracted.phone;
             if (extracted.company && !existingLead.company) updates.company = extracted.company;
-            // Always keep conversation_id up to date (may have switched conversations)
+            // Keep conversation_id current
             if (existingLead.conversation_id !== conversation_id) updates.conversation_id = conversation_id;
 
             if (Object.keys(updates).length > 0) {
                 await supabase.from('leads').update(updates).eq('id', existingLead.id);
                 log.info('Lead updated', { lead_id: existingLead.id, updates });
             } else {
-                log.info('Lead already complete — no update needed', { lead_id: existingLead.id });
+                log.info('Lead already complete', { lead_id: existingLead.id });
             }
         } else {
-            // Create new lead
-            const { data: newLead, error: insertErr } = await supabase
+            const { data: newLead, error: insErr } = await supabase
                 .from('leads')
                 .insert({
                     bot_id,
@@ -167,14 +160,14 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
                 })
                 .select('id')
                 .single();
-            if (insertErr) {
-                log.warn('Lead insert failed', { error: insertErr.message });
+            if (insErr) {
+                log.warn('Lead insert failed', { error: insErr.message });
             } else {
-                log.info('New lead created', { lead_id: newLead.id, name: extracted.name, email: extracted.email });
+                log.info('Lead created', { lead_id: newLead?.id, name: extracted.name, email: extracted.email });
             }
         }
     } catch (e) {
-        log.warn('Lead extraction failed', { error: e.message });
+        log.warn('Lead extraction error', { error: e.message, stack: e.stack?.split('\n')[1] });
     }
 }
 
@@ -404,14 +397,13 @@ export default async function handler(req, res) {
         if (conversation_id) {
             let existingLead = null;
             try {
-                // Check this conversation first
-                const { data: byConv } = await supabase
+                const { data: _lead } = await supabase
                     .from('leads')
                     .select('name, email, phone, company')
                     .eq('conversation_id', conversation_id)
                     .limit(1)
                     .maybeSingle();
-                existingLead = byConv;
+                existingLead = _lead;
             } catch (_) {}
 
             if (existingLead) {
@@ -420,16 +412,14 @@ export default async function handler(req, res) {
                 if (existingLead.email)   known.push('email: "' + existingLead.email + '"');
                 if (existingLead.phone)   known.push('phone: "' + existingLead.phone + '"');
                 if (existingLead.company) known.push('company: "' + existingLead.company + '"');
-
                 if (known.length > 0) {
-                    // Tell the LLM exactly what it already knows and what (if anything) is missing
                     const allFields = ['name', 'email', 'phone', 'company'];
                     const missing = allFields.filter(f => !existingLead[f]);
                     systemPrompt += '\n\nUSER CONTACT INFO ALREADY CAPTURED: ' + known.join(', ') + '.'
-                        + ' Do NOT ask for these again. Address the user by name.'
+                        + ' Do NOT ask for these again. Address user by name.'
                         + (missing.length > 0
-                            ? ' If relevant to the conversation you may ask for: ' + missing.join(', ') + '.'
-                            : ' You have their complete contact information.');
+                            ? ' If relevant you may still collect: ' + missing.join(', ') + '.'
+                            : ' You have their complete contact info.');
                 }
             }
         }
