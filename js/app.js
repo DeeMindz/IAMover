@@ -332,11 +332,20 @@ window.addEventListener('message', async function (e) {
       console.log('[IAM Bridge] Bot response:', data);
       // If HITL is active, do not send any response to widget — human agent is handling it
       if (data.hitl_active) {
-        console.log('[IAM Bridge] HITL active — suppressing bot response in widget');
-        // Subscribe to real-time messages so agent messages reach the widget
-        if (data.conversation_id || conv_id) {
-          startWidgetRealtimeSubscription(e.source, data.conversation_id || conv_id);
+        console.log('[IAM Bridge] HITL active — telling widget to start polling');
+        const activeConvId = data.conversation_id || conv_id;
+        // Tell the widget iframe to start polling for agent messages
+        if (e.source) {
+          e.source.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*');
         }
+        // Also push to any other preview iframes open
+        const allIframes = [
+          document.getElementById('preview-iframe'),
+          document.getElementById('preview-iframe-inline')
+        ].filter(f => f?.contentWindow && f.contentWindow !== e.source);
+        allIframes.forEach(f => f.contentWindow.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*'));
+        // Keep dashboard-side realtime subscription so agent sees user replies
+        startWidgetRealtimeSubscription(e.source, activeConvId);
         return;
       }
       if (data.response) {
@@ -1250,13 +1259,13 @@ async function renderConversations() {
 
 // Separate click handler — does NOT re-render full list (prevents disappearing)
 async function selectConversation(convId) {
+  // Update active state visually without full re-render
   $$('.conv-item').forEach(el => el.classList.remove('active'));
   const clicked = document.querySelector(`[onclick="selectConversation('${convId}')"]`);
   if (clicked) clicked.classList.add('active');
+
   AppState.activeConversation = convId;
-  LocalDB.set('activeConversation', convId);
   await loadConversationMessages(convId);
-  subscribeToConversation(convId);
 }
 window.selectConversation = selectConversation;
 
@@ -1396,51 +1405,34 @@ window.loadConversationMessages = loadConversationMessages;
 let activeSubscription = null;
 
 function subscribeToConversation(conversationId) {
-  if (activeSubscription) { activeSubscription.unsubscribe(); activeSubscription = null; }
-  if (!conversationId) return;
+  // Unsubscribe from previous
+  if (activeSubscription) {
+    activeSubscription.unsubscribe();
+    activeSubscription = null;
+  }
+  // Only subscribe during HITL
+  if (AppState.hitlActive) {
+    activeSubscription = Conversations.subscribeToMessages(
+      conversationId,
+      (newMessage) => {
+        const conv = AppState.conversations.find(c => c.id === conversationId);
+        if (conv) {
+          conv.messages.push({
+            role: newMessage.role,
+            text: newMessage.content,
+            time: new Date(newMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
 
-  activeSubscription = Conversations.subscribeToMessages(
-    conversationId,
-    (newMessage) => {
-      const msgsEl = document.getElementById('conv-messages');
-      if (!msgsEl || AppState.activeConversation !== conversationId) return;
+          // Invalidate cache so it persists locally
+          Cache.set(`messages_${conversationId}`, conv.messages);
 
-      const msg  = newMessage;
-      const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const conv = AppState.conversations.find(c => c.id === conversationId);
-      const botObj = AppState.bots.find(b => b.id === conv?.botId);
-      const botColor   = botObj?.color || '#6c63ff';
-      const botInitial = (botObj?.name || 'B').charAt(0).toUpperCase();
-      const botName    = botObj?.name || 'Bot';
-
-      const previewEl = document.getElementById(`conv-preview-${conversationId}`);
-      if (previewEl && msg.content) previewEl.textContent = msg.content.slice(0, 60) + (msg.content.length > 60 ? '…' : '');
-
-      const div = document.createElement('div');
-      if (msg.role === 'system') {
-        const isJoined = msg.content === 'agent_joined';
-        const label = isJoined ? '👤 A live agent has joined the conversation' : `${botName} has resumed`;
-        div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
-        div.innerHTML = `<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">${label}</span>`;
-      } else if (msg.role === 'user') {
-        const lastUser = [...msgsEl.querySelectorAll('.message.user')].pop();
-        if (lastUser?.querySelector('.msg-bubble')?.textContent === msg.content) return;
-        div.className = 'message user';
-        div.innerHTML = `<div class="msg-bubble">${msg.content}</div><div class="msg-time">${time}</div>`;
-      } else if (msg.role === 'bot') {
-        div.className = 'message bot';
-        div.innerHTML = `<div class="msg-avatar" style="background:${botColor}33;color:${botColor};font-weight:700;font-size:12px;">${botInitial}</div><div><div class="msg-bubble">${msg.content}</div><div class="msg-time">${time}</div></div>`;
-      } else if (msg.role === 'human-agent') {
-        const existing = [...msgsEl.querySelectorAll('.message.bot')];
-        const alreadyShown = existing.some(el => el.querySelector('.msg-bubble')?.textContent === msg.content && el.innerHTML.includes('10b981'));
-        if (alreadyShown) return;
-        div.className = 'message bot';
-        div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div><div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div><div class="msg-bubble" style="border-left:3px solid #10b981;">${msg.content}</div><div class="msg-time">${time}</div></div>`;
+          if (AppState.activeConversation === conversationId) {
+            renderConvDetail(conversationId);
+          }
+        }
       }
-      msgsEl.appendChild(div);
-      msgsEl.scrollTop = msgsEl.scrollHeight;
-    }
-  );
+    );
+  }
 }
 
 function unsubscribeAll() {
@@ -2349,19 +2341,31 @@ window.addEventListener('message', function (e) {
     window._previewConvId = e.data.conv_id;
   }
 
+  // Dashboard tells widget HITL is active — start polling for agent messages
+  if (e.data.type === 'IAM_HITL_ACTIVE' && e.data.conv_id) {
+    window._previewConvId = e.data.conv_id;
+    if (!window._pollInterval) {
+      window._lastMsgAt = new Date().toISOString();
+      startHITLPolling(e.data.conv_id);
+    }
+    isSending = false;
+  }
+
   // Load previous chat history
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages?.length) {
-    const msgs = document.getElementById('chat-messages');
+    var msgs = document.getElementById('chat-messages');
     msgs.innerHTML = '';
     e.data.messages.forEach(function(m) {
-      if (m.role === 'system') {
-        addSystemMsg(m.content);
-      } else {
+      if (m.role === 'system') { addSystemMsg(m.content); }
+      else if (m.role === 'human-agent') { showAgentMsg(m.content); }
+      else {
         var div = document.createElement('div');
-        div.className = 'msg ' + (m.role === 'bot' || m.role === 'human-agent' ? 'bot' : 'user');
-        div.textContent = m.content;
+        div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
+        if (m.role === 'bot') div.innerHTML = formatMarkdown(m.content);
+        else div.textContent = m.content;
         msgs.appendChild(div);
       }
+      if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
     });
     msgs.scrollTop = msgs.scrollHeight;
   }
@@ -2382,44 +2386,92 @@ window.addEventListener('message', function (e) {
     isSending = false;
   }
 
-  // Human agent message — show like a bot message (same side) but with agent label
+  // Fallback: direct agent message push (for preview iframes)
   if (e.data.type === 'IAM_AGENT_MESSAGE') {
-    var msgs = document.getElementById('chat-messages');
     var t = document.getElementById('typing-indicator');
     if (t) t.remove();
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
-    var label = document.createElement('div');
-    label.textContent = 'Support Agent';
-    label.style.cssText = 'font-size:10px;color:#888;margin-left:4px;';
-    var agentMsg = document.createElement('div');
-    agentMsg.className = 'msg bot';
-    agentMsg.style.borderLeft = '3px solid #10b981';
-    agentMsg.textContent = e.data.content;
-    wrap.appendChild(label);
-    wrap.appendChild(agentMsg);
-    msgs.appendChild(wrap);
-    msgs.scrollTop = msgs.scrollHeight;
+    showAgentMsg(e.data.content);
     isSending = false;
   }
 
-  // System notification message
   if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
-    var msgs = document.getElementById('chat-messages');
     addSystemMsg(e.data.content);
-    msgs.scrollTop = msgs.scrollHeight;
+    var msgs = document.getElementById('chat-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
   }
 });
 
+// ── HITL Polling — polls every 2s when agent is active ───────────
+function startHITLPolling(cId) {
+  stopHITLPolling();
+  var API_BASE = window.location.origin;
+  window._pollInterval = setInterval(function() {
+    var url = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
+    if (window._lastMsgAt) url += '&after=' + encodeURIComponent(window._lastMsgAt);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.messages) return;
+        data.messages.forEach(function(m) {
+          if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
+          if (m.role === 'human-agent') {
+            var existing = document.querySelectorAll('.iam-agent-bubble, .msg.bot');
+            var already = false;
+            existing.forEach(function(el) { if (el.textContent.trim() === m.content.trim()) already = true; });
+            if (!already) { var t2 = document.getElementById('typing-indicator'); if (t2) t2.remove(); showAgentMsg(m.content); isSending = false; }
+          }
+          if (m.role === 'system') {
+            addSystemMsg(m.content);
+            if (m.content === 'agent_left') stopHITLPolling();
+          }
+          if (m.role === 'bot') {
+            var bots = document.querySelectorAll('.msg.bot');
+            var last = bots[bots.length - 1];
+            if (!last || last.textContent.trim() !== m.content.trim()) {
+              var t3 = document.getElementById('typing-indicator'); if (t3) t3.remove();
+              var d = document.createElement('div'); d.className = 'msg bot';
+              d.innerHTML = formatMarkdown(m.content);
+              document.getElementById('chat-messages').appendChild(d);
+              document.getElementById('chat-messages').scrollTop = 99999;
+              isSending = false;
+            }
+          }
+        });
+        if (!data.hitl_active) stopHITLPolling();
+      })
+      .catch(function() {});
+  }, 2000);
+  console.log('[IAM Preview] HITL polling started');
+}
+function stopHITLPolling() {
+  if (window._pollInterval) { clearInterval(window._pollInterval); window._pollInterval = null; }
+}
+
+function showAgentMsg(content) {
+  var msgs = document.getElementById('chat-messages');
+  if (!msgs) return;
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+  var lbl = document.createElement('div');
+  lbl.textContent = 'Support Agent';
+  lbl.style.cssText = 'font-size:10px;color:#10b981;margin-left:4px;font-weight:600;';
+  var bubble = document.createElement('div');
+  bubble.className = 'msg bot';
+  bubble.style.borderLeft = '3px solid #10b981';
+  bubble.textContent = content;
+  wrap.appendChild(lbl); wrap.appendChild(bubble); msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 function addSystemMsg(content) {
   var msgs = document.getElementById('chat-messages');
-  var label = content === 'agent_joined'
-    ? '&#128100; A live agent has joined'
-    : '&#129302; AI assistant has resumed';
+  if (!msgs) return;
+  var label = content === 'agent_joined' ? '&#128100; A live agent has joined' : '${botName} has resumed';
   var div = document.createElement('div');
   div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
   div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
   msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
 function handleKey(e) {
