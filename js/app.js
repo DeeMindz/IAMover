@@ -1,8 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════════
-   IAM Platform — Main App JS
-   ═══════════════════════════════════════════════════════════════════ */
-
-import { Auth, Bots, KnowledgeBases, Conversations, Leads, Analytics, supabase } from './supabase.js';
+/*
 
 /* ─── Persistent Storage (LocalDB) ───────────────────────────────── */
 const LocalDB = {
@@ -1219,14 +1215,10 @@ async function selectConversation(convId) {
       const { data } = await supabase.from('conversations').select('metadata, user_id').eq('id', convId).single().catch(() => ({ data: null }));
       if (data) { conv.metadata = data.metadata; conv.user_id = data.user_id; }
     }
-    renderConvSidebar(conv);
-    // Ensure sidebar is expanded when selecting a conversation
-    const sidebar = document.getElementById('conv-sidebar');
-    const inner   = document.getElementById('conv-sidebar-inner');
-    const tab     = document.getElementById('conv-sidebar-tab');
-    if (sidebar) sidebar.classList.remove('collapsed');
-    if (inner)   inner.style.display = 'flex';
-    if (tab)     tab.style.display = 'none';
+    renderContactDrawer();
+    // Show "Contact Info" button in header when a conversation is selected
+    const contactBtn = document.getElementById('btn-contact-info');
+    if (contactBtn) contactBtn.style.display = 'flex';
   }
 }
 window.selectConversation = selectConversation;
@@ -3677,84 +3669,79 @@ window.copyApiKey = copyApiKey;
 window.openBotPreview = openBotPreview;
 window.setPreviewMode = setPreviewMode;
 window.sharePreviewLink = sharePreviewLink;
-function toggleConvSidebar() {
-  const sidebar = document.getElementById('conv-sidebar');
-  const tab     = document.getElementById('conv-sidebar-tab');
-  const inner   = document.getElementById('conv-sidebar-inner');
-  if (!sidebar) return;
-  const isCollapsed = sidebar.classList.contains('collapsed');
-  if (isCollapsed) {
-    sidebar.classList.remove('collapsed');
-    if (inner) inner.style.display = 'flex';
-    if (tab)   tab.style.display = 'none';
-  } else {
-    sidebar.classList.add('collapsed');
-    if (inner) inner.style.display = 'none';
-    if (tab)   tab.style.display   = 'flex';
-  }
+function openContactDrawer() {
+  const overlay = document.getElementById('contact-drawer-overlay');
+  const drawer  = document.getElementById('contact-drawer');
+  if (overlay) overlay.classList.add('open');
+  if (drawer)  { drawer.classList.add('open'); renderContactDrawer(); }
 }
-window.toggleConvSidebar = toggleConvSidebar;
+window.openContactDrawer = openContactDrawer;
 
-function renderConvSidebar(conv) {
-  const el = document.getElementById('conv-sidebar-content');
-  if (!el) return;
-  const lead = conv?.lead || null;
-  const meta = conv?.metadata || {};
+function closeContactDrawer() {
+  const overlay = document.getElementById('contact-drawer-overlay');
+  const drawer  = document.getElementById('contact-drawer');
+  if (overlay) overlay.classList.remove('open');
+  if (drawer)  drawer.classList.remove('open');
+}
+window.closeContactDrawer = closeContactDrawer;
 
-  const field = (label, value, mono=false) => value ? `
-    <div class="csb-row">
-      <div class="csb-label">${label}</div>
-      <div class="csb-value${mono?' style="font-family:monospace;font-size:11px;"':''}">${value}</div>
-    </div>` : '';
+function renderContactDrawer() {
+  const body = document.getElementById('contact-drawer-body');
+  if (!body) return;
+  const convId = AppState.activeConversation;
+  const conv   = AppState.conversations?.find(c => c.id === convId);
+  if (!conv) return;
 
-  const avatar = (name, email) => {
-    const letter = (name||email||'?').charAt(0).toUpperCase();
-    const color = ['#6c63ff','#10b981','#f59e0b','#ef4444','#3b82f6'][letter.charCodeAt(0)%5];
-    return `<div style="width:48px;height:48px;border-radius:50%;background:${color}22;color:${color};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;">${letter}</div>`;
-  };
+  const lead = conv.lead || null;
+  const meta = conv.metadata || {};
 
-  // Contact section
-  const hasContact = lead?.name || lead?.email || lead?.phone || lead?.company;
-  const contactHTML = hasContact ? `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      ${avatar(lead?.name, lead?.email)}
+  const field = (label, value, mono) => !value ? '' :
+    `<div class="cdr-field">
+      <div class="cdr-label">${label}</div>
+      <div class="cdr-value${mono ? ' mono' : ''}">${value}</div>
+    </div>`;
+
+  const colors = ['#6c63ff','#10b981','#f59e0b','#ef4444','#3b82f6'];
+  const letter = ((lead?.name || lead?.email || conv.user || '?').charAt(0)).toUpperCase();
+  const color  = colors[letter.charCodeAt(0) % colors.length];
+
+  const contactSection = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+      <div class="cdr-avatar" style="background:${color}20;color:${color};">${letter}</div>
       <div style="min-width:0;">
-        <div style="font-weight:700;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${lead?.name || 'Unknown'}</div>
-        <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${lead?.email || ''}</div>
+        <div style="font-weight:700;font-size:15px;">${lead?.name || conv.user || 'Anonymous'}</div>
+        ${lead?.email ? `<div style="font-size:12px;color:var(--text-muted);">${lead.email}</div>` : ''}
       </div>
     </div>
+    ${field('Name', lead?.name)}
     ${field('Email', lead?.email)}
     ${field('Phone', lead?.phone)}
     ${field('Company', lead?.company)}
-    ${lead?.status ? `<div class="csb-row"><div class="csb-label">Status</div><span class="badge badge-${lead.status==='warm'?'green':lead.status==='hot'?'red':'gray'}" style="font-size:10px;">${lead.status}</span></div>` : ''}
-  ` : `<div style="font-size:12px;color:var(--text-muted);padding:8px 0 14px;">No contact info captured yet.</div>`;
+    ${lead?.status ? `<div class="cdr-field"><div class="cdr-label">Status</div><span class="badge badge-${lead.status==='warm'?'green':lead.status==='hot'?'red':'gray'}">${lead.status}</span></div>` : ''}
+  `;
 
-  // Session metadata
-  const sessionHTML = `
-    <div class="csb-divider"></div>
-    <div class="csb-section-title">Session</div>
+  const sessionSection = `
+    <div class="cdr-divider"></div>
+    <div class="cdr-section-title">Session</div>
     ${field('Started', meta?.started_at ? new Date(meta.started_at).toLocaleString() : null)}
-    ${field('Page', meta?.page_title || meta?.page_url)}
+    ${field('Page', meta?.page_title)}
     ${field('Page URL', meta?.page_url)}
     ${field('Referrer', meta?.referrer_url)}
     ${field('Language', meta?.browser_language)}
     ${field('Timezone', meta?.user_timezone)}
     ${field('Device', meta?.device_type ? (meta.device_type.charAt(0).toUpperCase()+meta.device_type.slice(1)) : null)}
     ${field('Platform', meta?.user_platform)}
-    ${conv?.user_id ? field('Visitor ID', conv.user_id, true) : ''}
+    ${field('Visitor ID', conv?.user_id, true)}
   `;
 
-  el.innerHTML = `
-    <div class="csb-section-title" style="margin-top:2px;">Contact</div>
-    ${contactHTML}
-    ${sessionHTML}
-  `;
-}window.renderConvSidebar = renderConvSidebar;
+  body.innerHTML = contactSection + sessionSection;
+}
+window.renderContactDrawer = renderContactDrawer;
 
-window.showConfigSection = showConfigSection;
-window.markConfigDirty = markConfigDirty;
-window.markConfigClean = markConfigClean;
+/* ─── Persistent Storage (LocalDB) ───────────────────────────────── */
+// ── Window exports (re-added after cleanup) ──────────────────────────────────
+window.showConfigSection   = showConfigSection;
+window.markConfigDirty     = markConfigDirty;
+window.markConfigClean     = markConfigClean;
 window.handleConversationsNav = handleConversationsNav;
-window.renderAnalytics = renderAnalytics;
-
-console.log('IAM Platform: app.js loaded.');
+window.renderAnalytics     = renderAnalytics;
