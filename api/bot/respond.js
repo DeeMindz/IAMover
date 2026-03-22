@@ -134,15 +134,14 @@ export default async function handler(req, res) {
                 // Embed the user message for semantic search
                 const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
                 const embedRes = await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            model: 'models/gemini-embedding-001',
+                            model: 'models/text-embedding-004',
                             content: { parts: [{ text: message }] },
                             taskType: 'RETRIEVAL_QUERY',
-                            outputDimensionality: 1536,
                         })
                     }
                 );
@@ -199,25 +198,36 @@ export default async function handler(req, res) {
         if (conversation_id) {
             const { data: messages } = await supabase
                 .from('messages')
-                .select('role, content')
+                .select('role, content, created_at')
                 .eq('conversation_id', conversation_id)
                 .order('created_at', { ascending: true })
-                .limit(20);
+                .limit(40);
 
             if (messages) {
-                const mapped = messages
-                    // Exclude system notification messages from LLM history
-                    .filter(m => m.role === 'user' || m.role === 'bot' || m.role === 'human-agent')
-                    .map(m => {
-                        if (m.role === 'bot') return { role: 'assistant', content: m.content };
-                        if (m.role === 'human-agent') return { role: 'assistant', content: `[Live Agent]: ${m.content}` };
-                        return { role: 'user', content: m.content };
-                    });
+                // Find the last agent_left event — bot should only see messages AFTER that
+                // This prevents the LLM from being confused by the HITL conversation context
+                let startIndex = 0;
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    if (messages[i].role === 'system' && messages[i].content === 'agent_left') {
+                        startIndex = i + 1;
+                        break;
+                    }
+                }
+                const relevantMessages = messages.slice(startIndex);
+
+                const mapped = relevantMessages
+                    // Exclude system messages and human-agent messages from LLM history
+                    // Bot should only see user/bot exchanges after the last resume
+                    .filter(m => m.role === 'user' || m.role === 'bot')
+                    .map(m => ({
+                        role: m.role === 'bot' ? 'assistant' : 'user',
+                        content: m.content
+                    }));
 
                 // All LLMs require history to start with user role — trim leading assistant messages
                 const firstUserIndex = mapped.findIndex(m => m.role === 'user');
                 conversationHistory = firstUserIndex > -1 ? mapped.slice(firstUserIndex) : [];
-                log.info('Conversation history loaded', { messages: conversationHistory.length });
+                log.info('Conversation history loaded', { messages: conversationHistory.length, startIndex });
             }
         }
 

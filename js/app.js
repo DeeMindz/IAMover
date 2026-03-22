@@ -2366,6 +2366,9 @@ window.addEventListener('message', function (e) {
   if (e.data.type === 'IAM_HITL_ACTIVE' && e.data.conv_id) {
     window._previewConvId = e.data.conv_id;
     stopStatusCheck();
+    // Pre-mark agent_joined so poll doesn't show it again
+    window._shownSysMsgs = window._shownSysMsgs || {};
+    window._shownSysMsgs['agent_joined'] = true;
     if (!window._pollInterval) startHITLPolling(e.data.conv_id);
     isSending = false;
   }
@@ -2440,9 +2443,11 @@ function startStatusCheck(cId) {
         if (data.hitl_active && !window._pollInterval) {
           // Agent took over — switch to HITL polling immediately
           stopStatusCheck();
-          startHITLPolling(cId);
-          // Show notification
+          // Mark as shown FIRST, then start polling so poll dedup is already set
+          window._shownSysMsgs = window._shownSysMsgs || {};
+          window._shownSysMsgs['agent_joined'] = true;
           addSystemMsg('agent_joined');
+          startHITLPolling(cId);
         }
       })
       .catch(function() {});

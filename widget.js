@@ -359,8 +359,8 @@
       if (data.hitl_active) {
         if (!_hitlActive) {
           _hitlActive = true;
-          // Don't reset _lastMsgAt — keep cursor at current position
-          // so startPolling only fetches messages AFTER what's already shown
+          // Pre-mark agent_joined so poll dedup prevents duplicate notification
+          _shownSysMsgs['agent_joined'] = true;
           startPolling(convId);
         }
         isSending = false;
