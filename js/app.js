@@ -1549,6 +1549,19 @@ async function endHITL() {
 }
 window.endHITL = endHITL;
 
+// Typing indicator — debounced, writes agent_typing to DB so widget sees it
+let _agentTypingTimer = null;
+function handleAgentTyping() {
+  const convId = AppState.activeConversation;
+  if (!convId || !AppState.hitlActive) return;
+  clearTimeout(_agentTypingTimer);
+  supabase.from('conversations').update({ agent_typing: true }).eq('id', convId).then(() => {});
+  _agentTypingTimer = setTimeout(() => {
+    supabase.from('conversations').update({ agent_typing: false }).eq('id', convId).then(() => {});
+  }, 3000);
+}
+window.handleAgentTyping = handleAgentTyping;
+
 async function sendAgentMessage() {
   const input = document.getElementById('agent-input');
   if (!input || !input.value.trim()) return;
@@ -1557,6 +1570,10 @@ async function sendAgentMessage() {
 
   const text = input.value.trim();
   input.value = '';
+
+  // Clear typing indicator immediately
+  clearTimeout(_agentTypingTimer);
+  supabase.from('conversations').update({ agent_typing: false }).eq('id', convId).then(() => {});
 
   const conv = AppState.conversations.find(c => c.id === convId);
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
