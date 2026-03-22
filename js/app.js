@@ -1995,8 +1995,9 @@ async function attachKB(kbId) {
   if (!bot) return;
   try {
     await supabase.from('bot_knowledge_bases').insert({ bot_id: bot.id, kb_id: kbId });
-    if (!bot.knowledge_base_ids) bot.knowledge_base_ids = [];
-    bot.knowledge_base_ids.push(kbId);
+    // Re-fetch from DB to stay in sync
+    const { data: kbLinks } = await supabase.from('bot_knowledge_bases').select('kb_id').eq('bot_id', bot.id);
+    bot.knowledge_base_ids = kbLinks ? kbLinks.map(r => r.kb_id) : [];
     renderAttachedKBs(bot);
     openAttachKBModal();
     showToast('Knowledge base attached', 'success');
@@ -2009,9 +2010,10 @@ async function detachKB(kbId) {
   if (!bot) return;
   try {
     await supabase.from('bot_knowledge_bases').delete().eq('bot_id', bot.id).eq('kb_id', kbId);
-    bot.knowledge_base_ids = (bot.knowledge_base_ids || []).filter(id => id !== kbId);
+    // Re-fetch from DB to stay in sync
+    const { data: kbLinks } = await supabase.from('bot_knowledge_bases').select('kb_id').eq('bot_id', bot.id);
+    bot.knowledge_base_ids = kbLinks ? kbLinks.map(r => r.kb_id) : [];
     renderAttachedKBs(bot);
-    openAttachKBModal();
     showToast('Knowledge base detached', 'info');
   } catch (e) { showToast('Failed to detach', 'error'); }
 }
@@ -3085,7 +3087,7 @@ async function deleteBot(id) {
   }
 }
 
-function renderBotConfig(extra = {}) {
+async function renderBotConfig(extra = {}) {
   const botId = extra.botId || AppState.currentBot?.id;
   if (!botId) { navigate('home'); return; }
 
@@ -3093,6 +3095,19 @@ function renderBotConfig(extra = {}) {
   if (!bot) { navigate('home'); return; }
 
   AppState.currentBot = bot;
+
+  // Fetch the actual KB associations from bot_knowledge_bases table
+  // (bot.knowledge_base_ids is not a DB column — must be loaded separately)
+  try {
+    const { data: kbLinks } = await supabase
+      .from('bot_knowledge_bases')
+      .select('kb_id')
+      .eq('bot_id', botId);
+    bot.knowledge_base_ids = kbLinks ? kbLinks.map(r => r.kb_id) : [];
+  } catch (e) {
+    console.warn('Could not load KB associations:', e);
+    bot.knowledge_base_ids = bot.knowledge_base_ids || [];
+  }
 
   // Update page title elements
   const titleEl = document.getElementById('bot-config-name');
