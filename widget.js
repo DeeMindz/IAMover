@@ -1,12 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════
-   IAM Platform — Embeddable Widget v2
+   IAM Platform — Embeddable Widget v3
    Place at: widget.js in your repo root
    ═══════════════════════════════════════════════════════════════════ */
 
 (function (window, document) {
   'use strict';
 
-  var cfg      = window.IAMConfig || {};
+  var cfg         = window.IAMConfig || {};
   var BOT_ID      = cfg.botId;
   var COLOR       = cfg.color      || '#6c63ff';
   var POSITION    = cfg.position   || 'bottom-right';
@@ -15,7 +15,7 @@
 
   if (!BOT_ID) { console.warn('[IAM] No botId in IAMConfig'); return; }
 
-  // ── API base — auto-detected from script src ───────────────────────
+  // ── API base ───────────────────────────────────────────────────────
   var API_BASE = (function () {
     var tags = document.getElementsByTagName('script');
     for (var i = 0; i < tags.length; i++) {
@@ -26,11 +26,18 @@
     return window.location.origin;
   })();
 
-
   // ── State ──────────────────────────────────────────────────────────
-  var convId      = null;
-  var isSending   = false;
-  var botConfig   = { name: 'Assistant', color: COLOR, avatarUrl: '', greeting: 'Hi! How can I help you today?' };
+  var convId         = null;
+  var isSending      = false;
+  var botConfig      = { name: 'Assistant', color: COLOR, avatarUrl: '', greeting: 'Hi! How can I help you today?' };
+
+  // HITL state
+  var _pollInterval  = null;
+  var _statusInterval = null;
+  var _lastMsgAt     = null;
+  var _hitlActive    = false;
+  var _shownSysMsgs  = {};
+  var _shownMsgIds   = {};
 
   // ── Visitor ID ─────────────────────────────────────────────────────
   function getVisitorId() {
@@ -43,16 +50,19 @@
     return id;
   }
 
-  // ── Position (floating mode only) ─────────────────────────────────
+  // ── Position ───────────────────────────────────────────────────────
   var POS = { 'bottom-right': 'bottom:24px;right:24px;', 'bottom-left': 'bottom:24px;left:24px;', 'top-right': 'top:24px;right:24px;', 'top-left': 'top:24px;left:24px;' };
   var pos = IS_INLINE ? '' : (POS[POSITION] || POS['bottom-right']);
 
   // ── Styles ─────────────────────────────────────────────────────────
   var css = document.createElement('style');
   css.textContent = [
-    IS_INLINE ? '' : '#iam-launcher{position:fixed;' + pos + 'width:58px;height:58px;background:' + COLOR + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s,box-shadow .2s;overflow:hidden;}',
+    IS_INLINE ? '' : '#iam-launcher{position:fixed;' + pos + 'width:58px;height:58px;background:' + COLOR + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s;overflow:hidden;}',
     IS_INLINE ? '' : '#iam-launcher:hover{transform:scale(1.08);}',
     IS_INLINE ? '' : '#iam-launcher img{width:100%;height:100%;object-fit:cover;border-radius:50%;}',
+    IS_INLINE ? '' : '#iam-greeting-popup{position:fixed;' + pos.replace(/right:(\\d+)/, function(m, n) { return 'right:' + (parseInt(n)+70) + 'px'; }).replace(/left:(\\d+)/, function(m, n) { return 'left:' + (parseInt(n)+70) + 'px'; }) + 'bottom:' + (IS_INLINE ? '0' : '24px') + ';background:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:220px;font-size:13px;color:#333;z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamPopIn .3s ease;cursor:pointer;}',
+    IS_INLINE ? '' : '#iam-greeting-popup::after{content:"";position:absolute;bottom:-6px;right:20px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #fff;}',
+    IS_INLINE ? '' : '@keyframes iamPopIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
     IS_INLINE
       ? '#iam-window{position:relative;width:100%;height:100%;background:#fff;border-radius:18px;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}'
       : '#iam-window{position:fixed;' + pos + 'width:360px;height:530px;background:#fff;border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamOpen .25s cubic-bezier(.34,1.56,.64,1);}',
@@ -84,31 +94,47 @@
     '@keyframes iamWave{0%,60%,100%{transform:translateY(0);opacity:.6}30%{transform:translateY(-4px);opacity:1}}',
     '#iam-input-area{padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;align-items:center;background:#fff;flex-shrink:0;}',
     '#iam-input{flex:1;border:1px solid #e5e5e5;border-radius:20px;padding:8px 14px;font-size:13px;outline:none;color:#333;background:#f8f8f8;font-family:inherit;}',
-    '#iam-send{width:34px;height:34px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex-shrink:0;}',
+    '#iam-input:focus{border-color:' + COLOR + ';}',
+    '#iam-send{width:34px;height:34px;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex-shrink:0;background:' + COLOR + ';}',
     '#iam-new-conv-confirm{display:none;position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eee;padding:14px 16px;flex-direction:column;align-items:center;gap:10px;z-index:10;box-shadow:0 -4px 12px rgba(0,0,0,.08);}',
     '#iam-new-conv-confirm p{margin:0;font-size:13px;font-weight:600;color:#333;}',
     '#iam-new-conv-confirm small{margin:0;font-size:11px;color:#888;text-align:center;}',
     '.iam-ncbns{display:flex;gap:8px;width:100%;}',
     '.iam-ncbns button{flex:1;padding:8px;border-radius:10px;font-size:13px;cursor:pointer;border:none;}',
     '#iam-btn-cancel-nc{background:#f0f0f0;color:#333;}',
-    '#iam-btn-confirm-nc{color:#fff;font-weight:600;}',
+    '#iam-btn-confirm-nc{color:#fff;font-weight:600;background:' + COLOR + ';}',
   ].join('');
   document.head.appendChild(css);
 
-  // ── Launcher (floating mode only) ────────────────────────────────
+  // ── Launcher + greeting popup ──────────────────────────────────────
   var launcher = null;
+  var greetingPopup = null;
   if (!IS_INLINE) {
     launcher = document.createElement('button');
     launcher.id = 'iam-launcher';
     launcher.title = 'Chat with us';
     launcher.innerHTML = '💬';
     document.body.appendChild(launcher);
+
+    // Greeting popup — shows after 2s, hides when chat opens
+    greetingPopup = document.createElement('div');
+    greetingPopup.id = 'iam-greeting-popup';
+    greetingPopup.style.display = 'none';
+    greetingPopup.addEventListener('click', openWidget);
+    document.body.appendChild(greetingPopup);
+
+    // Show greeting popup after 2 seconds
+    setTimeout(function() {
+      if (!convId && greetingPopup) {
+        greetingPopup.textContent = botConfig.greeting;
+        greetingPopup.style.display = 'block';
+      }
+    }, 2000);
   }
 
   // ── Chat window ───────────────────────────────────────────────────
   var win = document.createElement('div');
   win.id = 'iam-window';
-  // In floating mode, start hidden; in inline mode, always visible
   win.style.display = IS_INLINE ? 'flex' : 'none';
   win.innerHTML = [
     '<div id="iam-header" style="background:' + COLOR + '">',
@@ -118,23 +144,23 @@
     '    <div id="iam-bot-status">⬤ Online · Ready to help</div>',
     '  </div>',
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
-    '  <button class="iam-hbtn" id="iam-btn-close" title="Close">✕</button>',
+    IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">✕</button>',
     '</div>',
     '<div id="iam-messages"></div>',
     '<div id="iam-input-area">',
     '  <input id="iam-input" placeholder="Type a message…" autocomplete="off" />',
-    '  <button id="iam-send" style="background:' + COLOR + '">↑</button>',
+    '  <button id="iam-send">↑</button>',
     '</div>',
     '<div id="iam-new-conv-confirm">',
     '  <p>Start a new conversation?</p>',
     '  <small>Your current chat history will no longer be visible.</small>',
     '  <div class="iam-ncbns">',
     '    <button id="iam-btn-cancel-nc">Cancel</button>',
-    '    <button id="iam-btn-confirm-nc" style="background:' + COLOR + '">New Chat</button>',
+    '    <button id="iam-btn-confirm-nc">New Chat</button>',
     '  </div>',
     '</div>',
   ].join('');
-  // Mount into container div (inline) or body (floating)
+
   if (IS_INLINE) {
     var container = document.getElementById(CONTAINER_ID);
     if (!container) { console.warn('[IAM] Container #' + CONTAINER_ID + ' not found'); return; }
@@ -146,33 +172,40 @@
   var msgsEl = document.getElementById('iam-messages');
   var input  = document.getElementById('iam-input');
 
-  // ── Apply bot config to UI ─────────────────────────────────────────
+  // Hide close button in inline mode
+  if (IS_INLINE) {
+    var closeBtn = document.getElementById('iam-btn-close');
+    if (closeBtn) closeBtn.style.display = 'none';
+  }
+
+  // ── Apply bot config ───────────────────────────────────────────────
   function applyBotConfig(cfg) {
     var c = cfg.color || COLOR;
     var header = document.getElementById('iam-header');
     var avatar = document.getElementById('iam-bot-avatar');
-    var name   = document.getElementById('iam-bot-name');
-    var send   = document.getElementById('iam-send');
+    var nameEl = document.getElementById('iam-bot-name');
+    var sendEl = document.getElementById('iam-send');
     var ncBtn  = document.getElementById('iam-btn-confirm-nc');
     if (header) header.style.background = c;
-    if (send)   send.style.background = c;
+    if (sendEl) sendEl.style.background = c;
     if (ncBtn)  ncBtn.style.background = c;
-    launcher.style.background = c;
-    if (name && (cfg.displayName || cfg.name)) name.textContent = cfg.displayName || cfg.name;
+    if (launcher) launcher.style.background = c;
+    if (nameEl && (cfg.displayName || cfg.name)) nameEl.textContent = cfg.displayName || cfg.name;
     var initial = (cfg.displayName || cfg.name || 'B').charAt(0).toUpperCase();
     if (avatar) {
       if (cfg.avatarUrl) {
         avatar.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.parentNode.textContent=\'' + initial + '\'" />';
+        if (launcher) launcher.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.parentNode.innerHTML=\'💬\'" />';
       } else {
         avatar.textContent = initial;
       }
     }
-    if (cfg.avatarUrl) {
-      launcher.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.parentNode.innerHTML=\'💬\'" />';
+    // Update greeting popup text once config loads
+    if (greetingPopup && (cfg.greeting || cfg.displayName || cfg.name)) {
+      greetingPopup.textContent = cfg.greeting || botConfig.greeting;
     }
   }
 
-  // ── Fetch bot config ───────────────────────────────────────────────
   function loadBotConfig(cb) {
     fetch(API_BASE + '/api/bot/config?bot_id=' + BOT_ID)
       .then(function(r) { return r.ok ? r.json() : null; })
@@ -197,14 +230,14 @@
     return h;
   }
 
-  // ── Append helpers ────────────────────────────────────────────────
+  // ── Message helpers ───────────────────────────────────────────────
   function appendBot(c)   { var d=document.createElement('div'); d.className='iam-msg bot'; d.innerHTML=md(c); msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight; }
   function appendUser(c)  { var d=document.createElement('div'); d.className='iam-msg user'; d.textContent=c; msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight; }
   function appendAgent(c) {
-    var w=document.createElement('div'); w.className='iam-agent-wrap';
-    var l=document.createElement('div'); l.className='iam-agent-label'; l.textContent='Support Agent';
-    var b=document.createElement('div'); b.className='iam-agent-bubble'; b.textContent=c;
-    w.appendChild(l); w.appendChild(b); msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
+    var wrap=document.createElement('div'); wrap.className='iam-agent-wrap';
+    var lbl=document.createElement('div'); lbl.className='iam-agent-label'; lbl.textContent='Support Agent';
+    var bbl=document.createElement('div'); bbl.className='iam-agent-bubble'; bbl.textContent=c;
+    wrap.appendChild(lbl); wrap.appendChild(bbl); msgsEl.appendChild(wrap); msgsEl.scrollTop=msgsEl.scrollHeight;
   }
   function appendSystem(c) {
     var n = botConfig.displayName || botConfig.name || 'Bot';
@@ -219,21 +252,12 @@
   }
   function hideTyping() { var t=document.getElementById('iam-typing'); if(t) t.remove(); }
 
-  // ── HITL Polling ─────────────────────────────────────────────────
-  // Polls /api/conversation/messages every 2s during HITL only.
-  // Uses a timestamp cursor so each poll only fetches NEW messages.
-  // This approach is 100% reliable — no WebSockets, no auth conflicts,
-  // no sandbox issues, works on any hosting environment.
-  var _pollInterval  = null;
-  var _lastMsgAt     = null;  // ISO timestamp cursor — only fetch after this
-  var _hitlActive    = false; // local HITL state for the widget
-  var _shownSysMsgs  = {}; // tracks system messages shown to prevent duplicates
-  var _shownMsgIds   = {}; // tracks individual message ids shown
-
+  // ── HITL Polling ──────────────────────────────────────────────────
+  // Polls /api/conversation/messages every 2s during HITL only
   function startPolling(cId) {
     if (_pollInterval) return; // already polling — never start twice
     _hitlActive = true;
-    // Don't reset _shownSysMsgs here — history renderer already populated it
+    stopStatusCheck(); // upgrade from status check to active HITL polling
 
     _pollInterval = setInterval(function() {
       var url = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
@@ -244,9 +268,7 @@
           if (!data.messages) return;
           data.messages.forEach(function(m) {
             if (!_lastMsgAt || m.created_at > _lastMsgAt) _lastMsgAt = m.created_at;
-
             if (m.role === 'human-agent') {
-              // Dedup by message id
               if (_shownMsgIds[m.id]) return;
               _shownMsgIds[m.id] = true;
               appendAgent(m.content);
@@ -256,16 +278,17 @@
               if (_shownSysMsgs[m.content]) return;
               _shownSysMsgs[m.content] = true;
               appendSystem(m.content);
-              if (m.content === 'agent_left') { _hitlActive = false; stopPolling(); }
+              if (m.content === 'agent_left') { _hitlActive = false; stopPolling(); startStatusCheck(cId); }
             }
             if (m.role === 'bot') {
               if (_shownMsgIds[m.id]) return;
               _shownMsgIds[m.id] = true;
+              hideTyping();
               appendBot(m.content);
               isSending = false;
             }
           });
-          if (data.hitl_active === false) { _hitlActive = false; stopPolling(); }
+          if (data.hitl_active === false && _hitlActive) { _hitlActive = false; stopPolling(); startStatusCheck(cId); }
         })
         .catch(function(e) { console.warn('[IAM] Poll error:', e); });
     }, 2000);
@@ -273,36 +296,58 @@
   }
 
   function stopPolling() {
-    if (_pollInterval) {
-      clearInterval(_pollInterval);
-      _pollInterval = null;
-      console.log('[IAM] HITL polling stopped');
-    }
+    if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; console.log('[IAM] HITL polling stopped'); }
   }
 
-  // ── Create conversation ───────────────────────────────────────────
+  // ── Background status check ────────────────────────────────────────
+  // Runs every 5s to detect when agent takes over, even if user is idle
+  function startStatusCheck(cId) {
+    stopStatusCheck();
+    _statusInterval = setInterval(function() {
+      if (_pollInterval) { stopStatusCheck(); return; }
+      fetch(API_BASE + '/api/conversation/messages?conversation_id=' + cId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.hitl_active && !_pollInterval) {
+            _shownSysMsgs['agent_joined'] = true; // mark before polling so poll won't re-show
+            appendSystem('agent_joined');
+            startPolling(cId);
+          }
+        })
+        .catch(function() {});
+    }, 5000);
+  }
+
+  function stopStatusCheck() {
+    if (_statusInterval) { clearInterval(_statusInterval); _statusInterval = null; }
+  }
+
+  // ── Create / resume conversation ──────────────────────────────────
   function createConversation(cb) {
     fetch(API_BASE + '/api/conversation/create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bot_id: BOT_ID, user_id: getVisitorId(), page_url: window.location.href,
+      body: JSON.stringify({
+        bot_id: BOT_ID, user_id: getVisitorId(), page_url: window.location.href,
         referrer_url: document.referrer || null, page_title: document.title || null,
         browser_language: navigator.language || null,
         user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
         device_type: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-        user_platform: navigator.platform || null })
+        user_platform: navigator.platform || null
+      })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
       convId = data.conversation_id;
-      initSupabase(function() { startRealtime(convId); });
+
       if (data.returning) {
+        // Returning visitor — load history first, then check HITL status
         fetch(API_BASE + '/api/conversation/messages?conversation_id=' + convId)
           .then(function(r) { return r.json(); })
           .then(function(d) {
+            msgsEl.innerHTML = '';
+            _shownMsgIds = {}; _shownSysMsgs = {};
             if (d.messages && d.messages.length) {
-              msgsEl.innerHTML = '';
               d.messages.forEach(function(m) {
-                // Mark as shown so poll dedup never re-adds them
                 if (m.id) _shownMsgIds[m.id] = true;
                 if (m.role === 'system') { _shownSysMsgs[m.content] = true; appendSystem(m.content); }
                 else if (m.role === 'human-agent') appendAgent(m.content);
@@ -311,19 +356,27 @@
                 if (!_lastMsgAt || m.created_at > _lastMsgAt) _lastMsgAt = m.created_at;
               });
             }
-            // If HITL is still active, resume polling
             if (d.hitl_active) {
+              // Agent currently active — jump straight to HITL polling
               startPolling(convId);
+            } else {
+              // Normal — start background status check
+              startStatusCheck(convId);
             }
-          }).catch(function(){});
-      } else if (botConfig.greeting) {
-        // Show greeting from config for new visitors
+            if (cb) cb();
+          }).catch(function() { startStatusCheck(convId); if (cb) cb(); });
+
+      } else {
+        // New visitor — show greeting and start status check
         msgsEl.innerHTML = '';
+        _shownMsgIds = {}; _shownSysMsgs = {};
+        _lastMsgAt = new Date().toISOString(); // cursor = now, so poll only gets future messages
         appendBot(botConfig.greeting);
+        startStatusCheck(convId);
+        if (cb) cb();
       }
-      if (cb) cb();
     })
-    .catch(function(e) { console.error('[IAM] Conv create failed:', e); });
+    .catch(function(e) { console.error('[IAM] Conv create failed:', e); if (cb) cb(); });
   }
 
   // ── Send message ──────────────────────────────────────────────────
@@ -333,21 +386,6 @@
     isSending = true;
     appendUser(text);
     input.value = '';
-
-    // When HITL is active, skip the bot endpoint entirely.
-    // Just save the message to DB so the agent sees it.
-    // The agent is watching via their dashboard subscription.
-    if (_hitlActive) {
-      fetch(API_BASE + '/api/bot/respond', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, bot_id: BOT_ID, conversation_id: convId })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function() { isSending = false; }) // response suppressed — agent handles it
-      .catch(function() { isSending = false; });
-      return; // do NOT show typing indicator or bot response
-    }
-
     showTyping();
     fetch(API_BASE + '/api/bot/respond', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -357,10 +395,9 @@
     .then(function(data) {
       hideTyping();
       if (data.hitl_active) {
-        if (!_hitlActive) {
-          _hitlActive = true;
-          // Pre-mark agent_joined so poll dedup prevents duplicate notification
-          _shownSysMsgs['agent_joined'] = true;
+        // Agent is handling — start polling if not already
+        if (!_hitlActive && !_pollInterval) {
+          _shownSysMsgs['agent_joined'] = true; // prevent duplicate notification
           startPolling(convId);
         }
         isSending = false;
@@ -377,51 +414,61 @@
   function hideNewConvConfirm()  { document.getElementById('iam-new-conv-confirm').style.display = 'none'; }
   function startNewConversation() {
     hideNewConvConfirm();
-    stopPolling();
-    _hitlActive = false;
-    _lastMsgAt = null;
+    stopPolling(); stopStatusCheck();
+    convId = null; isSending = false;
+    _lastMsgAt = null; _shownMsgIds = {}; _shownSysMsgs = {}; _hitlActive = false;
+    // Generate fresh visitor ID for new conversation
     var newVid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2,9);
     localStorage.setItem('iam_visitor_id', newVid);
-    convId = null; isSending = false; msgsEl.innerHTML = '';
-    if (botConfig.greeting) appendBot(botConfig.greeting);
+    msgsEl.innerHTML = '';
+    appendBot(botConfig.greeting);
     createConversation(function() { input.focus(); });
-  }
-
-  // Hide close button in inline mode — user can't "close" an embedded widget
-  if (IS_INLINE) {
-    var closeBtn = document.getElementById('iam-btn-close');
-    if (closeBtn) closeBtn.style.display = 'none';
   }
 
   // ── Open / close ──────────────────────────────────────────────────
   function openWidget() {
+    // Hide greeting popup
+    if (greetingPopup) greetingPopup.style.display = 'none';
     win.style.display = 'flex';
     if (launcher) launcher.style.display = 'none';
     if (!convId) {
       loadBotConfig(function() { createConversation(function() { input.focus(); }); });
     } else {
-      // Resume polling if HITL was active for this conversation
-      if (_hitlActive) startPolling(convId);
+      // Already have a conversation — just focus
+      if (_hitlActive && !_pollInterval) startPolling(convId);
       input.focus();
     }
   }
   function closeWidget() {
-    if (IS_INLINE) return; // can't close inline widget
+    if (IS_INLINE) return;
     win.style.display = 'none';
     if (launcher) launcher.style.display = 'flex';
     hideNewConvConfirm();
+    // Show greeting popup again after closing
+    if (greetingPopup && !convId) {
+      greetingPopup.textContent = botConfig.greeting;
+      greetingPopup.style.display = 'block';
+    }
   }
 
   // ── Events ────────────────────────────────────────────────────────
   if (launcher) launcher.addEventListener('click', openWidget);
-  document.getElementById('iam-btn-close').addEventListener('click', closeWidget);
+  var closeBtn2 = document.getElementById('iam-btn-close');
+  if (closeBtn2) closeBtn2.addEventListener('click', closeWidget);
   document.getElementById('iam-btn-new').addEventListener('click', showNewConvConfirm);
   document.getElementById('iam-btn-cancel-nc').addEventListener('click', hideNewConvConfirm);
   document.getElementById('iam-btn-confirm-nc').addEventListener('click', startNewConversation);
   document.getElementById('iam-send').addEventListener('click', sendMessage);
   input.addEventListener('keydown', function(e) { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();} });
 
-  // Auto-open immediately in inline mode
-  if (IS_INLINE) openWidget();
+  // Auto-open in inline mode; preload bot config for floating mode
+  if (IS_INLINE) {
+    loadBotConfig(function() { createConversation(function() {}); });
+  } else {
+    // Pre-load bot config so greeting popup has the right text
+    loadBotConfig(function() {
+      if (greetingPopup) greetingPopup.textContent = botConfig.greeting;
+    });
+  }
 
 })(window, document);
