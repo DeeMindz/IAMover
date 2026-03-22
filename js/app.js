@@ -1963,7 +1963,7 @@ function openAttachKBModal() {
 }
 window.openAttachKBModal = openAttachKBModal;
 
-async // Create a new KB from bot config — auto-attach to current bot
+// Create a new KB from bot config — auto-attach to current bot
 async function createKBFromBot() {
   const bot = AppState.currentBot;
   if (!bot) return;
