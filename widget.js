@@ -60,7 +60,7 @@
     IS_INLINE ? '' : '#iam-launcher{position:fixed;' + pos + 'width:58px;height:58px;background:' + COLOR + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s;overflow:hidden;}',
     IS_INLINE ? '' : '#iam-launcher:hover{transform:scale(1.08);}',
     IS_INLINE ? '' : '#iam-launcher img{width:100%;height:100%;object-fit:cover;border-radius:50%;}',
-    IS_INLINE ? '' : '#iam-greeting-popup{position:fixed;' + pos.split(';').map(function(p){var m=p.match(/^(bottom|top):(\d+)px$/);return m?m[1]+':'+(parseInt(m[2])+70)+'px':p;}).join(';') + ';background:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:200px;font-size:13px;color:#333;z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;animation:iamPopIn .3s ease;cursor:pointer;}',
+    IS_INLINE ? '' : '#iam-greeting-popup{position:fixed;' + pos.replace(/right:(\\d+)/, function(m, n) { return 'right:' + (parseInt(n)+70) + 'px'; }).replace(/left:(\\d+)/, function(m, n) { return 'left:' + (parseInt(n)+70) + 'px'; }) + 'bottom:' + (IS_INLINE ? '0' : '24px') + ';background:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:220px;font-size:13px;color:#333;z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamPopIn .3s ease;cursor:pointer;}',
     IS_INLINE ? '' : '#iam-greeting-popup::after{content:"";position:absolute;bottom:-6px;right:20px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #fff;}',
     IS_INLINE ? '' : '@keyframes iamPopIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
     IS_INLINE
@@ -68,8 +68,8 @@
       : '#iam-window{position:fixed;' + pos + 'width:360px;height:530px;background:#fff;border-radius:18px;box-shadow:0 12px 48px rgba(0,0,0,.18);display:flex;flex-direction:column;overflow:hidden;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamOpen .25s cubic-bezier(.34,1.56,.64,1);}',
     '@keyframes iamOpen{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}',
     '#iam-header{padding:14px 16px;display:flex;align-items:center;gap:10px;color:#fff;flex-shrink:0;}',
-    '#iam-bot-avatar{width:38px;height:38px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;overflow:hidden;color:#fff;}',
-    '#iam-bot-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;}',
+    '#iam-bot-avatar{width:36px;height:36px;background:rgba(255,255,255,.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;overflow:hidden;color:#fff;}',
+    '#iam-bot-avatar img{width:100%;height:100%;object-fit:cover;border-radius:8px;}',
     '#iam-header-info{flex:1;min-width:0;}',
     '#iam-bot-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
     '#iam-bot-status{font-size:11px;opacity:.85;margin-top:1px;}',
@@ -146,7 +146,24 @@
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">✕</button>',
     '</div>',
-    '<div id="iam-messages"></div>',
+    '<div id="iam-prechat" style="display:none;">',
+    '  <div id="iam-prechat-inner">',
+    '    <div id="iam-prechat-msg">Before we start, we\'d love to know who we\'re speaking with. This is completely optional.</div>',
+    '    <div class="iam-prechat-field">',
+    '      <label>Your Name</label>',
+    '      <input id="iam-pc-name" placeholder="e.g. John Smith" autocomplete="name" />',
+    '    </div>',
+    '    <div class="iam-prechat-field">',
+    '      <label>Email Address</label>',
+    '      <input id="iam-pc-email" type="email" placeholder="e.g. john@example.com" autocomplete="email" />',
+    '    </div>',
+    '  </div>',
+    '  <div id="iam-prechat-actions">',
+    '    <button id="iam-prechat-skip">Skip</button>',
+    '    <button id="iam-prechat-submit">Start Chat →</button>',
+    '  </div>',
+    '</div>',
+    '<div id="iam-messages" style="display:none;"></div>',
     '<div id="iam-input-area">',
     '  <input id="iam-input" placeholder="Type a message…" autocomplete="off" />',
     '  <button id="iam-send">↑</button>',
@@ -338,6 +355,10 @@
     .then(function(r) { return r.json(); })
     .then(function(data) {
       convId = data.conversation_id;
+      // If pre-chat was submitted before convId was ready, save now
+      if (_preChatDone && (_preChatName || _preChatEmail)) {
+        savePrechatLead(_preChatName, _preChatEmail, convId);
+      }
 
       if (data.returning) {
         // Returning visitor — load history first, then check HITL status
@@ -367,12 +388,18 @@
           }).catch(function() { startStatusCheck(convId); if (cb) cb(); });
 
       } else {
-        // New visitor — show greeting and start status check
+        // New visitor — show pre-chat form first, then greeting
         msgsEl.innerHTML = '';
         _shownMsgIds = {}; _shownSysMsgs = {};
-        _lastMsgAt = new Date().toISOString(); // cursor = now, so poll only gets future messages
-        // Only append greeting if not already shown (openWidget shows it instantly)
-        if (msgsEl.children.length === 0) appendBot(botConfig.greeting);
+        _lastMsgAt = new Date().toISOString();
+        // Show pre-chat form; greeting appended after skip/submit
+        if (!_preChatDone) {
+          showPreChat();
+          // Append greeting in messages so it's ready when form is dismissed
+          appendBot(botConfig.greeting);
+        } else {
+          appendBot(botConfig.greeting);
+        }
         startStatusCheck(convId);
         if (cb) cb();
       }
@@ -404,15 +431,7 @@
         isSending = false;
         return;
       }
-      if (data.response) {
-        appendBot(data.response);
-        // Advance cursor to AFTER this bot message so HITL poll never re-fetches it
-        if (data.bot_msg_ts) {
-          _lastMsgAt = data.bot_msg_ts;
-        } else {
-          _lastMsgAt = new Date().toISOString();
-        }
-      }
+      if (data.response) appendBot(data.response);
       isSending = false;
     })
     .catch(function() { hideTyping(); appendBot('Sorry, something went wrong.'); isSending = false; });
@@ -435,22 +454,63 @@
   }
 
   // ── Open / close ──────────────────────────────────────────────────
+  // Show pre-chat form for new visitors
+  function showPreChat() {
+    if (preChatEl) preChatEl.style.display = 'flex';
+    if (msgsEl)    msgsEl.style.display    = 'none';
+    // Wire buttons
+    if (pcSubmit) pcSubmit.onclick = submitPreChat;
+    if (pcSkip)   pcSkip.onclick   = function() { skipPreChat(); };
+    // Enter key submits
+    if (pcEmailEl) pcEmailEl.onkeydown = function(e) { if (e.key === 'Enter') submitPreChat(); };
+    if (pcNameEl)  pcNameEl.onkeydown  = function(e) { if (e.key === 'Enter') pcEmailEl && pcEmailEl.focus(); };
+    setTimeout(function() { if (pcNameEl) pcNameEl.focus(); }, 100);
+  }
+
+  function skipPreChat() {
+    _preChatDone = true;
+    if (preChatEl) preChatEl.style.display = 'none';
+    if (msgsEl)    msgsEl.style.display    = 'flex';
+    input.focus();
+  }
+
+  function submitPreChat() {
+    var name  = pcNameEl  ? pcNameEl.value.trim()  : '';
+    var email = pcEmailEl ? pcEmailEl.value.trim() : '';
+    _preChatName  = name;
+    _preChatEmail = email;
+    _preChatDone  = true;
+
+    // Save to leads immediately if we have at least one field
+    if ((name || email) && convId) {
+      savePrechatLead(name, email, convId);
+    }
+
+    skipPreChat();
+  }
+
+  function savePrechatLead(name, email, conversation_id) {
+    fetch(API_BASE + '/api/conversation/capture-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bot_id: BOT_ID,
+        conversation_id: conversation_id,
+        name:  name  || null,
+        email: email || null
+      })
+    }).catch(function(e) { console.warn('[IAM] Lead save failed:', e); });
+  }
+
   function openWidget() {
+    // Hide greeting popup
     if (greetingPopup) greetingPopup.style.display = 'none';
     win.style.display = 'flex';
     if (launcher) launcher.style.display = 'none';
     if (!convId) {
-      // Show greeting immediately from cached config — no waiting for API
-      if (msgsEl.children.length === 0) {
-        appendBot(botConfig.greeting);
-      }
-      input.focus();
-      // Create conversation silently in background
-      createConversation(function() {
-        // If conversation came back as returning visitor, history was loaded
-        // and greeting was replaced — nothing more to do
-      });
+      loadBotConfig(function() { createConversation(function() { input.focus(); }); });
     } else {
+      // Already have a conversation — just focus
       if (_hitlActive && !_pollInterval) startPolling(convId);
       input.focus();
     }
