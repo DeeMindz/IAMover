@@ -26,14 +26,10 @@
     return window.location.origin;
   })();
 
-  var SUPA_URL = 'https://ekdsfvjsbhoxjszciquq.supabase.co';
-  var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVrZHNmdmpzYmhveGpzemNpcXVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTM1ODcsImV4cCI6MjA4OTE4OTU4N30.otpg9pOci8B9nN33APefE0ulHAlfJ-nVMvNSvrIf_xQ';
 
   // ── State ──────────────────────────────────────────────────────────
   var convId      = null;
   var isSending   = false;
-  var realtimeSub = null;
-  var supaClient  = null;
   var botConfig   = { name: 'Assistant', color: COLOR, avatarUrl: '', greeting: 'Hi! How can I help you today?' };
 
   // ── Visitor ID ─────────────────────────────────────────────────────
@@ -223,57 +219,84 @@
   }
   function hideTyping() { var t=document.getElementById('iam-typing'); if(t) t.remove(); }
 
-  // ── Realtime ──────────────────────────────────────────────────────
-  var convRowSub = null; // second channel: conversation row changes
+  // ── HITL Polling ─────────────────────────────────────────────────
+  // Polls /api/conversation/messages every 2s during HITL only.
+  // Uses a timestamp cursor so each poll only fetches NEW messages.
+  // This approach is 100% reliable — no WebSockets, no auth conflicts,
+  // no sandbox issues, works on any hosting environment.
+  var _pollInterval  = null;
+  var _lastMsgAt     = null;  // ISO timestamp cursor — only fetch after this
+  var _hitlActive    = false; // local HITL state for the widget
 
-  function startRealtime(cId) {
-    if (realtimeSub) { try { realtimeSub.unsubscribe(); } catch(e) {} realtimeSub = null; }
-    if (convRowSub) { try { convRowSub.unsubscribe(); } catch(e) {} convRowSub = null; }
-    if (!cId || !supaClient) return;
+  function startPolling(cId) {
+    stopPolling();
+    _hitlActive = true;
+    _pollInterval = setInterval(function() {
+      var url = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
+      if (_lastMsgAt) url += '&after=' + encodeURIComponent(_lastMsgAt);
+      fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.messages) return;
 
-    // Channel 1: new messages
-    realtimeSub = supaClient
-      .channel('iam_msgs_' + cId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'conversation_id=eq.' + cId }, function(payload) {
-        var msg = payload.new;
-        if (msg.role === 'human-agent') { hideTyping(); appendAgent(msg.content); isSending = false; }
-        if (msg.role === 'system')      { appendSystem(msg.content); }
-        if (msg.role === 'bot') {
-          var bots = msgsEl.querySelectorAll('.iam-msg.bot');
-          var last = bots[bots.length - 1];
-          if (!last || last.textContent.trim() !== msg.content.trim()) { hideTyping(); appendBot(msg.content); isSending = false; }
-        }
-      })
-      .subscribe(function(s) { console.log('[IAM] Messages realtime:', s); });
+          // Process each new message
+          data.messages.forEach(function(m) {
+            // Advance the cursor to the latest message we've seen
+            if (!_lastMsgAt || m.created_at > _lastMsgAt) {
+              _lastMsgAt = m.created_at;
+            }
+            if (m.role === 'human-agent') {
+              hideTyping();
+              // Dedup — avoid showing a message already appended optimistically
+              var agentMsgs = msgsEl.querySelectorAll('.iam-agent-bubble');
+              var alreadyShown = false;
+              agentMsgs.forEach(function(el) { if (el.textContent.trim() === m.content.trim()) alreadyShown = true; });
+              if (!alreadyShown) appendAgent(m.content);
+              isSending = false;
+            }
+            if (m.role === 'system') {
+              appendSystem(m.content);
+              // Agent left — stop polling
+              if (m.content === 'agent_left') {
+                _hitlActive = false;
+                stopPolling();
+              }
+            }
+            if (m.role === 'bot') {
+              var bots = msgsEl.querySelectorAll('.iam-msg.bot');
+              var last = bots[bots.length - 1];
+              if (!last || last.textContent.trim() !== m.content.trim()) {
+                hideTyping();
+                appendBot(m.content);
+                isSending = false;
+              }
+            }
+          });
 
-    // Channel 2: conversation row changes — typing indicator + HITL status
-    convRowSub = supaClient
-      .channel('iam_conv_' + cId)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations', filter: 'id=eq.' + cId }, function(payload) {
-        var conv = payload.new;
+          // Agent typing indicator from conversation row
+          if (data.agent_typing && _hitlActive) {
+            showAgentTyping();
+          } else {
+            hideAgentTyping();
+          }
 
-        // Agent typing indicator
-        if (conv.agent_typing) {
-          showAgentTyping();
-        } else {
-          hideAgentTyping();
-        }
+          // If HITL ended (agent resumed bot), stop polling
+          if (!data.hitl_active && _hitlActive) {
+            _hitlActive = false;
+            stopPolling();
+          }
+        })
+        .catch(function(e) { console.warn('[IAM] Poll error:', e); });
+    }, 2000);
+    console.log('[IAM] HITL polling started for conv:', cId);
+  }
 
-        // hitl_active flipped to false — bot has resumed
-        // The system message (agent_left) will also arrive via messages channel,
-        // but this gives instant feedback from the row change
-        if (conv.hitl_active === false) {
-          hideAgentTyping();
-          // Only show pill if not already shown by system message
-          var existing = msgsEl.querySelectorAll('.iam-system span');
-          var name = botConfig.displayName || botConfig.name || 'Bot';
-          var resumeLabel = name + ' has resumed';
-          var alreadyShown = false;
-          existing.forEach(function(el) { if (el.textContent === resumeLabel) alreadyShown = true; });
-          if (!alreadyShown) appendSystem('agent_left');
-        }
-      })
-      .subscribe(function(s) { console.log('[IAM] Conv realtime:', s); });
+  function stopPolling() {
+    if (_pollInterval) {
+      clearInterval(_pollInterval);
+      _pollInterval = null;
+      console.log('[IAM] HITL polling stopped');
+    }
   }
 
   function showAgentTyping() {
@@ -296,18 +319,6 @@
   function hideAgentTyping() {
     var el = document.getElementById('iam-agent-typing');
     if (el) el.remove();
-  }
-
-  function initSupabase(cb) {
-    if (supaClient) { cb(); return; }
-    var opts = { auth: { storageKey: 'iam-widget-' + BOT_ID, persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
-    function make() { supaClient = window.supabase.createClient(SUPA_URL, SUPA_KEY, opts); cb(); }
-    if (window.supabase && window.supabase.createClient) { make(); }
-    else {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-      s.onload = make; document.head.appendChild(s);
-    }
   }
 
   // ── Create conversation ───────────────────────────────────────────
@@ -336,7 +347,13 @@
                 else if (m.role === 'human-agent') appendAgent(m.content);
                 else if (m.role === 'bot')  appendBot(m.content);
                 else if (m.role === 'user') appendUser(m.content);
+                // Track latest message timestamp for polling cursor
+                if (!_lastMsgAt || m.created_at > _lastMsgAt) _lastMsgAt = m.created_at;
               });
+            }
+            // If HITL is still active, resume polling
+            if (d.hitl_active) {
+              startPolling(convId);
             }
           }).catch(function(){});
       } else if (botConfig.greeting) {
@@ -364,7 +381,16 @@
     .then(function(r) { return r.json(); })
     .then(function(data) {
       hideTyping();
-      if (data.hitl_active) { isSending = false; return; }
+      if (data.hitl_active) {
+        // Agent has taken over — start polling to receive their messages
+        if (!_hitlActive) {
+          // Set cursor to now so we only get messages from this point forward
+          _lastMsgAt = new Date().toISOString();
+          startPolling(convId);
+        }
+        isSending = false;
+        return;
+      }
       if (data.response) appendBot(data.response);
       isSending = false;
     })
@@ -376,8 +402,9 @@
   function hideNewConvConfirm()  { document.getElementById('iam-new-conv-confirm').style.display = 'none'; }
   function startNewConversation() {
     hideNewConvConfirm();
-    if (realtimeSub) { try { realtimeSub.unsubscribe(); } catch(e) {} realtimeSub = null; }
-    if (convRowSub) { try { convRowSub.unsubscribe(); } catch(e) {} convRowSub = null; }
+    stopPolling();
+    _hitlActive = false;
+    _lastMsgAt = null;
     var newVid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2,9);
     localStorage.setItem('iam_visitor_id', newVid);
     convId = null; isSending = false; msgsEl.innerHTML = '';
@@ -398,7 +425,8 @@
     if (!convId) {
       loadBotConfig(function() { createConversation(function() { input.focus(); }); });
     } else {
-      initSupabase(function() { startRealtime(convId); });
+      // Resume polling if HITL was active for this conversation
+      if (_hitlActive) startPolling(convId);
       input.focus();
     }
   }

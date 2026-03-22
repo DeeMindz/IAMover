@@ -387,19 +387,12 @@ function startWidgetRealtimeSubscription(iframeSource, convId) {
         return iframes;
       };
 
-      const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      if (msg.role === 'bot') {
-        // Push bot response to preview iframes
-        getIframes().forEach(w => w.postMessage({ type: 'IAM_BOT_RESPONSE', response: msg.content, conv_id: convId }, '*'));
-      }
-
       if (msg.role === 'human-agent') {
         // Push agent message to all preview iframes
         getIframes().forEach(w => w.postMessage({
           type: 'IAM_AGENT_MESSAGE',
           content: msg.content,
-          time
+          time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }, '*'));
 
         // Also show in dashboard conversation panel if open
@@ -460,27 +453,11 @@ function setupEventListeners() {
     });
   });
 
-  // Agent typing indicator — debounced write to conversations.agent_typing
-  let _agentTypingTimer = null;
-  function setAgentTyping(convId, val) {
-    if (!convId) return;
-    supabase.from('conversations')
-      .update({ agent_typing: val, last_agent_seen: new Date().toISOString() })
-      .eq('id', convId)
-      .then(() => {}).catch(() => {});
-  }
-  window.setAgentTyping  = setAgentTyping;
-  window._agentTypingTimer = _agentTypingTimer;
-
+  // Agent message send on Enter
   const agentInput = document.getElementById('agent-input');
   if (agentInput) {
     agentInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); return; }
-      const convId = AppState.activeConversation;
-      if (!convId || !AppState.hitlActive) return;
-      setAgentTyping(convId, true);
-      clearTimeout(_agentTypingTimer);
-      _agentTypingTimer = setTimeout(() => setAgentTyping(convId, false), 3000);
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); }
     });
   }
 
@@ -1210,14 +1187,11 @@ async function renderConversations() {
 
   if (topbarName) topbarName.textContent = AppState.currentBot.name;
 
-  // Restore last-viewed conversation from localStorage on refresh
-  if (!AppState.activeConversation) {
-    const saved = LocalDB.get('activeConversation');
-    if (saved) AppState.activeConversation = saved;
-  }
-
+  // Always fetch fresh from DB — no caching to avoid stale/duplicate data
   try {
     const dbConvs = await Conversations.getAll(AppState.currentBot.id);
+
+    // Deduplicate by id just in case
     const seen = new Set();
     const mappedConvs = dbConvs
       .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
@@ -1225,7 +1199,8 @@ async function renderConversations() {
         id: c.id,
         botId: c.bot_id,
         user: c.user_id && !c.user_id.startsWith('vis_') && !c.user_id.startsWith('anonymous_')
-          ? c.user_id : 'Anonymous Visitor',
+          ? c.user_id
+          : 'Anonymous Visitor',
         time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         date: new Date(c.updated_at).toLocaleDateString(),
         status: (Date.now() - new Date(c.updated_at).getTime() < 3600000) ? 'active' : 'closed',
@@ -1234,14 +1209,14 @@ async function renderConversations() {
         messages: []
       }));
 
-    // Restore HITL state from DB — must happen before rendering
+    // Restore HITL state from DB after page refresh
     const activeHITL = mappedConvs.find(c => c.hitl_active);
-    if (activeHITL) {
+    if (activeHITL && AppState.activeConversation === activeHITL.id) {
       AppState.hitlActive = true;
-      if (!AppState.activeConversation) AppState.activeConversation = activeHITL.id;
     }
 
     AppState.conversations = mappedConvs;
+
   } catch (e) {
     console.error('Failed to load conversations:', e);
   }
@@ -1271,13 +1246,6 @@ async function renderConversations() {
       </div>
     `;
   }).join('');
-
-  // Auto-load active conversation on refresh
-  if (AppState.activeConversation) {
-    await loadConversationMessages(AppState.activeConversation);
-    subscribeToConversation(AppState.activeConversation);
-    if (AppState.hitlActive) startWidgetRealtimeSubscription(null, AppState.activeConversation);
-  }
 }
 
 // Separate click handler — does NOT re-render full list (prevents disappearing)
@@ -1285,11 +1253,9 @@ async function selectConversation(convId) {
   $$('.conv-item').forEach(el => el.classList.remove('active'));
   const clicked = document.querySelector(`[onclick="selectConversation('${convId}')"]`);
   if (clicked) clicked.classList.add('active');
-
   AppState.activeConversation = convId;
   LocalDB.set('activeConversation', convId);
   await loadConversationMessages(convId);
-  // Subscribe to realtime immediately — so all messages appear live without reload
   subscribeToConversation(convId);
 }
 window.selectConversation = selectConversation;
@@ -1433,8 +1399,6 @@ function subscribeToConversation(conversationId) {
   if (activeSubscription) { activeSubscription.unsubscribe(); activeSubscription = null; }
   if (!conversationId) return;
 
-  // Always subscribe — not just during HITL
-  // Appends directly to DOM so messages appear instantly without re-render
   activeSubscription = Conversations.subscribeToMessages(
     conversationId,
     (newMessage) => {
@@ -1444,45 +1408,35 @@ function subscribeToConversation(conversationId) {
       const msg  = newMessage;
       const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const conv = AppState.conversations.find(c => c.id === conversationId);
-      const botObj     = AppState.bots.find(b => b.id === conv?.botId);
+      const botObj = AppState.bots.find(b => b.id === conv?.botId);
       const botColor   = botObj?.color || '#6c63ff';
       const botInitial = (botObj?.name || 'B').charAt(0).toUpperCase();
       const botName    = botObj?.name || 'Bot';
 
-      // Update sidebar preview
       const previewEl = document.getElementById(`conv-preview-${conversationId}`);
       if (previewEl && msg.content) previewEl.textContent = msg.content.slice(0, 60) + (msg.content.length > 60 ? '…' : '');
 
       const div = document.createElement('div');
-
       if (msg.role === 'system') {
-        const label = msg.content === 'agent_joined'
-          ? '👤 A live agent has joined the conversation'
-          : `${botName} has resumed`;
+        const isJoined = msg.content === 'agent_joined';
+        const label = isJoined ? '👤 A live agent has joined the conversation' : `${botName} has resumed`;
         div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
         div.innerHTML = `<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">${label}</span>`;
-
       } else if (msg.role === 'user') {
-        // Skip if optimistic UI already rendered it
         const lastUser = [...msgsEl.querySelectorAll('.message.user')].pop();
         if (lastUser?.querySelector('.msg-bubble')?.textContent === msg.content) return;
         div.className = 'message user';
         div.innerHTML = `<div class="msg-bubble">${msg.content}</div><div class="msg-time">${time}</div>`;
-
       } else if (msg.role === 'bot') {
         div.className = 'message bot';
         div.innerHTML = `<div class="msg-avatar" style="background:${botColor}33;color:${botColor};font-weight:700;font-size:12px;">${botInitial}</div><div><div class="msg-bubble">${msg.content}</div><div class="msg-time">${time}</div></div>`;
-
       } else if (msg.role === 'human-agent') {
-        // Skip if optimistic UI already rendered it
-        const alreadyShown = [...msgsEl.querySelectorAll('.message.bot')].some(el =>
-          el.querySelector('.msg-bubble')?.textContent === msg.content && el.innerHTML.includes('10b981')
-        );
+        const existing = [...msgsEl.querySelectorAll('.message.bot')];
+        const alreadyShown = existing.some(el => el.querySelector('.msg-bubble')?.textContent === msg.content && el.innerHTML.includes('10b981'));
         if (alreadyShown) return;
         div.className = 'message bot';
         div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div><div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div><div class="msg-bubble" style="border-left:3px solid #10b981;">${msg.content}</div><div class="msg-time">${time}</div></div>`;
       }
-
       msgsEl.appendChild(div);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
@@ -1503,15 +1457,9 @@ async function interceptConversation() {
   AppState.hitlActive = true;
 
   try {
-    // Mark conversation as HITL active in DB — claimed_by tracks which agent
-    const { data: { user: agentUser } } = await supabase.auth.getUser();
+    // Mark conversation as HITL active in DB
     await supabase.from('conversations')
-      .update({
-        hitl_active: true,
-        claimed_by: agentUser?.id || null,
-        last_agent_seen: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .update({ hitl_active: true, updated_at: new Date().toISOString() })
       .eq('id', convId);
 
     // Insert system notification message
@@ -1575,12 +1523,7 @@ async function endHITL() {
 
   try {
     await supabase.from('conversations')
-      .update({
-        hitl_active: false,
-        claimed_by: null,
-        agent_typing: false,
-        updated_at: new Date().toISOString()
-      })
+      .update({ hitl_active: false, updated_at: new Date().toISOString() })
       .eq('id', convId);
 
     await supabase.from('messages').insert({
@@ -1606,10 +1549,7 @@ async function endHITL() {
   if (msgsEl) {
     const div = document.createElement('div');
     div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
-    const _endConv = AppState.conversations.find(c => c.id === convId);
-    const _endBot  = AppState.bots.find(b => b.id === _endConv?.botId);
-    const _endName = _endBot?.name || 'Bot';
-    div.innerHTML = `<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">${_endName} has resumed</span>`;
+    div.innerHTML = '<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">🤖 AI assistant has resumed</span>';
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -1624,19 +1564,6 @@ async function endHITL() {
 }
 window.endHITL = endHITL;
 
-// Typing indicator debounce — broadcasts to widget via conversations row update
-let _agentTypingTimer = null;
-function handleAgentTyping() {
-  const convId = AppState.activeConversation;
-  if (!convId || !AppState.hitlActive) return;
-  Conversations.setAgentTyping(convId, true);
-  clearTimeout(_agentTypingTimer);
-  _agentTypingTimer = setTimeout(() => {
-    Conversations.setAgentTyping(convId, false);
-  }, 3000);
-}
-window.handleAgentTyping = handleAgentTyping;
-
 async function sendAgentMessage() {
   const input = document.getElementById('agent-input');
   if (!input || !input.value.trim()) return;
@@ -1646,13 +1573,10 @@ async function sendAgentMessage() {
   const text = input.value.trim();
   input.value = '';
 
-  // Clear typing indicator immediately on send
-  clearTimeout(_agentTypingTimer);
-  Conversations.setAgentTyping(convId, false);
-
+  const conv = AppState.conversations.find(c => c.id === convId);
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Optimistic UI — append directly to DOM
+  // Optimistic UI — append directly to DOM without full re-render
   const msgsEl = document.getElementById('conv-messages');
   if (msgsEl) {
     const div = document.createElement('div');
@@ -1667,13 +1591,17 @@ async function sendAgentMessage() {
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
+  // Also update local state
+  if (conv) conv.messages.push({ role: 'human-agent', text, time });
 
   try {
+    // Save agent message to DB — user will see it via real-time subscription
     await supabase.from('messages').insert({
       conversation_id: convId,
       role: 'human-agent',
       content: text
     });
+    // Update conversation timestamp
     await supabase.from('conversations')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', convId);
