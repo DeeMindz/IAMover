@@ -364,9 +364,35 @@ export default async function handler(req, res) {
         });
 
         // Tell the LLM never to echo unresolved {{variable}} placeholders in responses.
-        // If the system prompt uses {{user_name}} etc., the LLM should refer to the
-        // actual values captured in conversation, not the placeholder text.
         systemPrompt += `\n\nIMPORTANT: Never output text like {{variable_name}} in your responses. If you want to reference a user's name or email, use the actual value they provided in the conversation, not a placeholder.`;
+
+        // ── Inject captured lead data so bot never asks again ────────────────
+        // Check if name/email was already captured for this conversation.
+        // If yes, tell the LLM explicitly so it doesn't ask again.
+        if (conversation_id) {
+            let existingLead = null;
+            try {
+                const { data: _lead } = await supabase
+                    .from('leads')
+                    .select('name, email, phone, company')
+                    .eq('conversation_id', conversation_id)
+                    .limit(1)
+                    .maybeSingle(); // maybeSingle() returns null (not error) when no row found
+                existingLead = _lead;
+            } catch (_) { /* no lead found, continue normally */ }
+
+            if (existingLead) {
+                const knownParts = [];
+                if (existingLead.name)    knownParts.push(`name: "${existingLead.name}"`);
+                if (existingLead.email)   knownParts.push(`email: "${existingLead.email}"`);
+                if (existingLead.phone)   knownParts.push(`phone: "${existingLead.phone}"`);
+                if (existingLead.company) knownParts.push(`company: "${existingLead.company}"`);
+
+                if (knownParts.length > 0) {
+                    systemPrompt += `\n\nUSER CONTACT INFO ALREADY CAPTURED: ${knownParts.join(', ')}. Do NOT ask for this information again. Address the user by their name when appropriate.`;
+                }
+            }
+        }
 
         // FIX: inject anti-hallucination rules when enabled
         if (bot.anti_hallucination) {
