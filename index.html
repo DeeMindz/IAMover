@@ -1,4 +1,65 @@
-<!DOCTYPE html>
+<script>
+    // ── Pure UI tab switchers (no module deps — safe to run immediately) ──────
+    function switchAnalyticTab(btn, tab) {
+      btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function switchKBTab(btn, tab) {
+      btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      ['files', 'text', 'sitemap'].forEach(t => {
+        const el = document.getElementById('kb-tab-' + t);
+        if (el) el.style.display = t === tab ? 'block' : 'none';
+      });
+    }
+
+    function switchEmbedTab(btn, tab) {
+      btn.closest('.tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const container = btn.closest('.card-body') || btn.closest('.panel-body');
+      if (container) {
+        container.querySelectorAll('[id^="embed-tab-"]').forEach(el => el.style.display = 'none');
+        const target = container.querySelector('#embed-tab-' + tab);
+        if (target) target.style.display = 'block';
+      }
+    }
+
+    function handleFileUpload(input) {
+      const files = [...input.files];
+      if (files.length) showToast(files.length + ' file(s) added to knowledge base', 'success');
+    }
+
+    function exportLeads() {
+      const rows = [['Name', 'Email', 'Company', 'Phone', 'Bot', 'Date', 'Status']];
+      if (window.AppState && AppState.leads) {
+        AppState.leads.forEach(l => rows.push([l.name, l.email, l.company, l.phone, l.bot, l.date, l.status]));
+      }
+      const csv = rows.map(r => r.map(c => '"' + (c || '') + '"').join(',')).join('\n');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = 'leads.csv';
+      a.click();
+    }
+
+    // ── Functions that need module globals — wrapped safely ──────────────────
+    function endHITL() {
+      if (window.endHITL && typeof window.endHITL === 'function' && window._endHITLImpl) {
+        window._endHITLImpl();
+      } else if (window.endHITL) {
+        window.endHITL();
+      }
+    }
+
+    function handleConversationsNav() {
+      if (window.AppState && AppState.currentBot) {
+        window.navigate('conversations', { botId: AppState.currentBot.id, botName: AppState.currentBot.name });
+      } else if (window.navigate) {
+        window.showToast('Please select a bot first to view its conversations', 'error');
+        window.navigate('home');
+      }
+    }
+  </script><!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -351,8 +412,6 @@
               <button class="btn btn-primary" onclick="sendAgentMessage()">Send</button>
             </div>
           </div>
-
-
         </div>
       </div>
 
@@ -684,10 +743,7 @@
                 </svg>
                 Preview
               </button>
-              <button class="btn btn-primary" id="btn-save-bot-config" onclick="saveBotConfig()">Save Changes</button>
-              <span id="cfg-unsaved-indicator" style="display:none;align-items:center;gap:5px;font-size:12px;color:#f59e0b;font-weight:600;background:rgba(245,158,11,.12);padding:4px 10px;border-radius:20px;">
-                ⚠️ Unsaved changes
-              </span>
+              <button class="btn btn-primary" onclick="saveBotConfig()">Save Changes</button>
             </div>
           </div>
 
@@ -715,11 +771,11 @@
               <div class="card-body">
                 <div class="form-group">
                   <label class="form-label">Bot Name</label>
-                  <input class="form-control" id="cfg-bot-name" oninput="markConfigDirty()" placeholder="My Awesome Bot" />
+                  <input class="form-control" id="cfg-bot-name" placeholder="My Awesome Bot" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">LLM Model</label>
-                  <select class="form-control" id="cfg-model" onchange="markConfigDirty()">
+                  <select class="form-control" id="cfg-model">
                     <optgroup label="⭐ Recommended">
                       <option value="gemini-2.5-flash">Gemini 2.5 Flash (Best Price-Performance)</option>
                       <option value="gemini-2.5-pro">Gemini 2.5 Pro (Most Capable)</option>
@@ -765,7 +821,7 @@
                 </div>
                 <div class="form-group">
                   <label class="form-label">Greeting Message</label>
-                  <input class="form-control" id="cfg-greeting" oninput="markConfigDirty()" placeholder="Hi! How can I help you today?" />
+                  <input class="form-control" id="cfg-greeting" placeholder="Hi! How can I help you today?" />
                   <div class="form-hint">First message the bot sends to users</div>
                 </div>
                 <div class="form-group">
@@ -791,7 +847,7 @@
               <div class="card-body">
                 <div class="form-group">
                   <label class="form-label">System Prompt</label>
-                  <textarea class="form-control" id="cfg-prompt" oninput="markConfigDirty()" rows="6"
+                  <textarea class="form-control" id="cfg-prompt" rows="6"
                     placeholder="You are a helpful AI assistant. Current context: {{page_title}} ({{page_url}}), Language: {{browser_language}}, Timezone: {{user_timezone}}"></textarea>
                   <div class="form-hint">Use {{variable_name}} for system variables: current_timestamp, page_url,
                     browser_language, page_title, user_timezone, user_platform, user_origin</div>
@@ -808,7 +864,7 @@
                   it doesn't know</div>
                 <div class="toggle-wrap">
                   <label class="toggle">
-                    <input type="checkbox" id="cfg-anti-hall" onchange="markConfigDirty()" checked />
+                    <input type="checkbox" id="cfg-anti-hall" checked />
                     <div class="toggle-track">
                       <div class="toggle-thumb"></div>
                     </div>
@@ -831,7 +887,7 @@
 
               <div class="form-group">
                 <label class="form-label">Fallback Message</label>
-                <input class="form-control" id="cfg-fallback-message" oninput="markConfigDirty()"
+                <input class="form-control"
                   value="I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?" />
                 <div class="form-hint">Shown when the bot cannot answer confidently</div>
               </div>
@@ -839,19 +895,19 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Max Response Length</label>
-                  <select class="form-control" id="cfg-max-response" onchange="markConfigDirty()">
-                    <option value="short">Short (1-2 sentences)</option>
-                    <option value="medium" selected>Medium (1 paragraph)</option>
-                    <option value="long">Long (multiple paragraphs)</option>
+                  <select class="form-control">
+                    <option>Short (1-2 sentences)</option>
+                    <option selected>Medium (1 paragraph)</option>
+                    <option>Long (multiple paragraphs)</option>
                   </select>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Response Temperature</label>
-                  <select class="form-control" id="cfg-temperature" onchange="markConfigDirty()">
-                    <option value="0.1">0.1 — Very precise</option>
-                    <option value="0.5" selected>0.5 — Balanced</option>
-                    <option value="0.8">0.8 — Creative</option>
-                    <option value="1.0">1.0 — Very creative</option>
+                  <select class="form-control">
+                    <option>0.1 — Very precise</option>
+                    <option selected>0.5 — Balanced</option>
+                    <option>0.8 — Creative</option>
+                    <option>1.0 — Very creative</option>
                   </select>
                 </div>
               </div>
@@ -864,25 +920,79 @@
               <div class="card-title">Knowledge Base</div>
             </div>
             <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Attached Knowledge Bases</label>
+                <div id="bot-attached-kbs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+                  <!-- Rendered dynamically by renderAttachedKBs() -->
+                  <div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No knowledge bases attached yet.
+                  </div>
+                </div>
+                <button class="btn btn-secondary" onclick="openAttachKBModal()">+ Attach Knowledge Base</button>
+              </div>
 
-              <!-- Attached KBs list -->
-              <div class="form-group" style="margin-bottom:20px;">
-                <label class="form-label" style="margin-bottom:10px;">Attached Knowledge Bases</label>
-                <div id="bot-attached-kbs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-                  <div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No knowledge bases attached yet.</div>
+              <div class="divider"></div>
+
+              <div>
+                <div class="form-label" style="margin-bottom:12px;">Quick Add Content</div>
+                <div class="tabs mb-4">
+                  <div class="tab-btn active" onclick="switchKBTab(this,'files')">📎 Files</div>
+                  <div class="tab-btn" onclick="switchKBTab(this,'text')">📝 Rich Text</div>
+                  <div class="tab-btn" onclick="switchKBTab(this,'sitemap')">🗺 Sitemap</div>
+                </div>
+
+                <div id="kb-tab-files">
+                  <div class="upload-zone" onclick="document.getElementById('file-upload').click()">
+                    <div class="upload-icon">📎</div>
+                    <div class="upload-title">Drop files here or click to upload</div>
+                    <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX up to 50MB each</div>
+                  </div>
+                  <input type="file" id="file-upload" multiple style="display:none;"
+                    onchange="handleFileUpload(this)" />
+                </div>
+
+                <div id="kb-tab-text" style="display:none;">
+                  <div class="form-group">
+                    <label class="form-label">Content Title</label>
+                    <input class="form-control" placeholder="e.g. Pricing FAQ" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Content</label>
+                    <textarea class="form-control" rows="8" placeholder="Paste or type your content here…"></textarea>
+                  </div>
+                  <button class="btn btn-primary" onclick="showToast('Content added to knowledge base','success')">Add
+                    Content</button>
+                </div>
+
+                <div id="kb-tab-sitemap" style="display:none;">
+                  <div class="form-group">
+                    <label class="form-label">Website URL or Sitemap URL</label>
+                    <input class="form-control"
+                      placeholder="https://yoursite.com or https://yoursite.com/sitemap.xml" />
+                    <div class="form-hint">We'll crawl your website and add pages to the knowledge base</div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Max Pages</label>
+                      <select class="form-control">
+                        <option>25</option>
+                        <option selected>50</option>
+                        <option>100</option>
+                        <option>250</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Crawl Depth</label>
+                      <select class="form-control">
+                        <option>1</option>
+                        <option selected>2</option>
+                        <option>3</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary"
+                    onclick="showToast('Crawl started — this may take a few minutes','info')">Start Crawl</button>
                 </div>
               </div>
-
-              <!-- Action buttons -->
-              <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <button class="btn btn-primary" onclick="createKBFromBot()">+ Create New Knowledge Base</button>
-                <button class="btn btn-secondary" onclick="openAttachKBModal()">Attach Existing KB</button>
-              </div>
-
-              <div class="form-hint" style="margin-top:10px;">
-                Knowledge bases store the content your bot uses to answer questions. Create a new one or attach an existing one from your library.
-              </div>
-
             </div>
           </div>
 
@@ -965,7 +1075,7 @@
                 <div class="form-group">
                   <label class="form-label">Primary Color</label>
                   <div style="display:flex;gap:10px;align-items:center;">
-                    <input type="color" class="color-swatch" id="cfg-primary-color" oninput="markConfigDirty()" value="#6c63ff" />
+                    <input type="color" class="color-swatch" id="cfg-primary-color" value="#6c63ff" />
                     <input class="form-control" id="cfg-primary-color-hex" value="#6c63ff" style="flex:1;"
                       oninput="document.getElementById('cfg-primary-color').value=this.value" />
                   </div>
@@ -982,12 +1092,12 @@
               </div>
               <div class="form-group">
                 <label class="form-label">Bot Display Name</label>
-                <input class="form-control" id="cfg-display-name" oninput="markConfigDirty()" placeholder="Support Assistant" />
+                <input class="form-control" id="cfg-display-name" placeholder="Support Assistant" />
                 <div class="form-hint">Shown in the chat header visible to users</div>
               </div>
               <div class="form-group">
                 <label class="form-label">Avatar / Logo URL</label>
-                <input class="form-control" id="cfg-avatar-url" oninput="markConfigDirty()" placeholder="https://yoursite.com/bot-avatar.png" />
+                <input class="form-control" id="cfg-avatar-url" placeholder="https://yoursite.com/bot-avatar.png" />
                 <div class="form-hint">Leave empty to use bot initials</div>
               </div>
               <div class="divider"></div>
