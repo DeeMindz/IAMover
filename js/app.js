@@ -1220,11 +1220,13 @@ async function selectConversation(convId) {
       if (data) { conv.metadata = data.metadata; conv.user_id = data.user_id; }
     }
     renderConvSidebar(conv);
-    // Make sure sidebar is visible
+    // Ensure sidebar is expanded when selecting a conversation
     const sidebar = document.getElementById('conv-sidebar');
-    if (sidebar) { sidebar.style.width = '260px'; sidebar.style.opacity = '1'; }
-    const tab = document.getElementById('conv-sidebar-tab');
-    if (tab) tab.style.display = 'none';
+    const inner   = document.getElementById('conv-sidebar-inner');
+    const tab     = document.getElementById('conv-sidebar-tab');
+    if (sidebar) sidebar.classList.remove('collapsed');
+    if (inner)   inner.style.display = 'flex';
+    if (tab)     tab.style.display = 'none';
   }
 }
 window.selectConversation = selectConversation;
@@ -3068,10 +3070,12 @@ async function saveBotConfig() {
     max_response_length: document.getElementById('cfg-max-response')?.value || bot.max_response_length || 'medium',
     theme: {
       ...(bot.theme || {}),
-      primaryColor: document.getElementById('cfg-primary-color')?.value || bot.theme?.primaryColor,
-      position: document.getElementById('cfg-widget-position')?.value || bot.theme?.position,
-      displayName: document.getElementById('cfg-display-name')?.value?.trim() || bot.theme?.displayName,
-      avatarUrl: document.getElementById('cfg-avatar-url')?.value?.trim() || bot.theme?.avatarUrl,
+      // Use null-coalescing pattern: read field value directly so clearing = saves empty string
+      // Never fall back to old DB value — whatever is in the field IS the new value
+      primaryColor: document.getElementById('cfg-primary-color')?.value ?? bot.theme?.primaryColor,
+      position:     document.getElementById('cfg-widget-position')?.value ?? bot.theme?.position ?? 'bottom-right',
+      displayName:  (document.getElementById('cfg-display-name')?.value ?? '').trim(),
+      avatarUrl:    (document.getElementById('cfg-avatar-url')?.value ?? '').trim(),
     },
   };
   try {
@@ -3676,16 +3680,17 @@ window.sharePreviewLink = sharePreviewLink;
 function toggleConvSidebar() {
   const sidebar = document.getElementById('conv-sidebar');
   const tab     = document.getElementById('conv-sidebar-tab');
+  const inner   = document.getElementById('conv-sidebar-inner');
   if (!sidebar) return;
-  const collapsed = sidebar.style.width === '0px' || sidebar.style.width === '';
-  if (collapsed) {
-    sidebar.style.width = '260px';
-    sidebar.style.opacity = '1';
-    if (tab) tab.style.display = 'none';
+  const isCollapsed = sidebar.classList.contains('collapsed');
+  if (isCollapsed) {
+    sidebar.classList.remove('collapsed');
+    if (inner) inner.style.display = 'flex';
+    if (tab)   tab.style.display = 'none';
   } else {
-    sidebar.style.width = '0px';
-    sidebar.style.opacity = '0';
-    if (tab) tab.style.display = 'flex';
+    sidebar.classList.add('collapsed');
+    if (inner) inner.style.display = 'none';
+    if (tab)   tab.style.display   = 'flex';
   }
 }
 window.toggleConvSidebar = toggleConvSidebar;
@@ -3696,51 +3701,55 @@ function renderConvSidebar(conv) {
   const lead = conv?.lead || null;
   const meta = conv?.metadata || {};
 
-  const section = (title, rows) => rows.length === 0 ? '' : `
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">${title}</div>
-      ${rows.map(([k,v]) => `
-        <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:8px;">
-          <span style="font-size:10px;color:var(--text-muted);">${k}</span>
-          <span style="font-size:12px;color:var(--text-primary);font-weight:500;word-break:break-all;">${v || '—'}</span>
-        </div>`).join('')}
-    </div>`;
+  const field = (label, value, mono=false) => value ? `
+    <div class="csb-row">
+      <div class="csb-label">${label}</div>
+      <div class="csb-value${mono?' style="font-family:monospace;font-size:11px;"':''}">${value}</div>
+    </div>` : '';
 
-  const contactRows = [
-    ['Name',    lead?.name],
-    ['Email',   lead?.email],
-    ['Phone',   lead?.phone],
-    ['Company', lead?.company],
-    ['Status',  lead?.status],
-  ].filter(([,v]) => v);
+  const avatar = (name, email) => {
+    const letter = (name||email||'?').charAt(0).toUpperCase();
+    const color = ['#6c63ff','#10b981','#f59e0b','#ef4444','#3b82f6'][letter.charCodeAt(0)%5];
+    return `<div style="width:48px;height:48px;border-radius:50%;background:${color}22;color:${color};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;">${letter}</div>`;
+  };
 
-  const metaRows = [
-    ['Page URL',   meta?.page_url],
-    ['Referrer',   meta?.referrer_url],
-    ['Language',   meta?.browser_language],
-    ['Timezone',   meta?.user_timezone],
-    ['Device',     meta?.device_type],
-    ['Platform',   meta?.user_platform],
-    ['Page Title', meta?.page_title],
-  ].filter(([,v]) => v);
+  // Contact section
+  const hasContact = lead?.name || lead?.email || lead?.phone || lead?.company;
+  const contactHTML = hasContact ? `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      ${avatar(lead?.name, lead?.email)}
+      <div style="min-width:0;">
+        <div style="font-weight:700;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${lead?.name || 'Unknown'}</div>
+        <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${lead?.email || ''}</div>
+      </div>
+    </div>
+    ${field('Email', lead?.email)}
+    ${field('Phone', lead?.phone)}
+    ${field('Company', lead?.company)}
+    ${lead?.status ? `<div class="csb-row"><div class="csb-label">Status</div><span class="badge badge-${lead.status==='warm'?'green':lead.status==='hot'?'red':'gray'}" style="font-size:10px;">${lead.status}</span></div>` : ''}
+  ` : `<div style="font-size:12px;color:var(--text-muted);padding:8px 0 14px;">No contact info captured yet.</div>`;
 
-  const visitorRow = conv?.user_id && !conv.user_id.startsWith('vis_') && !conv.user_id.startsWith('anonymous_')
-    ? `<div style="margin-bottom:8px;"><span style="font-size:10px;color:var(--text-muted);">Visitor ID</span><br><span style="font-size:11px;font-family:monospace;color:var(--text-secondary);word-break:break-all;">${conv.user_id}</span></div>`
-    : '';
-
-  if (!contactRows.length && !metaRows.length && !visitorRow) {
-    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px 0;">No data collected yet.</div>';
-    return;
-  }
+  // Session metadata
+  const sessionHTML = `
+    <div class="csb-divider"></div>
+    <div class="csb-section-title">Session</div>
+    ${field('Started', meta?.started_at ? new Date(meta.started_at).toLocaleString() : null)}
+    ${field('Page', meta?.page_title || meta?.page_url)}
+    ${field('Page URL', meta?.page_url)}
+    ${field('Referrer', meta?.referrer_url)}
+    ${field('Language', meta?.browser_language)}
+    ${field('Timezone', meta?.user_timezone)}
+    ${field('Device', meta?.device_type ? (meta.device_type.charAt(0).toUpperCase()+meta.device_type.slice(1)) : null)}
+    ${field('Platform', meta?.user_platform)}
+    ${conv?.user_id ? field('Visitor ID', conv.user_id, true) : ''}
+  `;
 
   el.innerHTML = `
-    ${contactRows.length ? section('Contact', contactRows) : ''}
-    ${contactRows.length && (metaRows.length || visitorRow) ? '<div style="height:1px;background:var(--border);margin:4px 0;"></div>' : ''}
-    ${metaRows.length ? section('Session', metaRows) : ''}
-    ${visitorRow ? '<div style="height:1px;background:var(--border);margin:4px 0;"></div><div>' + visitorRow + '</div>' : ''}
+    <div class="csb-section-title" style="margin-top:2px;">Contact</div>
+    ${contactHTML}
+    ${sessionHTML}
   `;
-}
-window.renderConvSidebar = renderConvSidebar;
+}window.renderConvSidebar = renderConvSidebar;
 
 window.showConfigSection = showConfigSection;
 window.markConfigDirty = markConfigDirty;

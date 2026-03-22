@@ -405,11 +405,13 @@
         _shownMsgIds = {}; _shownSysMsgs = {};
         _lastMsgAt = new Date().toISOString();
         startStatusCheck(convId);
-        // Show pre-chat card first (inside messages), then greeting beneath
+        // Show pre-chat card. Greeting appears AFTER form is dismissed.
         if (!_preChatDone) {
           showPreChat();
+          // Don't show greeting yet — skipPreChat/submitPreChat will append it
+        } else {
+          appendBot(botConfig.greeting);
         }
-        appendBot(botConfig.greeting);
         if (cb) cb();
       }
     })
@@ -491,7 +493,9 @@
     _preChatDone = true;
     var pc = document.getElementById('iam-prechat');
     if (pc) pc.style.display = 'none';
-    if (msgsEl) setTimeout(function(){ msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
+    // Now show the greeting below the (hidden) form
+    appendBot(botConfig.greeting);
+    setTimeout(function(){ if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
     input.focus();
   }
 
