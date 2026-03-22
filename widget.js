@@ -146,24 +146,24 @@
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">✕</button>',
     '</div>',
-    '<div id="iam-prechat" style="display:none;">',
-    '  <div id="iam-prechat-inner">',
-    '    <div id="iam-prechat-msg">Before we start, we\'d love to know who we\'re speaking with. This is completely optional.</div>',
-    '    <div class="iam-prechat-field">',
-    '      <label>Your Name</label>',
-    '      <input id="iam-pc-name" placeholder="e.g. John Smith" autocomplete="name" />',
+    '<div id="iam-prechat" style="display:none;flex-direction:column;flex:1;overflow:hidden;">',
+    '  <div id="iam-prechat-inner" style="padding:20px 18px;display:flex;flex-direction:column;gap:14px;flex:1;overflow-y:auto;">',
+    '    <div style="font-size:13px;color:#aaa;line-height:1.5;">Before we start, we\'d love to know who we\'re speaking with. Completely optional.</div>',
+    '    <div style="display:flex;flex-direction:column;gap:5px;">',
+    '      <label style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;">Your Name</label>',
+    '      <input id="iam-pc-name" placeholder="e.g. John Smith" autocomplete="name" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;outline:none;width:100%;box-sizing:border-box;" />',
     '    </div>',
-    '    <div class="iam-prechat-field">',
-    '      <label>Email Address</label>',
-    '      <input id="iam-pc-email" type="email" placeholder="e.g. john@example.com" autocomplete="email" />',
+    '    <div style="display:flex;flex-direction:column;gap:5px;">',
+    '      <label style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;">Email Address</label>',
+    '      <input id="iam-pc-email" type="email" placeholder="e.g. john@example.com" autocomplete="email" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;outline:none;width:100%;box-sizing:border-box;" />',
     '    </div>',
     '  </div>',
-    '  <div id="iam-prechat-actions">',
-    '    <button id="iam-prechat-skip">Skip</button>',
-    '    <button id="iam-prechat-submit">Start Chat →</button>',
+    '  <div style="display:flex;gap:8px;padding:14px 18px;border-top:1px solid #1a1a2e;">',
+    '    <button id="iam-prechat-skip" style="background:transparent;border:1px solid #2a2a4a;color:#888;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer;">Skip</button>',
+    '    <button id="iam-prechat-submit" style="flex:1;background:' + COLOR + ';color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">Start Chat →</button>',
     '  </div>',
     '</div>',
-    '<div id="iam-messages" style="display:none;"></div>',
+    '<div id="iam-messages"></div>',
     '<div id="iam-input-area">',
     '  <input id="iam-input" placeholder="Type a message…" autocomplete="off" />',
     '  <button id="iam-send">↑</button>',
@@ -186,8 +186,13 @@
     document.body.appendChild(win);
   }
 
-  var msgsEl = document.getElementById('iam-messages');
-  var input  = document.getElementById('iam-input');
+  var msgsEl    = document.getElementById('iam-messages');
+  var input     = document.getElementById('iam-input');
+  var preChatEl = document.getElementById('iam-prechat');
+  var pcNameEl  = document.getElementById('iam-pc-name');
+  var pcEmailEl = document.getElementById('iam-pc-email');
+  var pcSubmit  = document.getElementById('iam-prechat-submit');
+  var pcSkip    = document.getElementById('iam-prechat-skip');
 
   // Hide close button in inline mode
   if (IS_INLINE) {
@@ -355,9 +360,9 @@
     .then(function(r) { return r.json(); })
     .then(function(data) {
       convId = data.conversation_id;
-      // If pre-chat was submitted before convId was ready, save now
+      // If pre-chat was submitted before convId was ready, save lead now
       if (_preChatDone && (_preChatName || _preChatEmail)) {
-        savePrechatLead(_preChatName, _preChatEmail, convId);
+        savePrechatLead(_preChatName, _preChatEmail);
       }
 
       if (data.returning) {
@@ -388,19 +393,16 @@
           }).catch(function() { startStatusCheck(convId); if (cb) cb(); });
 
       } else {
-        // New visitor — show pre-chat form first, then greeting
+        // New visitor
         msgsEl.innerHTML = '';
         _shownMsgIds = {}; _shownSysMsgs = {};
         _lastMsgAt = new Date().toISOString();
-        // Show pre-chat form; greeting appended after skip/submit
+        appendBot(botConfig.greeting);
+        startStatusCheck(convId);
+        // Show pre-chat form before they can type
         if (!_preChatDone) {
           showPreChat();
-          // Append greeting in messages so it's ready when form is dismissed
-          appendBot(botConfig.greeting);
-        } else {
-          appendBot(botConfig.greeting);
         }
-        startStatusCheck(convId);
         if (cb) cb();
       }
     })
@@ -454,17 +456,14 @@
   }
 
   // ── Open / close ──────────────────────────────────────────────────
-  // Show pre-chat form for new visitors
   function showPreChat() {
-    if (preChatEl) preChatEl.style.display = 'flex';
-    if (msgsEl)    msgsEl.style.display    = 'none';
-    // Wire buttons
-    if (pcSubmit) pcSubmit.onclick = submitPreChat;
-    if (pcSkip)   pcSkip.onclick   = function() { skipPreChat(); };
-    // Enter key submits
+    if (preChatEl) { preChatEl.style.display = 'flex'; preChatEl.style.flexDirection = 'column'; }
+    if (msgsEl)    msgsEl.style.display = 'none';
+    if (pcSubmit)  pcSubmit.onclick = submitPreChat;
+    if (pcSkip)    pcSkip.onclick   = skipPreChat;
     if (pcEmailEl) pcEmailEl.onkeydown = function(e) { if (e.key === 'Enter') submitPreChat(); };
-    if (pcNameEl)  pcNameEl.onkeydown  = function(e) { if (e.key === 'Enter') pcEmailEl && pcEmailEl.focus(); };
-    setTimeout(function() { if (pcNameEl) pcNameEl.focus(); }, 100);
+    if (pcNameEl)  pcNameEl.onkeydown  = function(e) { if (e.key === 'Enter' && pcEmailEl) pcEmailEl.focus(); };
+    setTimeout(function() { if (pcNameEl) pcNameEl.focus(); }, 150);
   }
 
   function skipPreChat() {
@@ -475,31 +474,24 @@
   }
 
   function submitPreChat() {
-    var name  = pcNameEl  ? pcNameEl.value.trim()  : '';
-    var email = pcEmailEl ? pcEmailEl.value.trim() : '';
-    _preChatName  = name;
-    _preChatEmail = email;
+    _preChatName  = pcNameEl  ? pcNameEl.value.trim()  : '';
+    _preChatEmail = pcEmailEl ? pcEmailEl.value.trim() : '';
     _preChatDone  = true;
-
-    // Save to leads immediately if we have at least one field
-    if ((name || email) && convId) {
-      savePrechatLead(name, email, convId);
+    if (_preChatName || _preChatEmail) {
+      savePrechatLead(_preChatName, _preChatEmail);
     }
-
     skipPreChat();
   }
 
-  function savePrechatLead(name, email, conversation_id) {
+  function savePrechatLead(name, email) {
+    if (!convId) return; // convId not ready yet — will be called again after conversation created
     fetch(API_BASE + '/api/conversation/capture-lead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bot_id: BOT_ID,
-        conversation_id: conversation_id,
-        name:  name  || null,
-        email: email || null
-      })
-    }).catch(function(e) { console.warn('[IAM] Lead save failed:', e); });
+      body: JSON.stringify({ bot_id: BOT_ID, conversation_id: convId, name: name || null, email: email || null })
+    }).then(function(r) { return r.json(); })
+      .then(function(d) { console.log('[IAM] Lead saved:', d.action); })
+      .catch(function(e) { console.warn('[IAM] Lead save failed:', e); });
   }
 
   function openWidget() {
