@@ -39,6 +39,11 @@
   var _shownSysMsgs  = {};
   var _shownMsgIds   = {};
 
+  // Pre-chat form state
+  var _preChatDone  = false;
+  var _preChatName  = '';
+  var _preChatEmail = '';
+
   // ── Visitor ID ─────────────────────────────────────────────────────
   function getVisitorId() {
     var k = 'iam_visitor_id';
