@@ -198,36 +198,25 @@ export default async function handler(req, res) {
         if (conversation_id) {
             const { data: messages } = await supabase
                 .from('messages')
-                .select('role, content, created_at')
+                .select('role, content')
                 .eq('conversation_id', conversation_id)
                 .order('created_at', { ascending: true })
-                .limit(40);
+                .limit(20);
 
             if (messages) {
-                // Find the last agent_left event — bot should only see messages AFTER that
-                // This prevents the LLM from being confused by the HITL conversation context
-                let startIndex = 0;
-                for (let i = messages.length - 1; i >= 0; i--) {
-                    if (messages[i].role === 'system' && messages[i].content === 'agent_left') {
-                        startIndex = i + 1;
-                        break;
-                    }
-                }
-                const relevantMessages = messages.slice(startIndex);
-
-                const mapped = relevantMessages
-                    // Exclude system messages and human-agent messages from LLM history
-                    // Bot should only see user/bot exchanges after the last resume
-                    .filter(m => m.role === 'user' || m.role === 'bot')
-                    .map(m => ({
-                        role: m.role === 'bot' ? 'assistant' : 'user',
-                        content: m.content
-                    }));
+                const mapped = messages
+                    // Exclude system notification messages from LLM history
+                    .filter(m => m.role === 'user' || m.role === 'bot' || m.role === 'human-agent')
+                    .map(m => {
+                        if (m.role === 'bot') return { role: 'assistant', content: m.content };
+                        if (m.role === 'human-agent') return { role: 'assistant', content: `[Live Agent]: ${m.content}` };
+                        return { role: 'user', content: m.content };
+                    });
 
                 // All LLMs require history to start with user role — trim leading assistant messages
                 const firstUserIndex = mapped.findIndex(m => m.role === 'user');
                 conversationHistory = firstUserIndex > -1 ? mapped.slice(firstUserIndex) : [];
-                log.info('Conversation history loaded', { messages: conversationHistory.length, startIndex });
+                log.info('Conversation history loaded', { messages: conversationHistory.length });
             }
         }
 
@@ -383,14 +372,17 @@ export default async function handler(req, res) {
         }
 
         // ── Step 7: Save bot response and update conversation ───────────────
+        let botMsgTimestamp = null;
         if (conversation_id && responseText) {
-            const { error: saveBotErr } = await supabase.from('messages').insert({
-                conversation_id,
-                role:    'bot',
-                content: responseText
-            });
+            const { data: savedMsg, error: saveBotErr } = await supabase
+                .from('messages')
+                .insert({ conversation_id, role: 'bot', content: responseText })
+                .select('id, created_at')
+                .single();
             if (saveBotErr) {
                 log.warn('Failed to save bot response', { error: saveBotErr.message });
+            } else if (savedMsg) {
+                botMsgTimestamp = savedMsg.created_at;
             }
 
             await supabase
@@ -402,7 +394,8 @@ export default async function handler(req, res) {
         }
 
         log.info('Request complete', { bot_id, model: botModel, responseLength: responseText.length });
-        return res.status(200).json({ response: responseText });
+        // Return bot_msg_ts so widget can advance its poll cursor past this message
+        return res.status(200).json({ response: responseText, bot_msg_ts: botMsgTimestamp });
 
     } catch (error) {
         log.error('Request failed', {

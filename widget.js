@@ -371,7 +371,8 @@
         msgsEl.innerHTML = '';
         _shownMsgIds = {}; _shownSysMsgs = {};
         _lastMsgAt = new Date().toISOString(); // cursor = now, so poll only gets future messages
-        appendBot(botConfig.greeting);
+        // Only append greeting if not already shown (openWidget shows it instantly)
+        if (msgsEl.children.length === 0) appendBot(botConfig.greeting);
         startStatusCheck(convId);
         if (cb) cb();
       }
@@ -403,7 +404,15 @@
         isSending = false;
         return;
       }
-      if (data.response) appendBot(data.response);
+      if (data.response) {
+        appendBot(data.response);
+        // Advance cursor to AFTER this bot message so HITL poll never re-fetches it
+        if (data.bot_msg_ts) {
+          _lastMsgAt = data.bot_msg_ts;
+        } else {
+          _lastMsgAt = new Date().toISOString();
+        }
+      }
       isSending = false;
     })
     .catch(function() { hideTyping(); appendBot('Sorry, something went wrong.'); isSending = false; });
@@ -427,14 +436,21 @@
 
   // ── Open / close ──────────────────────────────────────────────────
   function openWidget() {
-    // Hide greeting popup
     if (greetingPopup) greetingPopup.style.display = 'none';
     win.style.display = 'flex';
     if (launcher) launcher.style.display = 'none';
     if (!convId) {
-      loadBotConfig(function() { createConversation(function() { input.focus(); }); });
+      // Show greeting immediately from cached config — no waiting for API
+      if (msgsEl.children.length === 0) {
+        appendBot(botConfig.greeting);
+      }
+      input.focus();
+      // Create conversation silently in background
+      createConversation(function() {
+        // If conversation came back as returning visitor, history was loaded
+        // and greeting was replaced — nothing more to do
+      });
     } else {
-      // Already have a conversation — just focus
       if (_hitlActive && !_pollInterval) startPolling(convId);
       input.focus();
     }
