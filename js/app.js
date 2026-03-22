@@ -333,12 +333,12 @@ window.addEventListener('message', async function (e) {
       // If HITL is active, do not send any response to widget — human agent is handling it
       if (data.hitl_active) {
         const activeConvId = data.conversation_id || conv_id;
-        console.log('[IAM Bridge] HITL — telling widget to poll:', activeConvId);
+        console.log('[IAM Bridge] HITL active — telling widget to start polling:', activeConvId);
+        // postMessage IAM_HITL_ACTIVE to widget iframe — triggers polling
         if (e.source) e.source.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*');
         [document.getElementById('preview-iframe'), document.getElementById('preview-iframe-inline')]
-          .filter(f => f && f.contentWindow && f.contentWindow !== e.source)
+          .filter(f => f?.contentWindow && f.contentWindow !== e.source)
           .forEach(f => f.contentWindow.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*'));
-        if (activeConvId) startWidgetRealtimeSubscription(e.source, activeConvId);
         return;
       }
       if (data.response) {
@@ -360,80 +360,7 @@ window.addEventListener('message', async function (e) {
 });
 
 // Real-time subscription so agent messages reach the widget during HITL
-let _widgetRealtimeSub = null;
-function startWidgetRealtimeSubscription(iframeSource, convId) {
-  if (_widgetRealtimeSub) {
-    _widgetRealtimeSub.unsubscribe();
-    _widgetRealtimeSub = null;
-  }
-  if (!convId) return;
-  console.log('[IAM Bridge] Starting real-time widget subscription for conv:', convId);
-  _widgetRealtimeSub = supabase
-    .channel('widget_conv_' + convId)
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'messages',
-      filter: 'conversation_id=eq.' + convId
-    }, (payload) => {
-      const msg = payload.new;
-      console.log('[IAM Bridge] Real-time message received:', msg);
-
-      // Helper to find active preview iframes
-      const getIframes = () => {
-        const iframes = [];
-        const m = document.getElementById('preview-iframe');
-        const i = document.getElementById('preview-iframe-inline');
-        if (m && m.contentWindow) iframes.push(m.contentWindow);
-        if (i && i.contentWindow) iframes.push(i.contentWindow);
-        return iframes;
-      };
-
-      if (msg.role === 'human-agent') {
-        // Push agent message to all preview iframes
-        getIframes().forEach(w => w.postMessage({
-          type: 'IAM_AGENT_MESSAGE',
-          content: msg.content,
-          time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }, '*'));
-
-        // Also show in dashboard conversation panel if open
-        const convMsgsEl = document.getElementById('conv-messages');
-        if (convMsgsEl && AppState.activeConversation === convId) {
-          // Check if already rendered (optimistic) — avoid duplicate
-          const existing = convMsgsEl.querySelectorAll('.message.bot');
-          const lastBot = existing[existing.length - 1];
-          const alreadyShown = lastBot && lastBot.querySelector('.msg-bubble')?.textContent === msg.content;
-          if (!alreadyShown) {
-            const div = document.createElement('div');
-            div.className = 'message bot';
-            const t = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div>
-              <div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>
-              <div class="msg-bubble" style="border-left:3px solid #10b981;">${msg.content}</div>
-              <div class="msg-time">${t}</div></div>`;
-            convMsgsEl.appendChild(div);
-            convMsgsEl.scrollTop = convMsgsEl.scrollHeight;
-          }
-        }
-      }
-
-      if (msg.role === 'system') {
-        getIframes().forEach(w => w.postMessage({
-          type: 'IAM_SYSTEM_MESSAGE',
-          content: msg.content,
-        }, '*'));
-        if (msg.content === 'agent_left') {
-          if (_widgetRealtimeSub) {
-            _widgetRealtimeSub.unsubscribe();
-            _widgetRealtimeSub = null;
-          }
-        }
-      }
-    })
-    .subscribe();
-}
-window.startWidgetRealtimeSubscription = startWidgetRealtimeSubscription;
+// startWidgetRealtimeSubscription removed — widget uses polling instead
 
 function setupEventListeners() {
   // Add some initial inline styling so the bot features start hidden if we launch on home
@@ -1398,34 +1325,47 @@ window.loadConversationMessages = loadConversationMessages;
 let activeSubscription = null;
 
 function subscribeToConversation(conversationId) {
-  // Unsubscribe from previous
-  if (activeSubscription) {
-    activeSubscription.unsubscribe();
-    activeSubscription = null;
-  }
-  // Only subscribe during HITL
-  if (AppState.hitlActive) {
-    activeSubscription = Conversations.subscribeToMessages(
-      conversationId,
-      (newMessage) => {
-        const conv = AppState.conversations.find(c => c.id === conversationId);
-        if (conv) {
-          conv.messages.push({
-            role: newMessage.role,
-            text: newMessage.content,
-            time: new Date(newMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          });
+  if (activeSubscription) { activeSubscription.unsubscribe(); activeSubscription = null; }
+  if (!conversationId) return;
 
-          // Invalidate cache so it persists locally
-          Cache.set(`messages_${conversationId}`, conv.messages);
+  // Subscribe to new messages — appends directly to DOM, no full re-render
+  activeSubscription = Conversations.subscribeToMessages(conversationId, (msg) => {
+    const msgsEl = document.getElementById('conv-messages');
+    if (!msgsEl || AppState.activeConversation !== conversationId) return;
 
-          if (AppState.activeConversation === conversationId) {
-            renderConvDetail(conversationId);
-          }
-        }
-      }
-    );
-  }
+    const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const conv  = AppState.conversations.find(c => c.id === conversationId);
+    const botObj = AppState.bots.find(b => b.id === conv?.botId);
+    const botColor   = botObj?.color || '#6c63ff';
+    const botInitial = (botObj?.name || 'B').charAt(0).toUpperCase();
+    const botName    = botObj?.name || 'Bot';
+
+    const div = document.createElement('div');
+
+    if (msg.role === 'system') {
+      const label = msg.content === 'agent_joined'
+        ? '👤 A live agent has joined the conversation'
+        : `${botName} has resumed`;
+      div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
+      div.innerHTML = `<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">${label}</span>`;
+    } else if (msg.role === 'user') {
+      const last = [...msgsEl.querySelectorAll('.message.user')].pop();
+      if (last?.querySelector('.msg-bubble')?.textContent === msg.content) return;
+      div.className = 'message user';
+      div.innerHTML = `<div class="msg-bubble">${msg.content}</div><div class="msg-time">${time}</div>`;
+    } else if (msg.role === 'bot') {
+      div.className = 'message bot';
+      div.innerHTML = `<div class="msg-avatar" style="background:${botColor}33;color:${botColor};font-weight:700;font-size:12px;">${botInitial}</div><div><div class="msg-bubble">${msg.content}</div><div class="msg-time">${time}</div></div>`;
+    } else if (msg.role === 'human-agent') {
+      const existing = [...msgsEl.querySelectorAll('.message.bot')];
+      if (existing.some(el => el.querySelector('.msg-bubble')?.textContent === msg.content && el.innerHTML.includes('10b981'))) return;
+      div.className = 'message bot';
+      div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div><div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div><div class="msg-bubble" style="border-left:3px solid #10b981;">${msg.content}</div><div class="msg-time">${time}</div></div>`;
+    }
+
+    msgsEl.appendChild(div);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  });
 }
 
 function unsubscribeAll() {
@@ -1439,39 +1379,35 @@ async function interceptConversation() {
   const convId = AppState.activeConversation;
   if (!convId) return;
 
-  AppState.hitlActive = true;
-
   try {
-    // Mark conversation as HITL active in DB
-    await supabase.from('conversations')
-      .update({ hitl_active: true, updated_at: new Date().toISOString() })
-      .eq('id', convId);
-
-    // Insert system notification message
-    await supabase.from('messages').insert({
-      conversation_id: convId,
-      role: 'system',
-      content: 'agent_joined'
+    const res = await fetch('/api/agent/takeover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation_id: convId })
     });
-
-    // Add to local state for immediate display
-    const conv = AppState.conversations.find(c => c.id === convId);
-    if (conv) {
-      conv.messages.push({
-        role: 'system',
-        text: 'agent_joined',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-    }
+    if (!res.ok) throw new Error('Takeover failed: ' + res.status);
   } catch (e) {
     console.error('HITL takeover failed:', e);
+    showToast('Failed to take over conversation', 'error');
+    return;
   }
 
-  // Subscribe to real-time messages for dashboard
+  AppState.hitlActive = true;
+
+  // Update local state
+  const conv = AppState.conversations.find(c => c.id === convId);
+  if (conv) {
+    conv.hitl_active = true;
+    conv.messages.push({
+      role: 'system', text: 'agent_joined',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+  }
+
+  // Subscribe to realtime so dashboard sees user replies live
   subscribeToConversation(convId);
-  // Start real-time for widget so it receives agent messages
-  startWidgetRealtimeSubscription(null, convId);
-  // Append system message directly without full re-render
+
+  // Append system pill to dashboard
   const msgsEl = document.getElementById('conv-messages');
   if (msgsEl) {
     const div = document.createElement('div');
@@ -1480,14 +1416,13 @@ async function interceptConversation() {
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
-  // Show HITL banner and input bar
+
   const hitlEl = document.getElementById('hitl-banner');
   if (hitlEl) {
     hitlEl.style.display = 'flex';
     hitlEl.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
-        <span>🟢</span>
-        <span>You are now handling this conversation</span>
+        <span>🟢</span><span>You are now handling this conversation</span>
       </div>
       <button class="btn btn-sm btn-secondary" onclick="endHITL()">Resume AI</button>`;
   }
@@ -1507,38 +1442,29 @@ async function endHITL() {
   unsubscribeAll();
 
   try {
-    await supabase.from('conversations')
-      .update({ hitl_active: false, updated_at: new Date().toISOString() })
-      .eq('id', convId);
-
-    await supabase.from('messages').insert({
-      conversation_id: convId,
-      role: 'system',
-      content: 'agent_left'
+    const res = await fetch('/api/agent/leave', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation_id: convId })
     });
-
-    const conv = AppState.conversations.find(c => c.id === convId);
-    if (conv) {
-      conv.messages.push({
-        role: 'system',
-        text: 'agent_left',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-    }
+    if (!res.ok) throw new Error('Leave failed: ' + res.status);
   } catch (e) {
-    console.error('HITL resume failed:', e);
+    console.error('HITL leave failed:', e);
   }
 
-  // Append system message directly without full re-render
+  const conv = AppState.conversations.find(c => c.id === convId);
+  const botObj = AppState.bots.find(b => b.id === conv?.botId);
+  const botName = botObj?.name || 'Bot';
+  if (conv) { conv.hitl_active = false; }
+
   const msgsEl = document.getElementById('conv-messages');
   if (msgsEl) {
     const div = document.createElement('div');
     div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
-    div.innerHTML = '<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">🤖 AI assistant has resumed</span>';
+    div.innerHTML = `<span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;">${botName} has resumed</span>`;
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
-  // Update HITL banner and input bar
   const hitlEl = document.getElementById('hitl-banner');
   if (hitlEl) hitlEl.style.display = 'none';
   const inputBar = document.getElementById('chat-input-area');
@@ -1549,7 +1475,7 @@ async function endHITL() {
 }
 window.endHITL = endHITL;
 
-// Typing indicator — debounced, writes agent_typing to DB so widget sees it
+// Typing indicator debounce
 let _agentTypingTimer = null;
 function handleAgentTyping() {
   const convId = AppState.activeConversation;
@@ -1568,17 +1494,16 @@ async function sendAgentMessage() {
   const convId = AppState.activeConversation;
   if (!convId) return;
 
-  const text = input.value.trim();
+  const content = input.value.trim();
   input.value = '';
 
-  // Clear typing indicator immediately
+  // Clear typing indicator
   clearTimeout(_agentTypingTimer);
   supabase.from('conversations').update({ agent_typing: false }).eq('id', convId).then(() => {});
 
-  const conv = AppState.conversations.find(c => c.id === convId);
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Optimistic UI — append directly to DOM without full re-render
+  // Optimistic UI
   const msgsEl = document.getElementById('conv-messages');
   if (msgsEl) {
     const div = document.createElement('div');
@@ -1587,29 +1512,26 @@ async function sendAgentMessage() {
       <div class="msg-avatar" style="background:#10b98133;">👤</div>
       <div>
         <div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>
-        <div class="msg-bubble" style="border-left:3px solid #10b981;">${text}</div>
+        <div class="msg-bubble" style="border-left:3px solid #10b981;">${content}</div>
         <div class="msg-time">${time}</div>
       </div>`;
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
-  // Also update local state
-  if (conv) conv.messages.push({ role: 'human-agent', text, time });
 
   try {
-    // Save agent message to DB — user will see it via real-time subscription
-    await supabase.from('messages').insert({
-      conversation_id: convId,
-      role: 'human-agent',
-      content: text
+    const res = await fetch('/api/agent/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation_id: convId, content })
     });
-    // Update conversation timestamp
-    await supabase.from('conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', convId);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Send failed');
+    }
   } catch (e) {
     console.error('Failed to send agent message:', e);
-    showToast('Failed to send message', 'error');
+    showToast('Failed to send message: ' + e.message, 'error');
   }
 }
 window.sendAgentMessage = sendAgentMessage;
@@ -2351,9 +2273,10 @@ window.addEventListener('message', function (e) {
     window._previewConvId = e.data.conv_id;
   }
 
+  // Agent took over — start polling for their messages
   if (e.data.type === 'IAM_HITL_ACTIVE' && e.data.conv_id) {
     window._previewConvId = e.data.conv_id;
-    window._lastMsgAt = null;
+    window._lastMsgAt = null; // no cursor — first poll catches everything
     startHITLPolling(e.data.conv_id);
     isSending = false;
   }
@@ -2400,8 +2323,8 @@ window.addEventListener('message', function (e) {
 
   if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
     addSystemMsg(e.data.content);
-    var m2 = document.getElementById('chat-messages');
-    if (m2) m2.scrollTop = m2.scrollHeight;
+    var cm = document.getElementById('chat-messages');
+    if (cm) cm.scrollTop = cm.scrollHeight;
   }
 });
 
@@ -2421,9 +2344,7 @@ function startHITLPolling(cId) {
         isFirstPoll = false;
         if (!data.messages) return;
         var shown = {};
-        document.querySelectorAll('.msg.bot, .msg.user').forEach(function(el) {
-          shown[el.textContent.trim()] = true;
-        });
+        document.querySelectorAll('.msg.bot, .msg.user').forEach(function(el) { shown[el.textContent.trim()] = true; });
         data.messages.forEach(function(m) {
           if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
           if (m.role === 'human-agent' && !shown[m.content.trim()]) {
@@ -2446,6 +2367,7 @@ function startHITLPolling(cId) {
       })
       .catch(function() {});
   }, 2000);
+  console.log('[IAM] HITL polling started for:', cId);
 }
 
 function stopHITLPolling() {
@@ -2461,8 +2383,7 @@ function showAgentMsg(content) {
   lbl.textContent = 'Support Agent';
   lbl.style.cssText = 'font-size:10px;color:#10b981;margin-left:4px;font-weight:600;';
   var bubble = document.createElement('div');
-  bubble.className = 'msg bot';
-  bubble.style.borderLeft = '3px solid #10b981';
+  bubble.className = 'msg bot'; bubble.style.borderLeft = '3px solid #10b981';
   bubble.textContent = content;
   wrap.appendChild(lbl); wrap.appendChild(bubble); msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
@@ -2475,25 +2396,19 @@ function addSystemMsg(content) {
   var div = document.createElement('div');
   div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
   div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
-  msgs.appendChild(div);
-  msgs.scrollTop = msgs.scrollHeight;
+  msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight;
 }
 
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
 }
-function showNewConvConfirm() {
-  var f = document.getElementById('new-conv-confirm'); if (f) f.style.display = 'flex';
-}
-function cancelNewConv() {
-  var f = document.getElementById('new-conv-confirm'); if (f) f.style.display = 'none';
-}
+function showNewConvConfirm() { var f=document.getElementById('new-conv-confirm'); if(f) f.style.display='flex'; }
+function cancelNewConv()      { var f=document.getElementById('new-conv-confirm'); if(f) f.style.display='none'; }
 function confirmNewConv() {
-  var f = document.getElementById('new-conv-confirm'); if (f) f.style.display = 'none';
-  stopHITLPolling();
-  window._previewConvId = null; window._lastMsgAt = null;
-  var msgs = document.getElementById('chat-messages');
-  msgs.innerHTML = '<div class="msg bot">${greeting}</div>';
+  var f=document.getElementById('new-conv-confirm'); if(f) f.style.display='none';
+  stopHITLPolling(); window._previewConvId=null; window._lastMsgAt=null;
+  var msgs=document.getElementById('chat-messages');
+  msgs.innerHTML='<div class="msg bot">${greeting}</div>';
   window.parent.postMessage({ type: 'IAM_NEW_CONV', bot_id: '${bot.id}' }, '*');
 }
 <\/script>

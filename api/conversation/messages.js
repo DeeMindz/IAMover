@@ -14,9 +14,7 @@ export default async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const { conversation_id, after } = req.query;
-    if (!conversation_id) {
-        return res.status(400).json({ error: 'conversation_id is required' });
-    }
+    if (!conversation_id) return res.status(400).json({ error: 'conversation_id is required' });
 
     try {
         let query = supabase
@@ -26,17 +24,12 @@ export default async function handler(req, res) {
             .order('created_at', { ascending: true })
             .limit(100);
 
-        // If `after` is provided, only return messages newer than that timestamp
-        // This is used by the widget polling during HITL to get incremental updates
-        if (after) {
-            query = query.gt('created_at', after);
-        }
+        // Only fetch messages newer than this timestamp (widget polling cursor)
+        if (after) query = query.gt('created_at', after);
 
         const { data: messages, error } = await query;
         if (error) throw error;
 
-        // Also return current conversation HITL status so widget knows
-        // when agent has left and can stop polling
         const { data: conv } = await supabase
             .from('conversations')
             .select('hitl_active, agent_typing')
@@ -50,7 +43,7 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        console.error('Messages fetch error:', error);
+        console.error('[Messages] Error:', error);
         return res.status(500).json({ error: error.message });
     }
 }
