@@ -1955,7 +1955,7 @@ async function deleteKBFile(fileId, kbId) {
 }
 window.deleteKBFile = deleteKBFile;
 
-function renderAttachedKBs(bot) {
+async function renderAttachedKBs(bot) {
   const container = document.getElementById('bot-attached-kbs');
   if (!container) return;
   const allKBs = Store.get('knowledge_bases') || [];
@@ -1965,21 +1965,44 @@ function renderAttachedKBs(bot) {
     container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0;">No knowledge bases attached yet.</div>';
     return;
   }
-  container.innerHTML = attached.map(kb => `
+
+  // Fetch accurate file + chunk counts directly from DB for attached KBs
+  let countMap = {};
+  try {
+    const { data: files } = await supabase
+      .from('kb_files')
+      .select('kb_id, chunk_count, status')
+      .in('kb_id', botKBIds);
+    if (files) {
+      files.forEach(f => {
+        if (!countMap[f.kb_id]) countMap[f.kb_id] = { files: 0, chunks: 0, indexed: 0 };
+        countMap[f.kb_id].files++;
+        countMap[f.kb_id].chunks += f.chunk_count || 0;
+        if (f.status === 'processed') countMap[f.kb_id].indexed++;
+      });
+    }
+  } catch (e) { console.warn('Could not fetch KB counts:', e); }
+
+  container.innerHTML = attached.map(kb => {
+    const c = countMap[kb.id] || { files: 0, chunks: 0, indexed: 0 };
+    const statusStr = c.files > 0
+      ? (c.indexed === c.files ? `<span style="color:#10b981;">✓ All indexed</span>` : `<span style="color:#f59e0b;">${c.indexed}/${c.files} indexed</span>`)
+      : '<span style="color:var(--text-muted);">No files yet</span>';
+    return `
     <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="font-size:20px;">🗂</span>
         <div>
           <div style="font-weight:600;font-size:13px;">${kb.name}</div>
-          <div style="font-size:11px;color:var(--text-muted);">${(kb.file_count || 0)} files · ${(kb.chunk_count || 0)} chunks</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${c.files} file${c.files !== 1 ? 's' : ''} · ${c.chunks} chunks · ${statusStr}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-sm btn-secondary" onclick="editKBFromBot('${kb.id}')">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="detachKB('${kb.id}')">Detach</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 window.renderAttachedKBs = renderAttachedKBs;
