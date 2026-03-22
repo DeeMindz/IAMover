@@ -1,5 +1,6 @@
 // api/kb/crawl.js
-// Crawls a URL or sitemap, extracts clean text, chunks and embeds it
+// Crawls a URL or sitemap, extracts clean text, chunks and embeds it.
+// Uses r.jina.ai as a reader proxy to handle JS-rendered pages.
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -13,8 +14,47 @@ const log = {
     error: (msg, data = {}) => console.error(JSON.stringify({ level: 'error', msg, ...data, ts: new Date().toISOString() })),
 };
 
-// ── Fetch and clean HTML page ─────────────────────────────────────────────────
+// ── Fetch page text via Jina Reader API ───────────────────────────────────────
+// r.jina.ai renders JS, extracts main content, returns clean markdown.
+// No API key needed for basic usage. Handles SPAs, React, etc.
 async function fetchPageText(url) {
+    // Try Jina Reader first (handles JS-rendered pages)
+    const jinaUrl = `https://r.jina.ai/${url}`;
+    try {
+        const response = await fetch(jinaUrl, {
+            headers: {
+                'Accept': 'text/plain',
+                'X-Return-Format': 'markdown',
+                'User-Agent': 'IAMPlatform-KB-Crawler/1.0',
+            },
+            signal: AbortSignal.timeout(20000),
+        });
+
+        if (response.ok) {
+            const text = await response.text();
+            // Jina returns the page title + content in markdown
+            // Strip the header lines Jina adds
+            const cleaned = text
+                .replace(/^Title:.*\n/m, '')
+                .replace(/^URL Source:.*\n/m, '')
+                .replace(/^Markdown Content:\n/m, '')
+                .replace(/^Published Time:.*\n/m, '')
+                .replace(/!\[.*?\]\(.*?\)/g, '') // remove images
+                .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links → just text
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            if (cleaned.length > 100) {
+                log.info('Jina fetch succeeded', { url, chars: cleaned.length });
+                return cleaned;
+            }
+        }
+        log.warn('Jina returned short content, falling back to direct fetch', { url });
+    } catch (e) {
+        log.warn('Jina fetch failed, falling back to direct fetch', { url, error: e.message });
+    }
+
+    // Fallback: direct HTML fetch (works for static sites)
     const response = await fetch(url, {
         headers: {
             'User-Agent': 'IAMPlatform-KB-Crawler/1.0 (compatible; knowledge base indexer)',
@@ -26,14 +66,13 @@ async function fetchPageText(url) {
     if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${url}`);
 
     const html = await response.text();
-
     let text = html
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
         .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
         .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
         .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-        .replace(/<\/?(p|div|h[1-6]|li|br|tr)[^>]*>/gi, '\n')
+        .replace(/<\/?(p|div|h[1-6]|li|br|tr|td|th)[^>]*>/gi, '\n')
         .replace(/<[^>]+>/g, '')
         .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
         .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, '').replace(/&[a-z]+;/g, '')
@@ -79,9 +118,7 @@ function chunkText(text, chunkSize = 3200, overlap = 320) {
     return chunks;
 }
 
-// ── Embed text ────────────────────────────────────────────────────────────────
-// Uses gemini-embedding-001 via v1beta with outputDimensionality:1536
-// text-embedding-004 was shut down January 14, 2026
+// ── Embed text via gemini-embedding-001 ──────────────────────────────────────
 async function embedText(text) {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY not set');
@@ -106,7 +143,7 @@ async function embedText(text) {
     }
 
     const data = await response.json();
-    return data.embedding.values; // exactly 1536 dimensions — no padding needed
+    return data.embedding.values; // exactly 1536 dimensions
 }
 
 // ── Save chunks to DB ─────────────────────────────────────────────────────────
@@ -115,7 +152,6 @@ async function saveChunks(chunks, kb_file_id, kb_id, sourceUrl) {
     for (let i = 0; i < chunks.length; i++) {
         try {
             const embedding = await embedText(chunks[i]);
-            // embedding is exactly 1536 dimensions — no padding required
             const vectorStr = '[' + embedding.join(',') + ']';
 
             await supabase.from('kb_chunks').insert({
@@ -131,7 +167,6 @@ async function saveChunks(chunks, kb_file_id, kb_id, sourceUrl) {
             });
 
             saved++;
-            // Small delay to avoid hitting rate limits
             if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 120));
         } catch (e) {
             log.warn('Chunk embed failed', { chunk: i, error: e.message });
@@ -175,11 +210,9 @@ export default async function handler(req, res) {
             log.info('Parsing sitemap', { url: targetUrl });
             urlsToCrawl = await parseSitemap(targetUrl);
             log.info('Sitemap parsed', { urlCount: urlsToCrawl.length });
-            // Cap at 20 pages to avoid Vercel timeout (60s Pro / 10s Hobby)
-            urlsToCrawl = urlsToCrawl.slice(0, 20);
+            urlsToCrawl = urlsToCrawl.slice(0, 20); // cap at 20 for Vercel timeout
         }
 
-        // Delete old chunks for this file
         await supabase.from('kb_chunks').delete().eq('kb_file_id', kb_file_id);
 
         let totalChunks = 0;
@@ -193,47 +226,55 @@ export default async function handler(req, res) {
                 const text = await fetchPageText(url);
 
                 if (text.length < 100) {
-                    log.warn('Page too short, skipping', { url, chars: text.length });
-                    pagesFailed.push({ url, reason: 'too short' });
+                    log.warn('Page too short after extraction, skipping', { url, chars: text.length });
+                    pagesFailed.push({ url, reason: `too short (${text.length} chars after extraction)` });
                     continue;
                 }
 
                 const chunks = chunkText(text);
+                log.info('Chunked page', { url, chunks: chunks.length, chars: text.length });
+
                 const saved = await saveChunks(chunks, kb_file_id, file.kb_id, url);
                 totalChunks += saved;
                 totalText += text + '\n\n';
                 pagesProcessed.push({ url, chunks: saved });
 
-                log.info('Page processed', { url, chunks: saved });
-
                 if (urlsToCrawl.indexOf(url) < urlsToCrawl.length - 1) {
                     await new Promise(r => setTimeout(r, 500));
                 }
-
             } catch (e) {
                 log.warn('Page crawl failed', { url, error: e.message });
                 pagesFailed.push({ url, reason: e.message });
             }
         }
 
+        // Mark as 'empty' if nothing was extracted, not 'processed'
+        const finalStatus = totalChunks > 0 ? 'processed' : 'failed';
+        const errorMsg = totalChunks === 0
+            ? `No content extracted. Pages tried: ${urlsToCrawl.length}. ${pagesFailed.map(p => p.reason).join('; ')}`
+            : null;
+
         await supabase.from('kb_files')
             .update({
-                content:      totalText.slice(0, 100000),
-                status:       'processed',
-                chunk_count:  totalChunks,
-                processed_at: new Date().toISOString(),
+                content:       totalText.slice(0, 100000),
+                status:        finalStatus,
+                chunk_count:   totalChunks,
+                processed_at:  new Date().toISOString(),
+                error_message: errorMsg,
             })
             .eq('id', kb_file_id);
 
         log.info('Crawl complete', { kb_file_id, totalChunks, pagesProcessed: pagesProcessed.length, pagesFailed: pagesFailed.length });
 
         return res.status(200).json({
-            success:         true,
+            success:         totalChunks > 0,
             file_id:         kb_file_id,
             url:             targetUrl,
             pages_processed: pagesProcessed.length,
             pages_failed:    pagesFailed.length,
             chunks_created:  totalChunks,
+            status:          finalStatus,
+            failed_reasons:  pagesFailed,
         });
 
     } catch (error) {
