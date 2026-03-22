@@ -236,6 +236,12 @@ export default async function handler(req, res) {
         }
 
         // ── Step 5: Build system prompt ─────────────────────────────────────
+        // Resolve temperature and token limit from saved bot settings
+        const botTemperature = typeof bot.temperature === 'number' ? bot.temperature : 0.5;
+        const botMaxTokens   = bot.max_response_length === 'short' ? 300
+                             : bot.max_response_length === 'long'  ? 2048
+                             : 1024; // medium (default)
+
         let systemPrompt = bot.system_prompt || 'You are a helpful AI assistant.';
 
         // ── Variable substitution ────────────────────────────────────────────
@@ -311,8 +317,8 @@ export default async function handler(req, res) {
                         parts: [{ text: msg.content }]
                     })),
                     generationConfig: {
-                        maxOutputTokens: 1024,
-                        temperature:     0.5,
+                        maxOutputTokens: botMaxTokens,
+                        temperature:     botTemperature,
                     },
                 });
 
@@ -356,7 +362,7 @@ export default async function handler(req, res) {
                     messages,
                     ...(isReasoning
                         ? { max_completion_tokens: 2048 }
-                        : { max_tokens: 1024, temperature: 0.5 })
+                        : { max_tokens: botMaxTokens, temperature: botTemperature })
                 });
 
                 responseText = response.choices[0].message.content;
@@ -375,7 +381,7 @@ export default async function handler(req, res) {
 
                 const response = await client.messages.create({
                     model:      botModel,
-                    max_tokens: 1024,
+                    max_tokens: botMaxTokens,
                     system:     systemPrompt,
                     messages:   [
                         ...conversationHistory,

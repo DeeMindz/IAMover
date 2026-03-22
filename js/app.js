@@ -2890,6 +2890,10 @@ async function saveBotConfig() {
     greeting_message: document.getElementById('cfg-greeting')?.value?.trim() || bot.greeting_message,
     system_prompt: document.getElementById('cfg-prompt')?.value?.trim() || bot.system_prompt,
     status: document.getElementById('cfg-live')?.checked ? 'live' : 'unpublished',
+    anti_hallucination: document.getElementById('cfg-anti-hall')?.checked ?? (bot.anti_hallucination ?? true),
+    fallback_message: document.getElementById('cfg-fallback-message')?.value?.trim() || bot.fallback_message || "I don't have that information. Would you like to speak with a human agent?",
+    temperature: parseFloat(document.getElementById('cfg-temperature')?.value || bot.temperature || 0.5),
+    max_response_length: document.getElementById('cfg-max-response')?.value || bot.max_response_length || 'medium',
     theme: {
       ...(bot.theme || {}),
       primaryColor: document.getElementById('cfg-primary-color')?.value || bot.theme?.primaryColor,
@@ -2992,6 +2996,18 @@ function fillBotForm(bot) {
   // Sync the preview bubble color
   const bubble = document.getElementById('cfg-preview-bubble');
   if (bubble) bubble.style.background = color;
+
+  // AI settings
+  const tempEl = document.getElementById('cfg-temperature');
+  if (tempEl) tempEl.value = String(bot.temperature || 0.5);
+
+  const maxResEl = document.getElementById('cfg-max-response');
+  if (maxResEl) maxResEl.value = bot.max_response_length || 'medium';
+
+  const fallbackEl = document.getElementById('cfg-fallback-message');
+  if (fallbackEl && bot.fallback_message) fallbackEl.value = bot.fallback_message;
+
+  setChk('cfg-anti-hall', bot.anti_hallucination !== false);
 
   // Render variables
   renderVariablesTable(bot.bot_variables || []);
