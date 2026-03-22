@@ -1715,6 +1715,27 @@ async function openKBDetail(id) {
 }
 window.openKBDetail = openKBDetail;
 
+// Retry processing a file that failed or is stuck in pending
+async function reprocessKBFile(fileId, fileType) {
+  try {
+    showToast('Retrying indexing…', 'info');
+    const endpoint = fileType === 'url' ? '/api/kb/crawl' : '/api/kb/process';
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kb_file_id: fileId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Reprocess failed');
+    showToast(`Indexing started — ${data.chunks_created ?? '?'} chunks`, 'success');
+    await loadKBDetailFiles(); // refresh the list
+  } catch (e) {
+    console.error(e);
+    showToast('Failed to reprocess: ' + e.message, 'error');
+  }
+}
+window.reprocessKBFile = reprocessKBFile;
+
 async function loadKBDetailFiles() {
   const id = AppState.currentKBId;
   if (!id) return;
@@ -1733,16 +1754,38 @@ async function loadKBDetailFiles() {
       const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : sizeKB > 0 ? `${sizeKB} KB` : '';
       const date = f.created_at ? new Date(f.created_at).toLocaleDateString() : '';
       const icon = icons[f.type] || '📄';
+
+      // Status badge — shows indexing state clearly
+      const statusMap = {
+        processed:  { label: 'Indexed',     color: '#10b981', bg: 'rgba(16,185,129,.12)', icon: '✓' },
+        processing: { label: 'Processing…', color: '#f59e0b', bg: 'rgba(245,158,11,.12)', icon: '⟳' },
+        pending:    { label: 'Pending',      color: '#6b7280', bg: 'rgba(107,114,128,.12)', icon: '○' },
+        failed:     { label: 'Failed',       color: '#ef4444', bg: 'rgba(239,68,68,.12)',  icon: '✕' },
+      };
+      const s = statusMap[f.status] || statusMap['pending'];
+      const chunkStr = f.chunk_count > 0 ? `${f.chunk_count} chunks` : '';
+      const statusBadge = `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${s.color};background:${s.bg};border-radius:20px;padding:2px 9px;">${s.icon} ${s.label}</span>`;
+      const errorHint = f.status === 'failed' && f.error_message
+        ? `<div style="font-size:10px;color:var(--danger);margin-top:2px;" title="${f.error_message}">⚠ ${f.error_message.slice(0,60)}${f.error_message.length>60?'…':''}</div>`
+        : '';
+
       return `
         <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <span style="font-size:22px;">${icon}</span>
-            <div>
-              <div style="font-weight:600;font-size:13px;">${f.name}</div>
-              <div style="font-size:11px;color:var(--text-muted);">${[sizeStr, date].filter(Boolean).join(' · ')}</div>
+          <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
+            <span style="font-size:22px;flex-shrink:0;">${icon}</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.name}</div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap;">
+                ${statusBadge}
+                <span style="font-size:11px;color:var(--text-muted);">${[chunkStr, sizeStr, date].filter(Boolean).join(' · ')}</span>
+              </div>
+              ${errorHint}
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="deleteKBFile('${f.id}','${id}')" style="color:var(--danger);">🗑</button>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:12px;">
+            ${f.status === 'failed' || f.status === 'pending' ? `<button class="btn btn-ghost btn-sm" onclick="reprocessKBFile('${f.id}','${f.type}')" title="Retry indexing" style="font-size:11px;">↻ Retry</button>` : ''}
+            <button class="btn btn-ghost btn-sm" onclick="deleteKBFile('${f.id}','${id}')" style="color:var(--danger);">🗑</button>
+          </div>
         </div>`;
     }).join('');
   } catch (e) {
