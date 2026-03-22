@@ -3222,7 +3222,7 @@ function fillBotForm(bot) {
   if (maxResEl) maxResEl.value = bot.max_response_length || 'medium';
 
   const fallbackEl = document.getElementById('cfg-fallback-message');
-  if (fallbackEl && bot.fallback_message) fallbackEl.value = bot.fallback_message;
+  if (fallbackEl) fallbackEl.value = bot.fallback_message || "I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?";
 
   setChk('cfg-anti-hall', bot.anti_hallucination !== false);
 
