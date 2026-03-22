@@ -20,36 +20,24 @@ async function fetchPageText(url) {
             'User-Agent': 'IAMPlatform-KB-Crawler/1.0 (compatible; knowledge base indexer)',
             'Accept': 'text/html,application/xhtml+xml',
         },
-        signal: AbortSignal.timeout(15000), // 15 second timeout
+        signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${url}`);
 
     const html = await response.text();
 
-    // Strip HTML tags and extract readable text
     let text = html
-        // Remove scripts, styles, nav, footer, header
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
         .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
         .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
         .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-        // Convert block elements to newlines
         .replace(/<\/?(p|div|h[1-6]|li|br|tr)[^>]*>/gi, '\n')
-        // Remove all remaining tags
         .replace(/<[^>]+>/g, '')
-        // Decode HTML entities
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&#\d+;/g, '')
-        .replace(/&[a-z]+;/g, '')
-        // Clean whitespace
-        .replace(/\t/g, ' ')
-        .replace(/ {2,}/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, '').replace(/&[a-z]+;/g, '')
+        .replace(/\t/g, ' ').replace(/ {2,}/g, ' ').replace(/\n{3,}/g, '\n\n')
         .trim();
 
     return text;
@@ -64,7 +52,7 @@ async function parseSitemap(url) {
     const matches = xml.matchAll(/<loc>(.*?)<\/loc>/g);
     for (const match of matches) {
         const loc = match[1].trim();
-        if (loc && !loc.endsWith('.xml')) urls.push(loc); // skip nested sitemaps
+        if (loc && !loc.endsWith('.xml')) urls.push(loc);
     }
     return urls;
 }
@@ -92,6 +80,8 @@ function chunkText(text, chunkSize = 3200, overlap = 320) {
 }
 
 // ── Embed text ────────────────────────────────────────────────────────────────
+// Uses gemini-embedding-001 via v1beta with outputDimensionality:1536
+// text-embedding-004 was shut down January 14, 2026
 async function embedText(text) {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY not set');
@@ -116,7 +106,7 @@ async function embedText(text) {
     }
 
     const data = await response.json();
-    return data.embedding.values;
+    return data.embedding.values; // exactly 1536 dimensions — no padding needed
 }
 
 // ── Save chunks to DB ─────────────────────────────────────────────────────────
@@ -125,8 +115,8 @@ async function saveChunks(chunks, kb_file_id, kb_id, sourceUrl) {
     for (let i = 0; i < chunks.length; i++) {
         try {
             const embedding = await embedText(chunks[i]);
-            const padded = [...embedding, ...new Array(1536 - embedding.length).fill(0)];
-            const vectorStr = '[' + padded.join(',') + ']';
+            // embedding is exactly 1536 dimensions — no padding required
+            const vectorStr = '[' + embedding.join(',') + ']';
 
             await supabase.from('kb_chunks').insert({
                 kb_file_id,
@@ -141,7 +131,8 @@ async function saveChunks(chunks, kb_file_id, kb_id, sourceUrl) {
             });
 
             saved++;
-            if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 100));
+            // Small delay to avoid hitting rate limits
+            if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 120));
         } catch (e) {
             log.warn('Chunk embed failed', { chunk: i, error: e.message });
         }
@@ -160,7 +151,6 @@ export default async function handler(req, res) {
     const { kb_file_id } = req.body;
     if (!kb_file_id) return res.status(400).json({ error: 'kb_file_id is required' });
 
-    // Load file record
     const { data: file, error: fileErr } = await supabase
         .from('kb_files')
         .select('*')
@@ -175,21 +165,18 @@ export default async function handler(req, res) {
 
     log.info('Starting URL crawl', { kb_file_id, url: targetUrl });
 
-    await supabase.from('kb_files')
-        .update({ status: 'processing' })
-        .eq('id', kb_file_id);
+    await supabase.from('kb_files').update({ status: 'processing' }).eq('id', kb_file_id);
 
     try {
         let urlsToCrawl = [targetUrl];
-        let isSitemap = targetUrl.includes('sitemap') || targetUrl.endsWith('.xml');
+        const isSitemap = targetUrl.includes('sitemap') || targetUrl.endsWith('.xml');
 
-        // If sitemap, get all URLs from it
         if (isSitemap) {
             log.info('Parsing sitemap', { url: targetUrl });
             urlsToCrawl = await parseSitemap(targetUrl);
             log.info('Sitemap parsed', { urlCount: urlsToCrawl.length });
-            // Cap at 50 pages
-            urlsToCrawl = urlsToCrawl.slice(0, 50);
+            // Cap at 20 pages to avoid Vercel timeout (60s Pro / 10s Hobby)
+            urlsToCrawl = urlsToCrawl.slice(0, 20);
         }
 
         // Delete old chunks for this file
@@ -219,7 +206,6 @@ export default async function handler(req, res) {
 
                 log.info('Page processed', { url, chunks: saved });
 
-                // Delay between pages to be respectful
                 if (urlsToCrawl.indexOf(url) < urlsToCrawl.length - 1) {
                     await new Promise(r => setTimeout(r, 500));
                 }
@@ -230,10 +216,9 @@ export default async function handler(req, res) {
             }
         }
 
-        // Save combined text content to kb_files
         await supabase.from('kb_files')
             .update({
-                content:      totalText.slice(0, 100000), // cap at 100k chars for column
+                content:      totalText.slice(0, 100000),
                 status:       'processed',
                 chunk_count:  totalChunks,
                 processed_at: new Date().toISOString(),
@@ -243,21 +228,19 @@ export default async function handler(req, res) {
         log.info('Crawl complete', { kb_file_id, totalChunks, pagesProcessed: pagesProcessed.length, pagesFailed: pagesFailed.length });
 
         return res.status(200).json({
-            success:          true,
-            file_id:          kb_file_id,
-            url:              targetUrl,
-            pages_processed:  pagesProcessed.length,
-            pages_failed:     pagesFailed.length,
-            chunks_created:   totalChunks,
+            success:         true,
+            file_id:         kb_file_id,
+            url:             targetUrl,
+            pages_processed: pagesProcessed.length,
+            pages_failed:    pagesFailed.length,
+            chunks_created:  totalChunks,
         });
 
     } catch (error) {
         log.error('Crawl failed', { kb_file_id, error: error.message });
-
         await supabase.from('kb_files')
             .update({ status: 'failed', error_message: error.message })
             .eq('id', kb_file_id);
-
         return res.status(500).json({ error: error.message });
     }
 }
