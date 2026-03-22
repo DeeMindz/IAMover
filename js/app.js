@@ -333,11 +333,10 @@ window.addEventListener('message', async function (e) {
       // If HITL is active, do not send any response to widget — human agent is handling it
       if (data.hitl_active) {
         const activeConvId = data.conversation_id || conv_id;
-        console.log('[IAM Bridge] HITL active — starting polling for conv:', activeConvId);
-        // Tell widget iframe to start polling — postMessage is reliable across origins
+        console.log('[IAM Bridge] HITL — telling widget to poll:', activeConvId);
         if (e.source) e.source.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*');
         [document.getElementById('preview-iframe'), document.getElementById('preview-iframe-inline')]
-          .filter(f => f?.contentWindow && f.contentWindow !== e.source)
+          .filter(f => f && f.contentWindow && f.contentWindow !== e.source)
           .forEach(f => f.contentWindow.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*'));
         if (activeConvId) startWidgetRealtimeSubscription(e.source, activeConvId);
         return;
@@ -2349,11 +2348,11 @@ window.addEventListener('message', function (e) {
       if (m.role === 'system') { addSystemMsg(m.content); }
       else if (m.role === 'human-agent') { showAgentMsg(m.content); }
       else {
-        var div = document.createElement('div');
-        div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-        if (m.role === 'bot') div.innerHTML = formatMarkdown(m.content);
-        else div.textContent = m.content;
-        msgs.appendChild(div);
+        var d = document.createElement('div');
+        d.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
+        if (m.role === 'bot') d.innerHTML = formatMarkdown(m.content);
+        else d.textContent = m.content;
+        msgs.appendChild(d);
       }
       if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
     });
@@ -2365,10 +2364,10 @@ window.addEventListener('message', function (e) {
     var t = document.getElementById('typing-indicator');
     if (t) t.remove();
     if (e.data.response) {
-      var botMsg = document.createElement('div');
-      botMsg.className = 'msg bot';
-      botMsg.innerHTML = formatMarkdown(e.data.response);
-      msgs.appendChild(botMsg);
+      var b = document.createElement('div');
+      b.className = 'msg bot';
+      b.innerHTML = formatMarkdown(e.data.response);
+      msgs.appendChild(b);
       msgs.scrollTop = msgs.scrollHeight;
     }
     if (e.data.conv_id) window._previewConvId = e.data.conv_id;
@@ -2392,12 +2391,10 @@ window.addEventListener('message', function (e) {
 function startHITLPolling(cId) {
   stopHITLPolling();
   var isFirstPoll = true;
-  // KEY FIX: use the hardcoded origin baked in at generation time
-  // window.location.origin returns "null" inside srcdoc iframes
-  var API_BASE = '${window.location.origin}';
+  var BASE = '${window.location.origin}';
 
   window._pollInterval = setInterval(function() {
-    var url = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
+    var url = BASE + '/api/conversation/messages?conversation_id=' + cId;
     if (!isFirstPoll && window._lastMsgAt) {
       url += '&after=' + encodeURIComponent(window._lastMsgAt);
     }
@@ -2406,23 +2403,21 @@ function startHITLPolling(cId) {
       .then(function(data) {
         isFirstPoll = false;
         if (!data.messages) return;
-        var shownTexts = {};
+        var shown = {};
         document.querySelectorAll('.msg.bot, .msg.user').forEach(function(el) {
-          shownTexts[el.textContent.trim()] = true;
+          shown[el.textContent.trim()] = true;
         });
         data.messages.forEach(function(m) {
           if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
-          if (m.role === 'human-agent' && !shownTexts[m.content.trim()]) {
+          if (m.role === 'human-agent' && !shown[m.content.trim()]) {
             var t = document.getElementById('typing-indicator'); if (t) t.remove();
-            showAgentMsg(m.content);
-            shownTexts[m.content.trim()] = true;
-            isSending = false;
+            showAgentMsg(m.content); shown[m.content.trim()] = true; isSending = false;
           }
           if (m.role === 'system') {
             addSystemMsg(m.content);
             if (m.content === 'agent_left') stopHITLPolling();
           }
-          if (m.role === 'bot' && !shownTexts[m.content.trim()]) {
+          if (m.role === 'bot' && !shown[m.content.trim()]) {
             var t2 = document.getElementById('typing-indicator'); if (t2) t2.remove();
             var d = document.createElement('div'); d.className = 'msg bot';
             d.innerHTML = formatMarkdown(m.content);
@@ -2432,9 +2427,8 @@ function startHITLPolling(cId) {
         });
         if (data.hitl_active === false) stopHITLPolling();
       })
-      .catch(function(e) { console.warn('[IAM Poll]', e); });
+      .catch(function() {});
   }, 2000);
-  console.log('[IAM] HITL polling started:', cId);
 }
 
 function stopHITLPolling() {
