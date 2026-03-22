@@ -333,16 +333,12 @@ window.addEventListener('message', async function (e) {
       // If HITL is active, do not send any response to widget — human agent is handling it
       if (data.hitl_active) {
         const activeConvId = data.conversation_id || conv_id;
-        console.log('[IAM Bridge] HITL active — telling widget to start polling for conv:', activeConvId);
-        // Tell the widget iframe to start polling for agent messages
-        if (e.source) {
-          e.source.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*');
-        }
-        // Push to any other open preview iframes
+        console.log('[IAM Bridge] HITL active — starting polling for conv:', activeConvId);
+        // Tell widget iframe to start polling — postMessage is reliable across origins
+        if (e.source) e.source.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*');
         [document.getElementById('preview-iframe'), document.getElementById('preview-iframe-inline')]
           .filter(f => f?.contentWindow && f.contentWindow !== e.source)
           .forEach(f => f.contentWindow.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*'));
-        // Keep dashboard realtime so agent sees user replies live
         if (activeConvId) startWidgetRealtimeSubscription(e.source, activeConvId);
         return;
       }
@@ -2339,17 +2335,13 @@ window.addEventListener('message', function (e) {
     window._previewConvId = e.data.conv_id;
   }
 
-  // Dashboard signals HITL takeover — start polling immediately
-  // NOTE: _lastMsgAt is NOT set here so the first poll fetches ALL messages
-  // and catches any agent messages sent before polling started
   if (e.data.type === 'IAM_HITL_ACTIVE' && e.data.conv_id) {
     window._previewConvId = e.data.conv_id;
-    window._lastMsgAt = null;  // intentionally null — first poll catches up
+    window._lastMsgAt = null;
     startHITLPolling(e.data.conv_id);
     isSending = false;
   }
 
-  // Load previous chat history
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages && e.data.messages.length) {
     var msgs = document.getElementById('chat-messages');
     msgs.innerHTML = '';
@@ -2363,10 +2355,7 @@ window.addEventListener('message', function (e) {
         else div.textContent = m.content;
         msgs.appendChild(div);
       }
-      // Track latest timestamp so incremental poll starts from here
-      if (!window._lastMsgAt || m.created_at > window._lastMsgAt) {
-        window._lastMsgAt = m.created_at;
-      }
+      if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
     });
     msgs.scrollTop = msgs.scrollHeight;
   }
@@ -2395,97 +2384,61 @@ window.addEventListener('message', function (e) {
 
   if (e.data.type === 'IAM_SYSTEM_MESSAGE') {
     addSystemMsg(e.data.content);
-    var msgs2 = document.getElementById('chat-messages');
-    if (msgs2) msgs2.scrollTop = msgs2.scrollHeight;
+    var m2 = document.getElementById('chat-messages');
+    if (m2) m2.scrollTop = m2.scrollHeight;
   }
 });
 
-// ── HITL Polling ──────────────────────────────────────────────────
-// Polls /api/conversation/messages every 2s during HITL.
-// First poll has no `after` cursor so it catches ALL agent messages,
-// including any sent before polling started. Subsequent polls use
-// the cursor so only new messages are fetched.
 function startHITLPolling(cId) {
   stopHITLPolling();
   var isFirstPoll = true;
-  var API_BASE = window.location.origin;
+  // KEY FIX: use the hardcoded origin baked in at generation time
+  // window.location.origin returns "null" inside srcdoc iframes
+  var API_BASE = '${window.location.origin}';
 
   window._pollInterval = setInterval(function() {
     var url = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
-    // Only add cursor after first poll — first poll must fetch everything
     if (!isFirstPoll && window._lastMsgAt) {
       url += '&after=' + encodeURIComponent(window._lastMsgAt);
     }
-
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
         isFirstPoll = false;
         if (!data.messages) return;
-
-        // Get all text currently shown in chat to dedup
         var shownTexts = {};
-        document.querySelectorAll('.msg.bot, .msg.user, .iam-agent-bubble').forEach(function(el) {
+        document.querySelectorAll('.msg.bot, .msg.user').forEach(function(el) {
           shownTexts[el.textContent.trim()] = true;
         });
-
         data.messages.forEach(function(m) {
-          // Advance cursor
-          if (!window._lastMsgAt || m.created_at > window._lastMsgAt) {
-            window._lastMsgAt = m.created_at;
+          if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
+          if (m.role === 'human-agent' && !shownTexts[m.content.trim()]) {
+            var t = document.getElementById('typing-indicator'); if (t) t.remove();
+            showAgentMsg(m.content);
+            shownTexts[m.content.trim()] = true;
+            isSending = false;
           }
-
-          if (m.role === 'human-agent') {
-            if (!shownTexts[m.content.trim()]) {
-              var t = document.getElementById('typing-indicator');
-              if (t) t.remove();
-              showAgentMsg(m.content);
-              shownTexts[m.content.trim()] = true;
-              isSending = false;
-            }
-          }
-
           if (m.role === 'system') {
-            // Only show system messages once
-            var pills = document.querySelectorAll('#chat-messages span');
-            var alreadyShown = false;
-            pills.forEach(function(p) {
-              if (p.textContent.includes('agent') || p.textContent.includes('resumed')) alreadyShown = true;
-            });
-            if (!alreadyShown) addSystemMsg(m.content);
+            addSystemMsg(m.content);
             if (m.content === 'agent_left') stopHITLPolling();
           }
-
-          if (m.role === 'bot') {
-            if (!shownTexts[m.content.trim()]) {
-              var t2 = document.getElementById('typing-indicator');
-              if (t2) t2.remove();
-              var d = document.createElement('div');
-              d.className = 'msg bot';
-              d.innerHTML = formatMarkdown(m.content);
-              var cm = document.getElementById('chat-messages');
-              cm.appendChild(d);
-              cm.scrollTop = cm.scrollHeight;
-              isSending = false;
-            }
+          if (m.role === 'bot' && !shownTexts[m.content.trim()]) {
+            var t2 = document.getElementById('typing-indicator'); if (t2) t2.remove();
+            var d = document.createElement('div'); d.className = 'msg bot';
+            d.innerHTML = formatMarkdown(m.content);
+            var cm = document.getElementById('chat-messages'); cm.appendChild(d); cm.scrollTop = cm.scrollHeight;
+            isSending = false;
           }
         });
-
-        // Stop polling when agent ends HITL
         if (data.hitl_active === false) stopHITLPolling();
       })
-      .catch(function(e) { console.warn('[IAM Poll] Error:', e); });
+      .catch(function(e) { console.warn('[IAM Poll]', e); });
   }, 2000);
-
-  console.log('[IAM Preview] HITL polling started for conv:', cId);
+  console.log('[IAM] HITL polling started:', cId);
 }
 
 function stopHITLPolling() {
-  if (window._pollInterval) {
-    clearInterval(window._pollInterval);
-    window._pollInterval = null;
-    console.log('[IAM Preview] HITL polling stopped');
-  }
+  if (window._pollInterval) { clearInterval(window._pollInterval); window._pollInterval = null; }
 }
 
 function showAgentMsg(content) {
@@ -2500,9 +2453,7 @@ function showAgentMsg(content) {
   bubble.className = 'msg bot';
   bubble.style.borderLeft = '3px solid #10b981';
   bubble.textContent = content;
-  wrap.appendChild(lbl);
-  wrap.appendChild(bubble);
-  msgs.appendChild(wrap);
+  wrap.appendChild(lbl); wrap.appendChild(bubble); msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
 }
 
@@ -2520,21 +2471,16 @@ function addSystemMsg(content) {
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
 }
-
 function showNewConvConfirm() {
-  var footer = document.getElementById('new-conv-confirm');
-  if (footer) { footer.style.display = 'flex'; }
+  var f = document.getElementById('new-conv-confirm'); if (f) f.style.display = 'flex';
 }
 function cancelNewConv() {
-  var footer = document.getElementById('new-conv-confirm');
-  if (footer) { footer.style.display = 'none'; }
+  var f = document.getElementById('new-conv-confirm'); if (f) f.style.display = 'none';
 }
 function confirmNewConv() {
-  var footer = document.getElementById('new-conv-confirm');
-  if (footer) { footer.style.display = 'none'; }
+  var f = document.getElementById('new-conv-confirm'); if (f) f.style.display = 'none';
   stopHITLPolling();
-  window._previewConvId = null;
-  window._lastMsgAt = null;
+  window._previewConvId = null; window._lastMsgAt = null;
   var msgs = document.getElementById('chat-messages');
   msgs.innerHTML = '<div class="msg bot">${greeting}</div>';
   window.parent.postMessage({ type: 'IAM_NEW_CONV', bot_id: '${bot.id}' }, '*');
