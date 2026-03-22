@@ -67,8 +67,7 @@ async function extractAndSaveLead({ bot_id, conversation_id, message, responseTe
         const conversationText = msgs
             .filter(m => m.role === 'user' || m.role === 'bot')
             .map(m => `${m.role === 'user' ? 'User' : 'Bot'}: ${m.content}`)
-            .join('
-');
+            .join('\n');
 
         // Quick extraction prompt — returns JSON or "none"
         const extractPrompt = `Extract contact information from this conversation. Return ONLY valid JSON or the word "none".
@@ -101,9 +100,7 @@ Only include fields that are clearly stated by the user. Return "none" if no con
         if (!raw || raw.toLowerCase() === 'none') return;
 
         // Parse the JSON — strip markdown fences if present
-        const jsonStr = raw.replace(/```json
-?/g, '').replace(/```
-?/g, '').trim();
+        const jsonStr = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         let lead;
         try { lead = JSON.parse(jsonStr); } catch { return; }
 
