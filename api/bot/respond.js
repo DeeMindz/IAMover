@@ -284,6 +284,23 @@ export default async function handler(req, res) {
             antiHallucination: bot.anti_hallucination
         });
 
+        // ── Anti-hallucination hard block ───────────────────────────────────
+        // If anti-hallucination is ON and there is no KB context (no KB attached,
+        // no chunks matched, or embedding failed), return the fallback immediately.
+        // Never let the LLM answer from its training data in this mode.
+        if (bot.anti_hallucination && !knowledgeContext) {
+            const fallback = bot.fallback_message
+                || "I don't have that information in my knowledge base. Would you like to speak with a human agent?";
+            // Still save the user message and a bot response to the conversation
+            if (conversation_id) {
+                await supabase.from('messages').insert({ conversation_id, role: 'user', content: message });
+                await supabase.from('messages').insert({ conversation_id, role: 'bot', content: fallback });
+                await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversation_id);
+            }
+            log.info('Anti-hallucination block — no KB context, returning fallback', { conversation_id });
+            return res.status(200).json({ response: fallback, bot_msg_ts: null });
+        }
+
         // ── Step 6: Call the configured LLM ────────────────────────────────
         const botModel = bot.model || 'gemini-2.5-flash';
         let responseText = '';
