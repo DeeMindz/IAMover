@@ -393,14 +393,17 @@ export default async function handler(req, res) {
         }
 
         // ── Step 7: Save bot response and update conversation ───────────────
+        let savedMsg = null;
         if (conversation_id && responseText) {
-            const { data: savedMsg, error: saveBotErr } = await supabase
+            const { data: _sm, error: saveBotErr } = await supabase
                 .from('messages')
                 .insert({ conversation_id, role: 'bot', content: responseText })
                 .select('id, created_at')
                 .single();
             if (saveBotErr) {
                 log.warn('Failed to save bot response', { error: saveBotErr.message });
+            } else {
+                savedMsg = _sm;
             }
 
             await supabase
