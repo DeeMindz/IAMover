@@ -2969,8 +2969,30 @@ async function saveBotConfig() {
     showToast('Bot saved!', 'success');
     renderEmbedCode(AppState.currentBot);
   } catch (e) {
-    console.error(e);
-    showToast('Failed to save bot', 'error');
+    // If save failed due to missing columns (PGRST204), retry without those fields
+    // and store them in theme until DB migration is run
+    if (e?.code === 'PGRST204' || (Array.isArray(e) && e[0]?.code === 'PGRST204') || JSON.stringify(e).includes('PGRST204')) {
+      console.warn('[IAM] Column missing — retrying save without new fields. Run the SQL migration to fix permanently.');
+      const { temperature, max_response_length, fallback_message, anti_hallucination, ...safeUpdates } = updates;
+      // Store new fields in theme as fallback
+      safeUpdates.theme = { ...safeUpdates.theme, _temperature: temperature, _max_response_length: max_response_length, _fallback_message: fallback_message, _anti_hallucination: anti_hallucination };
+      try {
+        const saved = await Bots.update(bot.id, safeUpdates);
+        Store.updateItem('bots', bot.id, { ...saved, temperature, max_response_length, fallback_message, anti_hallucination });
+        AppState.currentBot = { ...bot, ...saved, temperature, max_response_length, fallback_message, anti_hallucination };
+        LocalDB.clear('bots');
+        _configDirty = false;
+        markConfigClean();
+        showToast('Bot saved! ⚠️ Run SQL migration to enable all settings.', 'warning');
+        renderEmbedCode(AppState.currentBot);
+      } catch (e2) {
+        console.error(e2);
+        showToast('Failed to save bot', 'error');
+      }
+    } else {
+      console.error(e);
+      showToast('Failed to save bot', 'error');
+    }
   }
 }
 

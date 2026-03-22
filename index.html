@@ -684,7 +684,10 @@
                 </svg>
                 Preview
               </button>
-              <button class="btn btn-primary" onclick="saveBotConfig()">Save Changes</button>
+              <button class="btn btn-primary" id="btn-save-bot-config" onclick="saveBotConfig()">Save Changes</button>
+              <span id="cfg-unsaved-indicator" style="display:none;align-items:center;gap:5px;font-size:12px;color:#f59e0b;font-weight:600;background:rgba(245,158,11,.12);padding:4px 10px;border-radius:20px;">
+                ⚠️ Unsaved changes
+              </span>
             </div>
           </div>
 
@@ -712,11 +715,11 @@
               <div class="card-body">
                 <div class="form-group">
                   <label class="form-label">Bot Name</label>
-                  <input class="form-control" id="cfg-bot-name" placeholder="My Awesome Bot" />
+                  <input class="form-control" id="cfg-bot-name" oninput="markConfigDirty()" placeholder="My Awesome Bot" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">LLM Model</label>
-                  <select class="form-control" id="cfg-model">
+                  <select class="form-control" id="cfg-model" onchange="markConfigDirty()">
                     <optgroup label="⭐ Recommended">
                       <option value="gemini-2.5-flash">Gemini 2.5 Flash (Best Price-Performance)</option>
                       <option value="gemini-2.5-pro">Gemini 2.5 Pro (Most Capable)</option>
@@ -762,7 +765,7 @@
                 </div>
                 <div class="form-group">
                   <label class="form-label">Greeting Message</label>
-                  <input class="form-control" id="cfg-greeting" placeholder="Hi! How can I help you today?" />
+                  <input class="form-control" id="cfg-greeting" oninput="markConfigDirty()" placeholder="Hi! How can I help you today?" />
                   <div class="form-hint">First message the bot sends to users</div>
                 </div>
                 <div class="form-group">
@@ -788,7 +791,7 @@
               <div class="card-body">
                 <div class="form-group">
                   <label class="form-label">System Prompt</label>
-                  <textarea class="form-control" id="cfg-prompt" rows="6"
+                  <textarea class="form-control" id="cfg-prompt" oninput="markConfigDirty()" rows="6"
                     placeholder="You are a helpful AI assistant. Current context: {{page_title}} ({{page_url}}), Language: {{browser_language}}, Timezone: {{user_timezone}}"></textarea>
                   <div class="form-hint">Use {{variable_name}} for system variables: current_timestamp, page_url,
                     browser_language, page_title, user_timezone, user_platform, user_origin</div>
@@ -805,7 +808,7 @@
                   it doesn't know</div>
                 <div class="toggle-wrap">
                   <label class="toggle">
-                    <input type="checkbox" id="cfg-anti-hall" checked />
+                    <input type="checkbox" id="cfg-anti-hall" onchange="markConfigDirty()" checked />
                     <div class="toggle-track">
                       <div class="toggle-thumb"></div>
                     </div>
@@ -962,7 +965,7 @@
                 <div class="form-group">
                   <label class="form-label">Primary Color</label>
                   <div style="display:flex;gap:10px;align-items:center;">
-                    <input type="color" class="color-swatch" id="cfg-primary-color" value="#6c63ff" />
+                    <input type="color" class="color-swatch" id="cfg-primary-color" oninput="markConfigDirty()" value="#6c63ff" />
                     <input class="form-control" id="cfg-primary-color-hex" value="#6c63ff" style="flex:1;"
                       oninput="document.getElementById('cfg-primary-color').value=this.value" />
                   </div>
@@ -979,12 +982,12 @@
               </div>
               <div class="form-group">
                 <label class="form-label">Bot Display Name</label>
-                <input class="form-control" id="cfg-display-name" placeholder="Support Assistant" />
+                <input class="form-control" id="cfg-display-name" oninput="markConfigDirty()" placeholder="Support Assistant" />
                 <div class="form-hint">Shown in the chat header visible to users</div>
               </div>
               <div class="form-group">
                 <label class="form-label">Avatar / Logo URL</label>
-                <input class="form-control" id="cfg-avatar-url" placeholder="https://yoursite.com/bot-avatar.png" />
+                <input class="form-control" id="cfg-avatar-url" oninput="markConfigDirty()" placeholder="https://yoursite.com/bot-avatar.png" />
                 <div class="form-hint">Leave empty to use bot initials</div>
               </div>
               <div class="divider"></div>
