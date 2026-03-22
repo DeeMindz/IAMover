@@ -2,8 +2,7 @@
    IAM Platform — Main App JS
    ═══════════════════════════════════════════════════════════════════ */
 
-import { Auth, Bots, KnowledgeBases, Conversations, Leads, Analytics, supabase } from './supabase.js';
-import { BotVariables } from './supabase.js';
+import { Auth, Bots, KnowledgeBases, Conversations, Leads, Analytics, BotVariables, supabase } from './supabase.js';
 
 /* ─── Persistent Storage (LocalDB) ───────────────────────────────── */
 const LocalDB = {
@@ -127,11 +126,20 @@ const AppState = {
   leads: [],
   conversations: [],
   activeConversation: null,
-  hitlActive: false,
 };
 
 // Expose AppState globally for inline onclick handlers
 window.AppState = AppState;
+
+// Per-conversation HITL check — replaces global AppState.hitlActive
+// Each conversation has its own hitl_active flag so multiple users
+// can be in HITL simultaneously without affecting each other
+function isHITLActive(convId) {
+  const id = convId || AppState.activeConversation;
+  const conv = AppState.conversations.find(c => c.id === id);
+  return conv?.hitl_active || false;
+}
+window.isHITLActive = isHITLActive;
 
 /* ─── Initialization & Auth Guard ────────────────────────────────── */
 async function initApp() {
@@ -1155,11 +1163,8 @@ async function renderConversations() {
         };
       });
 
-    // Restore HITL state from DB after page refresh
-    const activeHITL = mappedConvs.find(c => c.hitl_active);
-    if (activeHITL && AppState.activeConversation === activeHITL.id) {
-      AppState.hitlActive = true;
-    }
+    // HITL state is now per-conversation via conv.hitl_active
+    // No global flag needed — isHITLActive() reads from conv object
 
     AppState.conversations = mappedConvs;
 
@@ -1285,8 +1290,10 @@ function renderConvDetail(id) {
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
 
+  const hitlForThisConv = isHITLActive(id);
+
   if (hitlEl) {
-    if (AppState.hitlActive) {
+    if (hitlForThisConv) {
       hitlEl.style.display = 'flex';
       hitlEl.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;">
@@ -1300,12 +1307,11 @@ function renderConvDetail(id) {
     }
   }
 
-  if (inputBar) inputBar.style.display = AppState.hitlActive ? 'flex' : 'none';
+  if (inputBar) inputBar.style.display = hitlForThisConv ? 'flex' : 'none';
 
   const takeoverBtn = document.getElementById('btn-takeover');
   if (takeoverBtn) {
-    // Show only if we have a conversation and HITL is not yet active for us
-    takeoverBtn.style.display = (id && !AppState.hitlActive) ? 'inline-flex' : 'none';
+    takeoverBtn.style.display = (id && !hitlForThisConv) ? 'inline-flex' : 'none';
   }
 }
 
@@ -1324,9 +1330,9 @@ async function loadConversationMessages(convId) {
     if (nameEl) nameEl.textContent = conv.user;
     if (statusEl) statusEl.innerHTML = `<span class="badge ${conv.status === 'active' ? 'badge-green' : 'badge-gray'}">${conv.status}</span> · ${botName}`;
     const takeoverBtn = document.getElementById('btn-takeover');
-    if (takeoverBtn) takeoverBtn.style.display = (convId && !AppState.hitlActive) ? 'inline-flex' : 'none';
+    if (takeoverBtn) takeoverBtn.style.display = (convId && !isHITLActive(convId)) ? 'inline-flex' : 'none';
     const inputBar = document.getElementById('chat-input-area');
-    if (inputBar) inputBar.style.display = AppState.hitlActive ? 'flex' : 'none';
+    if (inputBar) inputBar.style.display = isHITLActive(convId) ? 'flex' : 'none';
   }
 
   msgsEl.innerHTML = '<div style="padding:20px;color:var(--text-muted);text-align:center;">Loading messages...</div>';
@@ -1543,8 +1549,7 @@ async function interceptConversation() {
     return;
   }
 
-  AppState.hitlActive = true;
-  // _dashLastMsgAt already set by loadConversationMessages — don't override
+  // Mark HITL active on this specific conversation only
   const conv = AppState.conversations.find(c => c.id === convId);
   if (conv) conv.hitl_active = true;
 
@@ -1576,8 +1581,6 @@ window.interceptConversation = interceptConversation;
 async function endHITL() {
   const convId = AppState.activeConversation;
   if (!convId) return;
-
-  AppState.hitlActive = false;
 
   try {
     const res = await fetch('/api/agent/leave', {
@@ -1618,7 +1621,7 @@ window.endHITL = endHITL;
 let _agentTypingTimer = null;
 function handleAgentTyping() {
   const convId = AppState.activeConversation;
-  if (!convId || !AppState.hitlActive) return;
+  if (!convId || !isHITLActive(convId)) return;
   clearTimeout(_agentTypingTimer);
   supabase.from('conversations').update({ agent_typing: true }).eq('id', convId).then(() => {});
   _agentTypingTimer = setTimeout(() => {
