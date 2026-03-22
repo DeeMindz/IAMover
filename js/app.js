@@ -1395,15 +1395,12 @@ let _dashLastMsgAt    = null;
 
 function startDashboardPoll(convId) {
   stopDashboardPoll();
-  // isFirstPoll: first poll fetches everything after the last loaded message.
-  // _dashLastMsgAt is set by loadConversationMessages to the last message timestamp,
-  // so the first poll only fetches NEW messages — no duplicate history.
-  const isFirst = { val: true };
+  // Stop Realtime subscription — poll handles message delivery during HITL.
+  // Running both simultaneously causes every message to appear twice.
+  unsubscribeAll();
   _dashPollInterval = setInterval(async () => {
     try {
       let url = `/api/conversation/messages?conversation_id=${convId}`;
-      // Always use cursor — even on first poll — since loadConversationMessages
-      // already set _dashLastMsgAt to the last known message timestamp
       if (_dashLastMsgAt) url += `&after=${encodeURIComponent(_dashLastMsgAt)}`;
       const res  = await fetch(url);
       const data = await res.json();
@@ -1476,6 +1473,8 @@ function startDashboardPoll(convId) {
 function stopDashboardPoll() {
   if (_dashPollInterval) { clearInterval(_dashPollInterval); _dashPollInterval = null; }
   _dashLastMsgAt = null;
+  // Re-subscribe to Realtime now that HITL is over
+  if (AppState.activeConversation) subscribeToConversation(AppState.activeConversation);
 }
 
 async function interceptConversation() {
@@ -1496,7 +1495,7 @@ async function interceptConversation() {
   }
 
   AppState.hitlActive = true;
-  _dashLastMsgAt = new Date().toISOString();
+  // _dashLastMsgAt already set by loadConversationMessages — don't override
   const conv = AppState.conversations.find(c => c.id === convId);
   if (conv) conv.hitl_active = true;
 

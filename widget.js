@@ -231,6 +231,33 @@
   function startPolling(cId) {
     stopPolling();
     _hitlActive = true;
+
+    // Immediately fetch to set the cursor to latest message.
+    // This prevents the interval from re-showing old messages.
+    var url0 = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
+    fetch(url0)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.messages && data.messages.length) {
+          var latest = data.messages[data.messages.length - 1];
+          _lastMsgAt = latest.created_at;
+        } else {
+          _lastMsgAt = new Date().toISOString();
+        }
+        // Render any unshown messages from history
+        var shown = {};
+        document.querySelectorAll('.iam-msg.bot, .iam-msg.user, .iam-agent-bubble').forEach(function(el) {
+          shown[el.textContent.trim()] = true;
+        });
+        data.messages.forEach(function(m) {
+          if (m.role === 'human-agent' && !shown[m.content.trim()]) {
+            appendAgent(m.content); shown[m.content.trim()] = true;
+          }
+          if (m.role === 'system') addSystemMsg(m.content);
+        });
+      })
+      .catch(function() { _lastMsgAt = new Date().toISOString(); });
+
     _pollInterval = setInterval(function() {
       var url = API_BASE + '/api/conversation/messages?conversation_id=' + cId;
       if (_lastMsgAt) url += '&after=' + encodeURIComponent(_lastMsgAt);
@@ -274,7 +301,7 @@
           });
 
           // Agent typing indicator from conversation row
-          if (data.agent_typing && _hitlActive) {
+          if (data.agent_typing === true && _pollInterval) {
             showAgentTyping();
           } else {
             hideAgentTyping();
@@ -373,6 +400,21 @@
     isSending = true;
     appendUser(text);
     input.value = '';
+
+    // When HITL is active, skip the bot endpoint entirely.
+    // Just save the message to DB so the agent sees it.
+    // The agent is watching via their dashboard subscription.
+    if (_hitlActive) {
+      fetch(API_BASE + '/api/bot/respond', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, bot_id: BOT_ID, conversation_id: convId })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function() { isSending = false; }) // response suppressed — agent handles it
+      .catch(function() { isSending = false; });
+      return; // do NOT show typing indicator or bot response
+    }
+
     showTyping();
     fetch(API_BASE + '/api/bot/respond', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -382,12 +424,10 @@
     .then(function(data) {
       hideTyping();
       if (data.hitl_active) {
-        // Agent has taken over — start polling to receive their messages
-        if (!_hitlActive) {
-          // Set cursor to now so we only get messages from this point forward
-          _lastMsgAt = new Date().toISOString();
-          startPolling(convId);
-        }
+        // First time learning HITL is active — start polling
+        _hitlActive = true;
+        _lastMsgAt = null; // first poll catches all messages
+        startPolling(convId);
         isSending = false;
         return;
       }
