@@ -778,6 +778,8 @@ function openModal(id) {
 window.openModal = openModal;
 
 function closeModal(id) {
+  // Clear KB-from-bot flag if modal is dismissed
+  if (id === 'modal-create-kb') AppState.createKBForBotId = null;
   const modal = document.getElementById(id);
   if (modal) modal.classList.remove('open');
 }
@@ -1963,40 +1965,20 @@ function openAttachKBModal() {
 }
 window.openAttachKBModal = openAttachKBModal;
 
-// Create a new KB from bot config — auto-attach to current bot
-async function createKBFromBot() {
+// Create a new KB from bot config — opens the existing modal,
+// sets a flag so addKnowledgeBase() knows to auto-attach after creation
+function createKBFromBot() {
   const bot = AppState.currentBot;
   if (!bot) return;
-  const name = prompt('Knowledge base name:');
-  if (!name?.trim()) return;
-  try {
-    const { data: kb, error } = await supabase
-      .from('knowledge_bases')
-      .insert({ name: name.trim(), user_id: AppState.user?.id })
-      .select()
-      .single();
-    if (error || !kb) throw error || new Error('Failed to create KB');
-
-    // Auto-attach to current bot
-    await supabase.from('bot_knowledge_bases').insert({ bot_id: bot.id, kb_id: kb.id });
-    if (!bot.knowledge_base_ids) bot.knowledge_base_ids = [];
-    bot.knowledge_base_ids.push(kb.id);
-
-    // Add to local store
-    const allKBs = Store.get('knowledge_bases') || [];
-    allKBs.push(kb);
-    Store.set('knowledge_bases', allKBs);
-
-    renderAttachedKBs(bot);
-    showToast(`"${kb.name}" created and attached`, 'success');
-
-    // Navigate to KB edit view with bot context
-    AppState.returnToBotId = bot.id;
-    navigate('kb-detail', { kbId: kb.id });
-  } catch (e) {
-    console.error(e);
-    showToast('Failed to create knowledge base', 'error');
-  }
+  // Set flag so addKnowledgeBase knows to auto-attach to this bot
+  AppState.createKBForBotId = bot.id;
+  // Clear the form fields
+  const nameEl = document.getElementById('new-kb-name');
+  const descEl = document.getElementById('new-kb-description');
+  if (nameEl) nameEl.value = '';
+  if (descEl) descEl.value = '';
+  // Open the existing modal
+  openModal('modal-create-kb');
 }
 window.createKBFromBot = createKBFromBot;
 
@@ -2048,9 +2030,36 @@ async function addKnowledgeBase() {
     const descEl = document.getElementById('new-kb-description');
     if (nameEl) nameEl.value = '';
     if (descEl) descEl.value = '';
-    showToast(`"${name}" created!`, 'success');
-    // Go straight to detail page to add content
-    await openKBDetail(newKB.id);
+
+    // If opened from bot config, auto-attach and return to bot after editing
+    const attachToBotId = AppState.createKBForBotId;
+    AppState.createKBForBotId = null; // clear flag
+
+    if (attachToBotId) {
+      try {
+        await supabase.from('bot_knowledge_bases').insert({ bot_id: attachToBotId, kb_id: newKB.id });
+        // Update local bot state
+        const bot = AppState.conversations
+          ? AppState.currentBot
+          : (Store.get('bots') || []).find(b => b.id === attachToBotId);
+        if (bot) {
+          if (!bot.knowledge_base_ids) bot.knowledge_base_ids = [];
+          bot.knowledge_base_ids.push(newKB.id);
+          renderAttachedKBs(bot);
+        }
+        showToast(`"${name}" created and attached to bot!`, 'success');
+      } catch (attachErr) {
+        console.warn('Auto-attach failed:', attachErr);
+        showToast(`"${name}" created — please attach it manually`, 'warning');
+      }
+      // Navigate to KB detail, return to bot config when done
+      AppState.returnToBotId = attachToBotId;
+      await openKBDetail(newKB.id);
+    } else {
+      // Normal flow: from KB library, no bot context
+      showToast(`"${name}" created!`, 'success');
+      await openKBDetail(newKB.id);
+    }
   } catch (e) {
     console.error(e);
     showToast('Failed to create knowledge base', 'error');
