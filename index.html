@@ -1502,4 +1502,26 @@
     function exportLeads() {
       const rows = [['Name', 'Email', 'Company', 'Phone', 'Bot', 'Date', 'Status']];
       AppState.leads.forEach(l => rows.push([l.name, l.email, l.company, l.phone, l.bot, l.date, l.status]));
-      const csv = rows.map(r => r.
+      const csv = rows.map(r => r.map(c => '"' + (c || '').replace(/"/g, '""') + '"').join(',')).join('\n');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = 'leads.csv';
+      a.click();
+    }
+  </script>
+
+  <!-- Contact Info Modal -->
+  <div class="modal-overlay" id="modal-contact-info">
+    <div class="modal" style="max-width:440px;width:440px;">
+      <div class="modal-header">
+        <div class="modal-title" id="contact-modal-title">Contact Info</div>
+        <button class="icon-btn" onclick="closeModal('modal-contact-info')">✕</button>
+      </div>
+      <div class="modal-body" id="contact-modal-body" style="padding:0;max-height:70vh;overflow-y:auto;">
+        <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 20px;">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

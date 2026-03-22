@@ -1212,21 +1212,30 @@ async function selectConversation(convId) {
   await loadConversationMessages(convId);
   subscribeToConversation(convId);
 
-  // Populate contact sidebar with lead + metadata for this conversation
-  const conv = AppState.conversations?.find(c => c.id === convId);
-  if (conv) {
-    // Fetch metadata from DB if not cached
-    if (!conv.metadata) {
-      try {
-        const { data } = await supabase.from('conversations').select('metadata, user_id').eq('id', convId).single();
-        if (data) { conv.metadata = data.metadata; conv.user_id = data.user_id; }
-      } catch (_) {}
-    }
-    renderContactDrawer();
-    // Show "Contact Info" button in header when a conversation is selected
-    const contactBtn = document.getElementById('btn-contact-info');
-    if (contactBtn) contactBtn.style.display = 'flex';
+  // Always show Contact Info button when a conversation is selected
+  const contactBtn = document.getElementById('btn-contact-info');
+  if (contactBtn) contactBtn.style.display = 'flex';
+
+  // Populate drawer — fetch metadata if not cached
+  let conv = AppState.conversations?.find(c => c.id === convId);
+  if (!conv) {
+    // Conversations may not be in cache yet — fetch directly
+    conv = { id: convId, lead: null, metadata: null };
   }
+  if (!conv.metadata) {
+    try {
+      const { data } = await supabase.from('conversations').select('metadata, user_id').eq('id', convId).single();
+      if (data) {
+        conv.metadata = data.metadata;
+        conv.user_id  = data.user_id;
+        // Update cache if conv exists there
+        const cached = AppState.conversations?.find(c => c.id === convId);
+        if (cached) { cached.metadata = data.metadata; cached.user_id = data.user_id; }
+      }
+    } catch (_) {}
+  }
+  AppState._drawerConv = conv; // store for renderContactDrawer
+  renderContactDrawer();
 }
 window.selectConversation = selectConversation;
 
@@ -3677,27 +3686,26 @@ window.openBotPreview = openBotPreview;
 window.setPreviewMode = setPreviewMode;
 window.sharePreviewLink = sharePreviewLink;
 function openContactDrawer() {
-  const overlay = document.getElementById('contact-drawer-overlay');
-  const drawer  = document.getElementById('contact-drawer');
-  if (overlay) overlay.classList.add('open');
-  if (drawer)  { drawer.classList.add('open'); renderContactDrawer(); }
+  renderContactDrawer();
+  openModal('modal-contact-info');
 }
 window.openContactDrawer = openContactDrawer;
 
 function closeContactDrawer() {
-  const overlay = document.getElementById('contact-drawer-overlay');
-  const drawer  = document.getElementById('contact-drawer');
-  if (overlay) overlay.classList.remove('open');
-  if (drawer)  drawer.classList.remove('open');
+  closeModal('modal-contact-info');
 }
 window.closeContactDrawer = closeContactDrawer;
 
 function renderContactDrawer() {
-  const body = document.getElementById('contact-drawer-body');
+  const body = document.getElementById('contact-modal-body');
   if (!body) return;
   const convId = AppState.activeConversation;
-  const conv   = AppState.conversations?.find(c => c.id === convId);
-  if (!conv) return;
+  const conv   = AppState._drawerConv
+    || AppState.conversations?.find(c => c.id === convId);
+  if (!conv) {
+    body.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0;">Select a conversation to view contact info.</div>';
+    return;
+  }
 
   const lead = conv.lead || null;
   const meta = conv.metadata || {};
@@ -3741,12 +3749,16 @@ function renderContactDrawer() {
     ${field('Visitor ID', conv?.user_id, true)}
   `;
 
+  // Update modal title with name if available
+  const titleEl = document.getElementById('contact-modal-title');
+  if (titleEl) titleEl.textContent = (lead?.name || conv?.user && !conv.user.startsWith('vis_') ? conv.user : null) || 'Contact Info';
   body.innerHTML = contactSection + sessionSection;
 }
 window.renderContactDrawer = renderContactDrawer;
 
 /* ─── Persistent Storage (LocalDB) ───────────────────────────────── */
 // ── Window exports (re-added after cleanup) ──────────────────────────────────
+window.renderEmbedCode     = renderEmbedCode;
 window.showConfigSection   = showConfigSection;
 window.markConfigDirty     = markConfigDirty;
 window.markConfigClean     = markConfigClean;
