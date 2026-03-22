@@ -1404,7 +1404,6 @@ function startDashboardPoll(convId) {
       if (_dashLastMsgAt) url += `&after=${encodeURIComponent(_dashLastMsgAt)}`;
       const res  = await fetch(url);
       const data = await res.json();
-      isFirst.val = false;
       if (!data.messages?.length) return;
 
       const msgsEl = document.getElementById('conv-messages');
@@ -1413,12 +1412,10 @@ function startDashboardPoll(convId) {
       const botColor   = botObj?.color || '#6c63ff';
       const botInitial = (botObj?.name || 'B').charAt(0).toUpperCase();
 
-      // Build set of already-shown text to avoid duplicates
+      // Build set of already-shown content to avoid duplicates
       const shown = new Set();
       if (msgsEl) {
-        // Use data-rawcontent for accurate dedup (textContent fails for markdown)
-        msgsEl.querySelectorAll('[data-rawcontent]').forEach(el => shown.add(el.getAttribute('data-rawcontent')));
-        // Also add system pills by their label text
+        msgsEl.querySelectorAll('.msg-bubble').forEach(el => shown.add(el.textContent.trim()));
         msgsEl.querySelectorAll('span').forEach(el => {
           const t = el.textContent.trim();
           if (t.includes('agent has joined')) shown.add('__sys__agent_joined');
