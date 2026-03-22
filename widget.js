@@ -60,8 +60,8 @@
     IS_INLINE ? '' : '#iam-launcher{position:fixed;' + pos + 'width:58px;height:58px;background:' + COLOR + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s;overflow:hidden;}',
     IS_INLINE ? '' : '#iam-launcher:hover{transform:scale(1.08);}',
     IS_INLINE ? '' : '#iam-launcher img{width:100%;height:100%;object-fit:cover;border-radius:50%;}',
-    IS_INLINE ? '' : '#iam-greeting-popup{position:fixed;' + pos.replace(/right:(\\d+)/, function(m, n) { return 'right:' + (parseInt(n)+70) + 'px'; }).replace(/left:(\\d+)/, function(m, n) { return 'left:' + (parseInt(n)+70) + 'px'; }) + 'bottom:' + (IS_INLINE ? '0' : '24px') + ';background:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:220px;font-size:13px;color:#333;z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:iamPopIn .3s ease;cursor:pointer;}',
-    IS_INLINE ? '' : '#iam-greeting-popup::after{content:"";position:absolute;bottom:-6px;right:20px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid #fff;}',
+    IS_INLINE ? '' : (function(){ var r=POSITION.indexOf('right')!==-1; var t=POSITION.indexOf('top')!==-1; return '#iam-greeting-popup{position:fixed;' + (t?'top:90px;':'bottom:90px;') + (r?'right:24px;':'left:24px;') + 'background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:230px;font-size:13px;color:#333;z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,sans-serif;animation:iamPopIn .3s ease;cursor:pointer;line-height:1.4;}'; })(),
+    IS_INLINE ? '' : (function(){ var r=POSITION.indexOf('right')!==-1; var t=POSITION.indexOf('top')!==-1; var s=r?'right:18px;':'left:18px;'; var a=t?'top:-6px;border-bottom:6px solid #fff;':'bottom:-6px;border-top:6px solid #fff;'; return '#iam-greeting-popup::after{content:"";position:absolute;'+a+s+'width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;}'; })(),
     IS_INLINE ? '' : '@keyframes iamPopIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}',
     IS_INLINE
       ? '#iam-window{position:relative;width:100%;height:100%;background:#fff;border-radius:18px;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}'
@@ -113,7 +113,7 @@
     launcher = document.createElement('button');
     launcher.id = 'iam-launcher';
     launcher.title = 'Chat with us';
-    launcher.innerHTML = '💬';
+    launcher.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
     document.body.appendChild(launcher);
 
     // Greeting popup — shows after 2s, hides when chat opens
@@ -138,7 +138,7 @@
   win.style.display = IS_INLINE ? 'flex' : 'none';
   win.innerHTML = [
     '<div id="iam-header" style="background:' + COLOR + '">',
-    '  <div id="iam-bot-avatar">🤖</div>',
+    '  <div id="iam-bot-avatar">A</div>',
     '  <div id="iam-header-info">',
     '    <div id="iam-bot-name">Assistant</div>',
     '    <div id="iam-bot-status">⬤ Online · Ready to help</div>',
@@ -148,18 +148,18 @@
     '</div>',
     '<div id="iam-prechat" style="display:none;flex-direction:column;flex:1;overflow:hidden;">',
     '  <div id="iam-prechat-inner" style="padding:20px 18px;display:flex;flex-direction:column;gap:14px;flex:1;overflow-y:auto;">',
-    '    <div style="font-size:13px;color:#aaa;line-height:1.5;">Before we start, we\'d love to know who we\'re speaking with. Completely optional.</div>',
+    '    <div style="font-size:13px;color:#666;line-height:1.6;">Before we start, we\'d love to know who we\'re speaking with. Completely optional.</div>',
     '    <div style="display:flex;flex-direction:column;gap:5px;">',
     '      <label style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;">Your Name</label>',
-    '      <input id="iam-pc-name" placeholder="e.g. John Smith" autocomplete="name" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;outline:none;width:100%;box-sizing:border-box;" />',
+    '      <input id="iam-pc-name" placeholder="e.g. John Smith" autocomplete="name" style="background:#f5f5f5;border:1.5px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;" />',
     '    </div>',
     '    <div style="display:flex;flex-direction:column;gap:5px;">',
     '      <label style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;">Email Address</label>',
-    '      <input id="iam-pc-email" type="email" placeholder="e.g. john@example.com" autocomplete="email" style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;outline:none;width:100%;box-sizing:border-box;" />',
+    '      <input id="iam-pc-email" type="email" placeholder="e.g. john@example.com" autocomplete="email" style="background:#f5f5f5;border:1.5px solid #e0e0e0;border-radius:8px;padding:10px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;" />',
     '    </div>',
     '  </div>',
-    '  <div style="display:flex;gap:8px;padding:14px 18px;border-top:1px solid #1a1a2e;">',
-    '    <button id="iam-prechat-skip" style="background:transparent;border:1px solid #2a2a4a;color:#888;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer;">Skip</button>',
+    '  <div style="display:flex;gap:8px;padding:14px 18px;border-top:1px solid #eee;">',
+    '    <button id="iam-prechat-skip" style="background:transparent;border:1.5px solid #ddd;color:#888;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer;">Skip</button>',
     '    <button id="iam-prechat-submit" style="flex:1;background:' + COLOR + ';color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">Start Chat →</button>',
     '  </div>',
     '</div>',
@@ -217,9 +217,12 @@
     if (avatar) {
       if (cfg.avatarUrl) {
         avatar.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.parentNode.textContent=\'' + initial + '\'" />';
-        if (launcher) launcher.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.parentNode.innerHTML=\'💬\'" />';
+        if (launcher) launcher.innerHTML = '<img src="' + cfg.avatarUrl + '" alt="" onerror="this.style.display=\'none\'" />';
       } else {
         avatar.textContent = initial;
+        if (launcher) {
+          launcher.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+        }
       }
     }
     // Update greeting popup text once config loads
@@ -263,7 +266,7 @@
   }
   function appendSystem(c) {
     var n = botConfig.displayName || botConfig.name || 'Bot';
-    var label = c === 'agent_joined' ? '👤 A live agent has joined' : n + ' has resumed';
+    var label = c === 'agent_joined' ? '● A live agent has joined' : n + ' has resumed';
     var d=document.createElement('div'); d.className='iam-system';
     d.innerHTML='<span>'+label+'</span>'; msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight;
   }
@@ -459,6 +462,7 @@
   function showPreChat() {
     if (preChatEl) { preChatEl.style.display = 'flex'; preChatEl.style.flexDirection = 'column'; }
     if (msgsEl)    msgsEl.style.display = 'none';
+    [pcNameEl, pcEmailEl].forEach(function(el) { if (!el) return; el.onfocus=function(){el.style.borderColor=COLOR;}; el.onblur=function(){el.style.borderColor='#e0e0e0';}; });
     if (pcSubmit)  pcSubmit.onclick = submitPreChat;
     if (pcSkip)    pcSkip.onclick   = skipPreChat;
     if (pcEmailEl) pcEmailEl.onkeydown = function(e) { if (e.key === 'Enter') submitPreChat(); };
@@ -469,7 +473,10 @@
   function skipPreChat() {
     _preChatDone = true;
     if (preChatEl) preChatEl.style.display = 'none';
-    if (msgsEl)    msgsEl.style.display    = 'flex';
+    if (msgsEl) {
+      msgsEl.style.display = 'flex';
+      setTimeout(function() { msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
+    }
     input.focus();
   }
 
