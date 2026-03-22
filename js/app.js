@@ -1177,18 +1177,8 @@ async function renderConversations() {
     const color = getColorForId(c.id);
     const isActive = c.id === AppState.activeConversation;
 
-    // Build lead variable pills — show non-empty fields
-    const pillDefs = [
-      { key: 'email',   icon: '✉',  color: '#6c63ff' },
-      { key: 'phone',   icon: '📞', color: '#10b981' },
-      { key: 'company', icon: '🏢', color: '#f59e0b' },
-    ];
-    const pills = c.lead
-      ? pillDefs
-          .filter(p => c.lead[p.key])
-          .map(p => `<span title="${p.key}: ${c.lead[p.key]}" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;background:${p.color}18;color:${p.color};max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.icon} ${c.lead[p.key]}</span>`)
-          .join('')
-      : '';
+    // Show compact lead indicator (dot) if lead data exists — full details in sidebar
+    const hasLead = c.lead && (c.lead.name || c.lead.email);
 
     return `
       <div class="conv-item ${isActive ? 'active' : ''}"
@@ -1196,10 +1186,13 @@ async function renderConversations() {
         <div class="conv-avatar" style="background:${color}33; color:${color}">${initials(c.user || 'AN')}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div class="conv-name" style="font-weight:${c.lead?.name || c.lead?.email ? '600' : '400'};">${c.user}</div>
-            <div class="conv-time">${c.time}</div>
+            <div class="conv-name">${c.user}</div>
+            <div style="display:flex;align-items:center;gap:5px;">
+              ${hasLead ? '<span style="width:6px;height:6px;border-radius:50%;background:#10b981;flex-shrink:0;" title="Has contact info"></span>' : ''}
+              <div class="conv-time">${c.time}</div>
+            </div>
           </div>
-          ${pills ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">${pills}</div>` : `<div class="conv-preview" id="conv-preview-${c.id}">${c.msgs > 0 ? c.msgs + ' message' + (c.msgs !== 1 ? 's' : '') : 'No messages yet'}</div>`}
+          <div class="conv-preview">${c.msgs > 0 ? c.msgs + ' message' + (c.msgs !== 1 ? 's' : '') : 'No messages yet'}</div>
         </div>
         ${c.hitl_active ? '<div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;" title="Agent active"></div>' : c.status === 'active' ? '<div class="conv-unread"></div>' : ''}
       </div>
@@ -1216,8 +1209,23 @@ async function selectConversation(convId) {
   AppState.activeConversation = convId;
   LocalDB.set('activeConversation', convId);
   await loadConversationMessages(convId);
-  // Subscribe so new messages appear live — user messages, bot, agent, system
   subscribeToConversation(convId);
+
+  // Populate contact sidebar with lead + metadata for this conversation
+  const conv = AppState.conversations?.find(c => c.id === convId);
+  if (conv) {
+    // Fetch metadata from DB if not cached
+    if (!conv.metadata) {
+      const { data } = await supabase.from('conversations').select('metadata, user_id').eq('id', convId).single().catch(() => ({ data: null }));
+      if (data) { conv.metadata = data.metadata; conv.user_id = data.user_id; }
+    }
+    renderConvSidebar(conv);
+    // Make sure sidebar is visible
+    const sidebar = document.getElementById('conv-sidebar');
+    if (sidebar) { sidebar.style.width = '260px'; sidebar.style.opacity = '1'; }
+    const tab = document.getElementById('conv-sidebar-tab');
+    if (tab) tab.style.display = 'none';
+  }
 }
 window.selectConversation = selectConversation;
 
@@ -3665,6 +3673,75 @@ window.copyApiKey = copyApiKey;
 window.openBotPreview = openBotPreview;
 window.setPreviewMode = setPreviewMode;
 window.sharePreviewLink = sharePreviewLink;
+function toggleConvSidebar() {
+  const sidebar = document.getElementById('conv-sidebar');
+  const tab     = document.getElementById('conv-sidebar-tab');
+  if (!sidebar) return;
+  const collapsed = sidebar.style.width === '0px' || sidebar.style.width === '';
+  if (collapsed) {
+    sidebar.style.width = '260px';
+    sidebar.style.opacity = '1';
+    if (tab) tab.style.display = 'none';
+  } else {
+    sidebar.style.width = '0px';
+    sidebar.style.opacity = '0';
+    if (tab) tab.style.display = 'flex';
+  }
+}
+window.toggleConvSidebar = toggleConvSidebar;
+
+function renderConvSidebar(conv) {
+  const el = document.getElementById('conv-sidebar-content');
+  if (!el) return;
+  const lead = conv?.lead || null;
+  const meta = conv?.metadata || {};
+
+  const section = (title, rows) => rows.length === 0 ? '' : `
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">${title}</div>
+      ${rows.map(([k,v]) => `
+        <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:8px;">
+          <span style="font-size:10px;color:var(--text-muted);">${k}</span>
+          <span style="font-size:12px;color:var(--text-primary);font-weight:500;word-break:break-all;">${v || '—'}</span>
+        </div>`).join('')}
+    </div>`;
+
+  const contactRows = [
+    ['Name',    lead?.name],
+    ['Email',   lead?.email],
+    ['Phone',   lead?.phone],
+    ['Company', lead?.company],
+    ['Status',  lead?.status],
+  ].filter(([,v]) => v);
+
+  const metaRows = [
+    ['Page URL',   meta?.page_url],
+    ['Referrer',   meta?.referrer_url],
+    ['Language',   meta?.browser_language],
+    ['Timezone',   meta?.user_timezone],
+    ['Device',     meta?.device_type],
+    ['Platform',   meta?.user_platform],
+    ['Page Title', meta?.page_title],
+  ].filter(([,v]) => v);
+
+  const visitorRow = conv?.user_id && !conv.user_id.startsWith('vis_') && !conv.user_id.startsWith('anonymous_')
+    ? `<div style="margin-bottom:8px;"><span style="font-size:10px;color:var(--text-muted);">Visitor ID</span><br><span style="font-size:11px;font-family:monospace;color:var(--text-secondary);word-break:break-all;">${conv.user_id}</span></div>`
+    : '';
+
+  if (!contactRows.length && !metaRows.length && !visitorRow) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px 0;">No data collected yet.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    ${contactRows.length ? section('Contact', contactRows) : ''}
+    ${contactRows.length && (metaRows.length || visitorRow) ? '<div style="height:1px;background:var(--border);margin:4px 0;"></div>' : ''}
+    ${metaRows.length ? section('Session', metaRows) : ''}
+    ${visitorRow ? '<div style="height:1px;background:var(--border);margin:4px 0;"></div><div>' + visitorRow + '</div>' : ''}
+  `;
+}
+window.renderConvSidebar = renderConvSidebar;
+
 window.showConfigSection = showConfigSection;
 window.markConfigDirty = markConfigDirty;
 window.markConfigClean = markConfigClean;
