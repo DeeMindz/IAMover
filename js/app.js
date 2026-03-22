@@ -1217,8 +1217,10 @@ async function selectConversation(convId) {
   if (conv) {
     // Fetch metadata from DB if not cached
     if (!conv.metadata) {
-      const { data } = await supabase.from('conversations').select('metadata, user_id').eq('id', convId).single().catch(() => ({ data: null }));
-      if (data) { conv.metadata = data.metadata; conv.user_id = data.user_id; }
+      try {
+        const { data } = await supabase.from('conversations').select('metadata, user_id').eq('id', convId).single();
+        if (data) { conv.metadata = data.metadata; conv.user_id = data.user_id; }
+      } catch (_) {}
     }
     renderContactDrawer();
     // Show "Contact Info" button in header when a conversation is selected
