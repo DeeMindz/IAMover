@@ -501,6 +501,10 @@
   function showPreChat() {
     if (!preChatEl) return;
     preChatEl.style.display = 'block';
+    // Disable input until form is dismissed
+    if (input) { input.disabled = true; input.placeholder = 'Please introduce yourself first…'; }
+    var sendBtn = document.getElementById('iam-send');
+    if (sendBtn) sendBtn.disabled = true;
     [pcNameEl, pcEmailEl].forEach(function(el) {
       if (!el) return;
       el.onfocus = function(){ el.style.borderColor = COLOR; };
@@ -515,6 +519,10 @@
   function skipPreChat() {
     _preChatDone = true;
     if (preChatEl) preChatEl.style.display = 'none';
+    // Re-enable input
+    if (input) { input.disabled = false; input.placeholder = 'Type a message…'; }
+    var sendBtn = document.getElementById('iam-send');
+    if (sendBtn) sendBtn.disabled = false;
     appendBot(botConfig.greeting);
     setTimeout(function(){ if(msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
     input.focus();
