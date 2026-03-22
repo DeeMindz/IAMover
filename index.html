@@ -1510,16 +1510,17 @@
     }
   </script>
 
-  <!-- Contact Info Modal -->
-  <div class="modal-overlay" id="modal-contact-info">
-    <div class="modal" style="max-width:440px;width:440px;">
-      <div class="modal-header">
-        <div class="modal-title" id="contact-modal-title">Contact Info</div>
-        <button class="icon-btn" onclick="closeModal('modal-contact-info')">✕</button>
-      </div>
-      <div class="modal-body" id="contact-modal-body" style="padding:0;max-height:70vh;overflow-y:auto;">
-        <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 20px;">Loading...</div>
-      </div>
+  <!-- Contact Info Drawer -->
+  <div id="contact-drawer-overlay" onclick="closeContactDrawer()"></div>
+  <div id="contact-drawer">
+    <div id="contact-drawer-header">
+      <div id="contact-modal-title" style="font-family:var(--font-display);font-weight:700;font-size:15px;">Contact Info</div>
+      <button class="icon-btn" onclick="closeContactDrawer()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="contact-modal-body" style="flex:1;overflow-y:auto;padding:20px;">
+      <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0;">Loading...</div>
     </div>
   </div>
 

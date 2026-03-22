@@ -3686,13 +3686,19 @@ window.openBotPreview = openBotPreview;
 window.setPreviewMode = setPreviewMode;
 window.sharePreviewLink = sharePreviewLink;
 function openContactDrawer() {
+  const overlay = document.getElementById('contact-drawer-overlay');
+  const drawer  = document.getElementById('contact-drawer');
+  if (overlay) overlay.classList.add('open');
+  if (drawer)  drawer.classList.add('open');
   renderContactDrawer();
-  openModal('modal-contact-info');
 }
 window.openContactDrawer = openContactDrawer;
 
 function closeContactDrawer() {
-  closeModal('modal-contact-info');
+  const overlay = document.getElementById('contact-drawer-overlay');
+  const drawer  = document.getElementById('contact-drawer');
+  if (overlay) overlay.classList.remove('open');
+  if (drawer)  drawer.classList.remove('open');
 }
 window.closeContactDrawer = closeContactDrawer;
 
