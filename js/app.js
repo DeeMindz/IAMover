@@ -1294,6 +1294,10 @@ async function loadConversationMessages(convId) {
       return;
     }
 
+    // Record latest message timestamp so dashboard poll cursor starts here
+    const latestMsg = messages[messages.length - 1];
+    if (latestMsg?.created_at) _dashLastMsgAt = latestMsg.created_at;
+
     // Update conversation object with fetched messages
     if (conv) {
       conv.messages = messages.map(m => ({
@@ -1391,11 +1395,16 @@ let _dashLastMsgAt    = null;
 
 function startDashboardPoll(convId) {
   stopDashboardPoll();
+  // isFirstPoll: first poll fetches everything after the last loaded message.
+  // _dashLastMsgAt is set by loadConversationMessages to the last message timestamp,
+  // so the first poll only fetches NEW messages — no duplicate history.
   const isFirst = { val: true };
   _dashPollInterval = setInterval(async () => {
     try {
       let url = `/api/conversation/messages?conversation_id=${convId}`;
-      if (!isFirst.val && _dashLastMsgAt) url += `&after=${encodeURIComponent(_dashLastMsgAt)}`;
+      // Always use cursor — even on first poll — since loadConversationMessages
+      // already set _dashLastMsgAt to the last known message timestamp
+      if (_dashLastMsgAt) url += `&after=${encodeURIComponent(_dashLastMsgAt)}`;
       const res  = await fetch(url);
       const data = await res.json();
       isFirst.val = false;
@@ -1431,6 +1440,9 @@ function startDashboardPoll(convId) {
           div.className = 'message bot';
           div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div><div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div><div class="msg-bubble" style="border-left:3px solid #10b981;">${m.content}</div><div class="msg-time">${time}</div></div>`;
         } else if (m.role === 'system') {
+          const sysKey = '__sys__' + m.content;
+          if (shown.has(sysKey)) return;
+          shown.add(sysKey);
           const bName = botObj?.name || 'Bot';
           const label = m.content === 'agent_joined' ? '👤 A live agent has joined' : `${bName} has resumed`;
           div.style.cssText = 'display:flex;align-items:center;justify-content:center;margin:10px 0;';
@@ -2439,7 +2451,12 @@ function startHITLPolling(cId) {
             showAgentMsg(m.content); isSending = false;
           }
           if (m.role === 'system') {
-            addSystemMsg(m.content);
+            // Dedup system messages — only show each content type once
+            var sysKey = 'sys_' + m.content;
+            if (!shown[sysKey]) {
+              addSystemMsg(m.content);
+              shown[sysKey] = true;
+            }
             if (m.content === 'agent_left') stopHITLPolling();
           }
           if (m.role === 'bot') {
