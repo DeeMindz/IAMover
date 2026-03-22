@@ -1119,23 +1119,40 @@ async function renderConversations() {
   try {
     const dbConvs = await Conversations.getAll(AppState.currentBot.id);
 
+    // Fetch leads for all conversations in one query
+    const convIds = dbConvs.map(c => c.id);
+    let leadsByConvId = {};
+    if (convIds.length > 0) {
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('conversation_id, name, email, phone, company')
+        .in('conversation_id', convIds);
+      if (leads) leads.forEach(l => { leadsByConvId[l.conversation_id] = l; });
+    }
+
     // Deduplicate by id just in case
     const seen = new Set();
     const mappedConvs = dbConvs
       .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
-      .map(c => ({
-        id: c.id,
-        botId: c.bot_id,
-        user: c.user_id && !c.user_id.startsWith('vis_') && !c.user_id.startsWith('anonymous_')
-          ? c.user_id
-          : 'Anonymous Visitor',
-        time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        date: new Date(c.updated_at).toLocaleDateString(),
-        status: (Date.now() - new Date(c.updated_at).getTime() < 3600000) ? 'active' : 'closed',
-        hitl_active: c.hitl_active || false,
-        msgs: c.messages?.[0]?.count || 0,
-        messages: []
-      }));
+      .map(c => {
+        const lead = leadsByConvId[c.id] || null;
+        // Display name priority: lead name > lead email > visitor id > Anonymous Visitor
+        const displayName = lead?.name || lead?.email
+          || (c.user_id && !c.user_id.startsWith('vis_') && !c.user_id.startsWith('anonymous_') ? c.user_id : null)
+          || 'Anonymous Visitor';
+        return {
+          id: c.id,
+          botId: c.bot_id,
+          user: displayName,
+          lead: lead, // full lead object for variable pills
+          time: new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          date: new Date(c.updated_at).toLocaleDateString(),
+          status: (Date.now() - new Date(c.updated_at).getTime() < 3600000) ? 'active' : 'closed',
+          hitl_active: c.hitl_active || false,
+          msgs: c.messages?.[0]?.count || 0,
+          messages: []
+        };
+      });
 
     // Restore HITL state from DB after page refresh
     const activeHITL = mappedConvs.find(c => c.hitl_active);
@@ -1159,18 +1176,32 @@ async function renderConversations() {
   list.innerHTML = botConvs.map(c => {
     const color = getColorForId(c.id);
     const isActive = c.id === AppState.activeConversation;
+
+    // Build lead variable pills — show non-empty fields
+    const pillDefs = [
+      { key: 'email',   icon: '✉',  color: '#6c63ff' },
+      { key: 'phone',   icon: '📞', color: '#10b981' },
+      { key: 'company', icon: '🏢', color: '#f59e0b' },
+    ];
+    const pills = c.lead
+      ? pillDefs
+          .filter(p => c.lead[p.key])
+          .map(p => `<span title="${p.key}: ${c.lead[p.key]}" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;background:${p.color}18;color:${p.color};max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.icon} ${c.lead[p.key]}</span>`)
+          .join('')
+      : '';
+
     return `
       <div class="conv-item ${isActive ? 'active' : ''}"
            onclick="selectConversation('${c.id}')">
         <div class="conv-avatar" style="background:${color}33; color:${color}">${initials(c.user || 'AN')}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div class="conv-name">${c.user}</div>
+            <div class="conv-name" style="font-weight:${c.lead?.name || c.lead?.email ? '600' : '400'};">${c.user}</div>
             <div class="conv-time">${c.time}</div>
           </div>
-          <div class="conv-preview" id="conv-preview-${c.id}">${c.msgs > 0 ? c.msgs + ' message' + (c.msgs !== 1 ? 's' : '') : 'No messages yet'}</div>
+          ${pills ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">${pills}</div>` : `<div class="conv-preview" id="conv-preview-${c.id}">${c.msgs > 0 ? c.msgs + ' message' + (c.msgs !== 1 ? 's' : '') : 'No messages yet'}</div>`}
         </div>
-        ${c.status === 'active' ? '<div class="conv-unread"></div>' : ''}
+        ${c.hitl_active ? '<div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;" title="Agent active"></div>' : c.status === 'active' ? '<div class="conv-unread"></div>' : ''}
       </div>
     `;
   }).join('');
