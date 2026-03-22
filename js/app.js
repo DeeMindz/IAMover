@@ -3091,7 +3091,17 @@ async function renderBotConfig(extra = {}) {
   const botId = extra.botId || AppState.currentBot?.id;
   if (!botId) { navigate('home'); return; }
 
-  const bot = AppState.bots.find(b => b.id === botId) || AppState.currentBot;
+  // Use getOne to load bot with bot_variables(*) join — getAll() doesn't include variables
+  let bot;
+  try {
+    bot = await Bots.getOne(botId);
+    // Merge into AppState so other parts of the app have the latest
+    const idx = AppState.bots.findIndex(b => b.id === botId);
+    if (idx >= 0) AppState.bots[idx] = { ...AppState.bots[idx], ...bot };
+  } catch (e) {
+    console.warn('getOne failed, falling back to cached bot:', e);
+    bot = AppState.bots.find(b => b.id === botId) || AppState.currentBot;
+  }
   if (!bot) { navigate('home'); return; }
 
   AppState.currentBot = bot;
@@ -3559,6 +3569,8 @@ window.openBotPreview = openBotPreview;
 window.setPreviewMode = setPreviewMode;
 window.sharePreviewLink = sharePreviewLink;
 window.showConfigSection = showConfigSection;
+window.markConfigDirty = markConfigDirty;
+window.markConfigClean = markConfigClean;
 window.handleConversationsNav = handleConversationsNav;
 window.renderAnalytics = renderAnalytics;
 
