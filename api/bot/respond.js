@@ -421,11 +421,16 @@ export default async function handler(req, res) {
         if (bot.anti_hallucination && !knowledgeContext) {
             const fallback = bot.fallback_message
                 || "I don't have that information in my knowledge base. Would you like to speak with a human agent?";
-            // Still save the user message and a bot response to the conversation
+            // Note: user message was already saved in Step 4 — don't insert again
             if (conversation_id) {
-                await supabase.from('messages').insert({ conversation_id, role: 'user', content: message });
-                await supabase.from('messages').insert({ conversation_id, role: 'bot', content: fallback });
+                const { data: fbMsg } = await supabase
+                    .from('messages')
+                    .insert({ conversation_id, role: 'bot', content: fallback })
+                    .select('id, created_at')
+                    .single();
                 await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversation_id);
+                log.info('Anti-hallucination block — no KB context, returning fallback', { conversation_id });
+                return res.status(200).json({ response: fallback, bot_msg_ts: fbMsg?.created_at || null });
             }
             log.info('Anti-hallucination block — no KB context, returning fallback', { conversation_id });
             return res.status(200).json({ response: fallback, bot_msg_ts: null });
