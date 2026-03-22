@@ -151,22 +151,21 @@
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">✕</button>',
     '</div>',
-    '<div id="iam-messages">',
-    '  <div id="iam-prechat" style="display:none;margin:8px 4px 4px;background:#fff;border:1.5px solid #e8e8f0;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(108,99,255,.08);">',
-    '    <div style="background:' + COLOR + '18;padding:12px 16px 10px;border-bottom:1px solid #eee;">',
-    '      <div style="font-weight:700;font-size:13px;color:#333;">Quick intro</div>',
-    '      <div style="font-size:12px;color:#777;margin-top:2px;">Completely optional — feel free to skip.</div>',
-    '    </div>',
-    '    <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">',
-    '      <input id="iam-pc-name" placeholder="Your name" autocomplete="name" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
-    '      <input id="iam-pc-email" type="email" placeholder="Email address" autocomplete="email" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
-    '      <div style="display:flex;gap:8px;margin-top:2px;">',
-    '        <button id="iam-prechat-skip" style="background:transparent;border:1.5px solid #e0e0e0;color:#999;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:inherit;">Skip</button>',
-    '        <button id="iam-prechat-submit" style="flex:1;background:' + COLOR + ';color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Start Chat →</button>',
-    '      </div>',
+    '<div id="iam-prechat" style="display:none;margin:8px 8px 0;background:#fff;border:1.5px solid #e8e8f0;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(108,99,255,.08);flex-shrink:0;">',
+    '  <div style="background:' + COLOR + '18;padding:12px 16px 10px;border-bottom:1px solid #eee;">',
+    '    <div style="font-weight:700;font-size:13px;color:#333;">Quick intro</div>',
+    '    <div style="font-size:12px;color:#888;margin-top:2px;">Completely optional — feel free to skip.</div>',
+    '  </div>',
+    '  <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">',
+    '    <input id="iam-pc-name" placeholder="Your name" autocomplete="name" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
+    '    <input id="iam-pc-email" type="email" placeholder="Email address" autocomplete="email" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />',
+    '    <div style="display:flex;gap:8px;">',
+    '      <button id="iam-prechat-skip" style="background:transparent;border:1.5px solid #e0e0e0;color:#999;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:inherit;">Skip</button>',
+    '      <button id="iam-prechat-submit" style="flex:1;background:' + COLOR + ';color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Start Chat →</button>',
     '    </div>',
     '  </div>',
     '</div>',
+    '<div id="iam-messages"></div>',
     '<div id="iam-input-area">',
     '  <input id="iam-input" placeholder="Type a message…" autocomplete="off" />',
     '  <button id="iam-send">↑</button>',
@@ -399,12 +398,14 @@
           }).catch(function() { startStatusCheck(convId); if (cb) cb(); });
 
       } else {
-        // New visitor
-        msgsEl.innerHTML = '';
+        // New visitor — preserve iam-prechat card when clearing messages
+        Array.from(msgsEl.children).forEach(function(child) {
+          if (child.id !== 'iam-prechat') child.remove();
+        });
         _shownMsgIds = {}; _shownSysMsgs = {};
         _lastMsgAt = new Date().toISOString();
-        // Show pre-chat card first (inside messages), then greeting below it
         startStatusCheck(convId);
+        // Show pre-chat card first (inside messages), then greeting beneath
         if (!_preChatDone) {
           showPreChat();
         }
@@ -456,16 +457,24 @@
     // Generate fresh visitor ID for new conversation
     var newVid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2,9);
     localStorage.setItem('iam_visitor_id', newVid);
-    msgsEl.innerHTML = '';
+    Array.from(msgsEl.children).forEach(function(child) {
+      if (child.id !== 'iam-prechat') child.remove();
+    });
+    _preChatDone = false; // show form again for new conversation
     appendBot(botConfig.greeting);
     createConversation(function() { input.focus(); });
   }
 
   // ── Open / close ──────────────────────────────────────────────────
   function showPreChat() {
+    // Re-query each time in case DOM was reset
+    preChatEl = document.getElementById('iam-prechat');
+    pcNameEl  = document.getElementById('iam-pc-name');
+    pcEmailEl = document.getElementById('iam-pc-email');
+    pcSubmit  = document.getElementById('iam-prechat-submit');
+    pcSkip    = document.getElementById('iam-prechat-skip');
     if (!preChatEl) return;
-    preChatEl.style.display = 'block'; // card is already inside msgsEl
-    // Focus border color
+    preChatEl.style.display = 'block';
     [pcNameEl, pcEmailEl].forEach(function(el) {
       if (!el) return;
       el.onfocus = function(){ el.style.borderColor = COLOR; };
@@ -480,7 +489,8 @@
 
   function skipPreChat() {
     _preChatDone = true;
-    if (preChatEl) preChatEl.style.display = 'none';
+    var pc = document.getElementById('iam-prechat');
+    if (pc) pc.style.display = 'none';
     if (msgsEl) setTimeout(function(){ msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
     input.focus();
   }
