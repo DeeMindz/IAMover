@@ -52,97 +52,132 @@ const OPENAI_MODEL_MAP = {
 // ── Lead extraction helper ────────────────────────────────────────────────────
 // Uses a fast LLM call to extract structured lead data from conversation.
 // Runs after the main response — does not block user-facing latency.
-async function extractAndSaveLead({ bot_id, conversation_id, message, responseText, supabase, log }) {
+async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
     try {
-        // Load recent conversation messages for context
+        // Load full conversation for extraction context
         const { data: msgs } = await supabase
             .from('messages')
             .select('role, content')
             .eq('conversation_id', conversation_id)
             .order('created_at', { ascending: true })
-            .limit(20);
+            .limit(30);
 
-        if (!msgs || msgs.length < 2) return; // not enough context
+        if (!msgs || msgs.length < 2) return;
 
         const conversationText = msgs
             .filter(m => m.role === 'user' || m.role === 'bot')
-            .map(m => `${m.role === 'user' ? 'User' : 'Bot'}: ${m.content}`)
+            .map(m => (m.role === 'user' ? 'User: ' : 'Bot: ') + m.content)
             .join('\n');
-
-        // Quick extraction prompt — returns JSON or "none"
-        const extractPrompt = `Extract contact information from this conversation. Return ONLY valid JSON or the word "none".
-
-Conversation:
-${conversationText}
-
-Return JSON like: {"name":"John Smith","email":"john@example.com","phone":"555-1234","company":"Acme Inc"}
-Only include fields that are clearly stated by the user. Return "none" if no contact info was shared.`;
 
         const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
         if (!apiKey) return;
 
+        // Use gemini-1.5-flash — stable, fast, cheap. gemini-2.0-flash doesn't exist in v1beta.
         const extractRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: extractPrompt }] }],
+                    contents: [{ parts: [{ text:
+                        'Extract contact information from this conversation. Return ONLY valid JSON or the word none.\n\n' +
+                        'Conversation:\n' + conversationText + '\n\n' +
+                        'Return JSON: {"name":"...","email":"...","phone":"...","company":"..."}\n' +
+                        'Only include fields clearly stated by the user. Omit fields not mentioned. Return none if nothing found.'
+                    }] }],
                     generationConfig: { maxOutputTokens: 200, temperature: 0 }
                 })
             }
         );
 
-        if (!extractRes.ok) return;
-        const extractData = await extractRes.json();
-        const raw = extractData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        if (!extractRes.ok) {
+            log.warn('Lead extraction API failed', { status: extractRes.status });
+            return;
+        }
 
+        const extractData = await extractRes.json();
+        const raw = (extractData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
         if (!raw || raw.toLowerCase() === 'none') return;
 
-        // Parse the JSON — strip markdown fences if present
-        const jsonStr = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        let lead;
-        try { lead = JSON.parse(jsonStr); } catch { return; }
+        let extracted;
+        try {
+            extracted = JSON.parse(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+        } catch { return; }
 
-        // Must have at least email or name to be worth saving
-        if (!lead.email && !lead.name) return;
+        if (!extracted.email && !extracted.name) return;
 
-        // Check if lead already exists for this conversation
-        const { data: existing } = await supabase
-            .from('leads')
-            .select('id, name, email')
-            .eq('conversation_id', conversation_id)
-            .limit(1);
+        log.info('Lead data extracted', { conversation_id, name: extracted.name, email: extracted.email });
 
-        if (existing && existing.length > 0) {
-            // Update existing lead with any new info
+        // ── Deduplication strategy ────────────────────────────────────────────
+        // Priority 1: match by email across ALL leads (email is the primary key)
+        // Priority 2: match by this conversation_id (same session, no email yet)
+        let existingLead = null;
+
+        if (extracted.email) {
+            // Email is the canonical identifier — check globally across all bots
+            const { data: byEmail } = await supabase
+                .from('leads')
+                .select('id, bot_id, conversation_id, name, email, phone, company')
+                .eq('email', extracted.email)
+                .limit(1)
+                .maybeSingle();
+            existingLead = byEmail;
+        }
+
+        if (!existingLead) {
+            // Fallback: same conversation (name-only capture)
+            const { data: byConv } = await supabase
+                .from('leads')
+                .select('id, bot_id, conversation_id, name, email, phone, company')
+                .eq('conversation_id', conversation_id)
+                .limit(1)
+                .maybeSingle();
+            existingLead = byConv;
+        }
+
+        if (existingLead) {
+            // Update — only fill in fields that are missing
             const updates = {};
-            if (lead.name  && !existing[0].name)  updates.name  = lead.name;
-            if (lead.email && !existing[0].email) updates.email = lead.email;
-            if (lead.phone)  updates.phone   = lead.phone;
-            if (lead.company) updates.company = lead.company;
+            if (extracted.name    && !existingLead.name)    updates.name    = extracted.name;
+            if (extracted.email   && !existingLead.email)   updates.email   = extracted.email;
+            if (extracted.phone   && !existingLead.phone)   updates.phone   = extracted.phone;
+            if (extracted.company && !existingLead.company) updates.company = extracted.company;
+            // Always keep conversation_id up to date (may have switched conversations)
+            if (existingLead.conversation_id !== conversation_id) updates.conversation_id = conversation_id;
+
             if (Object.keys(updates).length > 0) {
-                await supabase.from('leads').update(updates).eq('id', existing[0].id);
-                log.info('Lead updated', { conversation_id, updates });
+                await supabase.from('leads').update(updates).eq('id', existingLead.id);
+                log.info('Lead updated', { lead_id: existingLead.id, updates });
+            } else {
+                log.info('Lead already complete — no update needed', { lead_id: existingLead.id });
             }
         } else {
             // Create new lead
-            await supabase.from('leads').insert({
-                bot_id,
-                conversation_id,
-                name:    lead.name    || null,
-                email:   lead.email   || null,
-                phone:   lead.phone   || null,
-                company: lead.company || null,
-                status:  'cold',
-                extra_data: {}
-            });
-            log.info('Lead captured', { conversation_id, name: lead.name, email: lead.email });
+            const { data: newLead, error: insertErr } = await supabase
+                .from('leads')
+                .insert({
+                    bot_id,
+                    conversation_id,
+                    name:       extracted.name    || null,
+                    email:      extracted.email   || null,
+                    phone:      extracted.phone   || null,
+                    company:    extracted.company || null,
+                    status:     'cold',
+                    extra_data: {}
+                })
+                .select('id')
+                .single();
+            if (insertErr) {
+                log.warn('Lead insert failed', { error: insertErr.message });
+            } else {
+                log.info('New lead created', { lead_id: newLead.id, name: extracted.name, email: extracted.email });
+            }
         }
     } catch (e) {
         log.warn('Lead extraction failed', { error: e.message });
     }
 }
+
 
 export default async function handler(req, res) {
     // CORS — handle null origin from srcdoc iframes
@@ -369,24 +404,32 @@ export default async function handler(req, res) {
         if (conversation_id) {
             let existingLead = null;
             try {
-                const { data: _lead } = await supabase
+                // Check this conversation first
+                const { data: byConv } = await supabase
                     .from('leads')
                     .select('name, email, phone, company')
                     .eq('conversation_id', conversation_id)
                     .limit(1)
-                    .maybeSingle(); // maybeSingle() returns null (not error) when no row found
-                existingLead = _lead;
-            } catch (_) { /* no lead found, continue normally */ }
+                    .maybeSingle();
+                existingLead = byConv;
+            } catch (_) {}
 
             if (existingLead) {
-                const knownParts = [];
-                if (existingLead.name)    knownParts.push(`name: "${existingLead.name}"`);
-                if (existingLead.email)   knownParts.push(`email: "${existingLead.email}"`);
-                if (existingLead.phone)   knownParts.push(`phone: "${existingLead.phone}"`);
-                if (existingLead.company) knownParts.push(`company: "${existingLead.company}"`);
+                const known = [];
+                if (existingLead.name)    known.push('name: "' + existingLead.name + '"');
+                if (existingLead.email)   known.push('email: "' + existingLead.email + '"');
+                if (existingLead.phone)   known.push('phone: "' + existingLead.phone + '"');
+                if (existingLead.company) known.push('company: "' + existingLead.company + '"');
 
-                if (knownParts.length > 0) {
-                    systemPrompt += `\n\nUSER CONTACT INFO ALREADY CAPTURED: ${knownParts.join(', ')}. Do NOT ask for this information again. Address the user by their name when appropriate.`;
+                if (known.length > 0) {
+                    // Tell the LLM exactly what it already knows and what (if anything) is missing
+                    const allFields = ['name', 'email', 'phone', 'company'];
+                    const missing = allFields.filter(f => !existingLead[f]);
+                    systemPrompt += '\n\nUSER CONTACT INFO ALREADY CAPTURED: ' + known.join(', ') + '.'
+                        + ' Do NOT ask for these again. Address the user by name.'
+                        + (missing.length > 0
+                            ? ' If relevant to the conversation you may ask for: ' + missing.join(', ') + '.'
+                            : ' You have their complete contact information.');
                 }
             }
         }
@@ -574,7 +617,7 @@ export default async function handler(req, res) {
         // ── Lead Capture: extract name/email/phone from conversation ─────────
         // Run async extraction in background — don't block the response
         if (conversation_id && responseText) {
-            extractAndSaveLead({ bot_id, conversation_id, message, responseText, supabase, log }).catch(() => {});
+            extractAndSaveLead({ bot_id, conversation_id, supabase, log }).catch(() => {});
         }
 
         return res.status(200).json({ response: responseText, bot_msg_ts: savedMsg?.created_at || null });
