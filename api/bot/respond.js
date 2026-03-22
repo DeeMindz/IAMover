@@ -237,6 +237,47 @@ export default async function handler(req, res) {
         // ── Step 5: Build system prompt ─────────────────────────────────────
         let systemPrompt = bot.system_prompt || 'You are a helpful AI assistant.';
 
+        // ── Variable substitution ────────────────────────────────────────────
+        // Replace {{variable}} placeholders in the system prompt before sending to LLM
+        const now = new Date();
+        const padZ = n => String(n).padStart(2, '0');
+        const currentTimestamp = `${now.getFullYear()}-${padZ(now.getMonth()+1)}-${padZ(now.getDate())} ${padZ(now.getHours())}:${padZ(now.getMinutes())}:${padZ(now.getSeconds())}`;
+        const currentDate      = `${now.getFullYear()}-${padZ(now.getMonth()+1)}-${padZ(now.getDate())}`;
+        const currentTime      = `${padZ(now.getHours())}:${padZ(now.getMinutes())}`;
+        const dayNames         = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const monthNames       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const currentDay       = dayNames[now.getDay()];
+        const currentMonth     = monthNames[now.getMonth()];
+        const currentYear      = String(now.getFullYear());
+
+        // Built-in variables always available in any prompt
+        const builtInVars = {
+            current_timestamp: currentTimestamp,
+            current_date:      currentDate,
+            current_time:      currentTime,
+            current_day:       currentDay,
+            current_month:     currentMonth,
+            current_year:      currentYear,
+            bot_name:          bot.name || 'Assistant',
+        };
+
+        // Load custom bot variables from DB if any exist
+        const { data: botVars } = await supabase
+            .from('bot_variables')
+            .select('name, value')
+            .eq('bot_id', bot_id);
+
+        const allVars = { ...builtInVars };
+        if (botVars) {
+            botVars.forEach(v => { allVars[v.name] = v.value; });
+        }
+
+        // Replace {{variable_name}} — unknown variables are left as-is so agent can see them
+        systemPrompt = systemPrompt.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+            const trimmed = key.trim();
+            return allVars.hasOwnProperty(trimmed) ? allVars[trimmed] : match;
+        });
+
         // FIX: inject anti-hallucination rules when enabled
         if (bot.anti_hallucination) {
             systemPrompt += `\n\nIMPORTANT RULES:
@@ -372,17 +413,14 @@ export default async function handler(req, res) {
         }
 
         // ── Step 7: Save bot response and update conversation ───────────────
-        let botMsgTimestamp = null;
         if (conversation_id && responseText) {
-            const { data: savedMsg, error: saveBotErr } = await supabase
-                .from('messages')
-                .insert({ conversation_id, role: 'bot', content: responseText })
-                .select('id, created_at')
-                .single();
+            const { error: saveBotErr } = await supabase.from('messages').insert({
+                conversation_id,
+                role:    'bot',
+                content: responseText
+            });
             if (saveBotErr) {
                 log.warn('Failed to save bot response', { error: saveBotErr.message });
-            } else if (savedMsg) {
-                botMsgTimestamp = savedMsg.created_at;
             }
 
             await supabase
@@ -394,8 +432,7 @@ export default async function handler(req, res) {
         }
 
         log.info('Request complete', { bot_id, model: botModel, responseLength: responseText.length });
-        // Return bot_msg_ts so widget can advance its poll cursor past this message
-        return res.status(200).json({ response: responseText, bot_msg_ts: botMsgTimestamp });
+        return res.status(200).json({ response: responseText });
 
     } catch (error) {
         log.error('Request failed', {
