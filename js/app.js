@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 /* ─── Persistent Visitor ID — managed by parent window ───────────────── */
 // iframe cannot access localStorage so parent manages visitor ID
-function getOrCreateVisitorId() {
+async function getOrCreateVisitorId() {
   let vid = localStorage.getItem('iam_visitor_id');
   if (!vid) {
     vid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
@@ -1326,6 +1326,7 @@ window.loadConversationMessages = loadConversationMessages;
 
 /* ── REALTIME SUBSCRIPTIONS ── */
 let activeSubscription = null;
+let _configDirty = false; // true when bot config has unsaved changes
 
 function subscribeToConversation(conversationId) {
   if (activeSubscription) { activeSubscription.unsubscribe(); activeSubscription = null; }
@@ -2963,12 +2964,74 @@ async function saveBotConfig() {
     AppState.currentBot = { ...bot, ...saved };
     LocalDB.clear('bots');
     Cache.clear(`analytics_summary_all`);
+    _configDirty = false;
+    markConfigClean();
     showToast('Bot saved!', 'success');
     renderEmbedCode(AppState.currentBot);
   } catch (e) {
     console.error(e);
     showToast('Failed to save bot', 'error');
   }
+}
+
+// ── Unsaved changes tracking ─────────────────────────────────────────
+function markConfigDirty() {
+  if (_configDirty) return; // already dirty
+  _configDirty = true;
+  // Show "unsaved" indicator on the Save Changes button
+  const saveBtn = document.getElementById('btn-save-bot-config');
+  if (saveBtn) {
+    saveBtn.classList.add('btn-warning');
+    saveBtn.classList.remove('btn-primary');
+    if (!saveBtn.dataset.origText) saveBtn.dataset.origText = saveBtn.textContent;
+    saveBtn.innerHTML = '● Save Changes';
+  }
+  // Also show a sticky banner at the top of the config panel
+  let banner = document.getElementById('cfg-unsaved-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'cfg-unsaved-banner';
+    banner.style.cssText = 'position:sticky;top:0;z-index:100;background:#f59e0b;color:#fff;padding:8px 20px;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;border-radius:8px;margin-bottom:12px;';
+    banner.innerHTML = '<span>⚠ Unsaved changes</span><div style="display:flex;gap:8px;"><button onclick="saveBotConfig()" style="background:#fff;color:#f59e0b;border:none;border-radius:6px;padding:4px 12px;font-weight:700;cursor:pointer;font-size:12px;">Save Now</button><button onclick="discardBotConfig()" style="background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">Discard</button></div>';
+    const cardBody = document.querySelector('#config-overview .card-body, .config-section.active .card-body');
+    if (cardBody) cardBody.insertBefore(banner, cardBody.firstChild);
+  }
+}
+
+function markConfigClean() {
+  _configDirty = false;
+  const saveBtn = document.getElementById('btn-save-bot-config');
+  if (saveBtn) {
+    saveBtn.classList.remove('btn-warning');
+    saveBtn.classList.add('btn-primary');
+    if (saveBtn.dataset.origText) saveBtn.textContent = saveBtn.dataset.origText;
+    delete saveBtn.dataset.origText;
+  }
+  const banner = document.getElementById('cfg-unsaved-banner');
+  if (banner) banner.remove();
+}
+
+function discardBotConfig() {
+  markConfigClean();
+  // Re-render the current bot config to restore original values
+  if (AppState.currentBot) renderBotConfig(AppState.currentBot);
+}
+window.discardBotConfig = discardBotConfig;
+
+// ── Wire up dirty tracking ────────────────────────────────────────────
+// Attach a single delegated listener to the config panel on first render
+let _configListenerAttached = false;
+function attachConfigDirtyListeners() {
+  if (_configListenerAttached) return;
+  const panel = document.getElementById('bot-config-page') || document.querySelector('.config-panel');
+  if (!panel) return;
+  panel.addEventListener('input',  function(e) {
+    if (e.target.closest('.config-section')) markConfigDirty();
+  });
+  panel.addEventListener('change', function(e) {
+    if (e.target.closest('.config-section')) markConfigDirty();
+  });
+  _configListenerAttached = true;
 }
 
 function confirmDeleteBot(id, name) {
@@ -3066,10 +3129,24 @@ function fillBotForm(bot) {
 
   // Render variables
   renderVariablesTable(bot.bot_variables || []);
+
+  // Wire up dirty tracking (safe to call multiple times)
+  markConfigClean(); // reset on each render so switching bots doesn't carry state
+  _configListenerAttached = false; // allow re-attach on new bot
+  attachConfigDirtyListeners();
 }
 
 function showConfigSection(section) {
-  // CSS controls visibility via .config-section.active (display:flex) vs no active (display:none)
+  // If there are unsaved changes, show an inline warning instead of silently switching
+  if (_configDirty) {
+    const proceed = confirm('You have unsaved changes. Save before switching tabs?');
+    if (proceed) {
+      saveBotConfig();
+      // saveBotConfig is async but we still switch — the save runs in background
+    }
+    _configDirty = false; // clear either way so we don't loop
+  }
+
   const configSections = document.querySelectorAll('.config-section');
   const configNavItems = document.querySelectorAll('.config-nav-item');
   configSections.forEach(el => el.classList.remove('active'));
