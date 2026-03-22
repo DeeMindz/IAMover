@@ -1,4 +1,9 @@
-/*
+/* ═══════════════════════════════════════════════════════════════════
+   IAM Platform — Main App JS
+   ═══════════════════════════════════════════════════════════════════ */
+
+import { Auth, Bots, KnowledgeBases, Conversations, Leads, Analytics, supabase } from './supabase.js';
+import { BotVariables } from './supabase.js';
 
 /* ─── Persistent Storage (LocalDB) ───────────────────────────────── */
 const LocalDB = {
