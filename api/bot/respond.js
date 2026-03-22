@@ -69,9 +69,9 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
             .join('\n');
 
         const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-        if (!apiKey) return;
+        if (!apiKey) { log.warn('No API key for lead extraction'); return; }
 
-        // gemini-1.5-flash: stable, fast, cheap — gemini-2.0-flash does NOT exist in v1beta
+        // gemini-1.5-flash is stable — gemini-2.0-flash does NOT exist in v1beta
         const extractRes = await fetch(
             'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
             {
@@ -90,24 +90,29 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
         );
 
         if (!extractRes.ok) {
-            log.warn('Lead extraction API failed', { status: extractRes.status, text: await extractRes.text() });
+            log.warn('Lead extraction API error', { status: extractRes.status });
             return;
         }
 
         const exData = await extractRes.json();
         const raw = (exData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-        if (!raw || raw.toLowerCase() === 'none') return;
+        log.info('Lead extraction raw result', { raw: raw.slice(0, 100) });
+
+        if (!raw || raw.toLowerCase().trim() === 'none') return;
 
         let extracted;
         try {
             extracted = JSON.parse(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-        } catch { return; }
+        } catch (parseErr) {
+            log.warn('Lead JSON parse failed', { raw: raw.slice(0, 100) });
+            return;
+        }
 
         if (!extracted.email && !extracted.name) return;
 
-        log.info('Lead extracted', { conversation_id, name: extracted.name, email: extracted.email });
+        log.info('Lead data extracted', { name: extracted.name, email: extracted.email });
 
-        // Dedup: email is the primary key globally, fallback to conversation_id
+        // Dedup: email is the global primary key; fallback to conversation_id
         let existingLead = null;
 
         if (extracted.email) {
@@ -136,14 +141,13 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
             if (extracted.email   && !existingLead.email)   updates.email   = extracted.email;
             if (extracted.phone   && !existingLead.phone)   updates.phone   = extracted.phone;
             if (extracted.company && !existingLead.company) updates.company = extracted.company;
-            // Keep conversation_id current
             if (existingLead.conversation_id !== conversation_id) updates.conversation_id = conversation_id;
 
             if (Object.keys(updates).length > 0) {
                 await supabase.from('leads').update(updates).eq('id', existingLead.id);
                 log.info('Lead updated', { lead_id: existingLead.id, updates });
             } else {
-                log.info('Lead already complete', { lead_id: existingLead.id });
+                log.info('Lead already complete — no update needed', { lead_id: existingLead.id });
             }
         } else {
             const { data: newLead, error: insErr } = await supabase
@@ -167,7 +171,7 @@ async function extractAndSaveLead({ bot_id, conversation_id, supabase, log }) {
             }
         }
     } catch (e) {
-        log.warn('Lead extraction error', { error: e.message, stack: e.stack?.split('\n')[1] });
+        log.warn('Lead extraction crashed', { error: e.message });
     }
 }
 
@@ -402,9 +406,9 @@ export default async function handler(req, res) {
                     .select('name, email, phone, company')
                     .eq('conversation_id', conversation_id)
                     .limit(1)
-                    .maybeSingle();
+                    .maybeSingle(); // maybeSingle() returns null (not error) when no row found
                 existingLead = _lead;
-            } catch (_) {}
+            } catch (_) { /* no lead found, continue normally */ }
 
             if (existingLead) {
                 const known = [];
@@ -413,13 +417,10 @@ export default async function handler(req, res) {
                 if (existingLead.phone)   known.push('phone: "' + existingLead.phone + '"');
                 if (existingLead.company) known.push('company: "' + existingLead.company + '"');
                 if (known.length > 0) {
-                    const allFields = ['name', 'email', 'phone', 'company'];
-                    const missing = allFields.filter(f => !existingLead[f]);
+                    const missing = ['name','email','phone','company'].filter(f => !existingLead[f]);
                     systemPrompt += '\n\nUSER CONTACT INFO ALREADY CAPTURED: ' + known.join(', ') + '.'
                         + ' Do NOT ask for these again. Address user by name.'
-                        + (missing.length > 0
-                            ? ' If relevant you may still collect: ' + missing.join(', ') + '.'
-                            : ' You have their complete contact info.');
+                        + (missing.length > 0 ? ' You may still collect: ' + missing.join(', ') + '.' : ' You have complete contact info.');
                 }
             }
         }
