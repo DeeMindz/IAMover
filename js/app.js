@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 /* ─── Persistent Visitor ID — managed by parent window ───────────────── */
 // iframe cannot access localStorage so parent manages visitor ID
-async function getOrCreateVisitorId() {
+function getOrCreateVisitorId() {
   let vid = localStorage.getItem('iam_visitor_id');
   if (!vid) {
     vid = 'vis_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
