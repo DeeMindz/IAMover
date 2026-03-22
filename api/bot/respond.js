@@ -133,15 +133,17 @@ export default async function handler(req, res) {
             try {
                 // Embed the user message for semantic search
                 const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+                // gemini-embedding-001 via v1beta — text-embedding-004 was shut down Jan 14 2026
                 const embedRes = await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            model: 'models/text-embedding-004',
+                            model: 'models/gemini-embedding-001',
                             content: { parts: [{ text: message }] },
                             taskType: 'RETRIEVAL_QUERY',
+                            outputDimensionality: 1536,
                         })
                     }
                 );
@@ -149,8 +151,7 @@ export default async function handler(req, res) {
                 if (embedRes.ok) {
                     const embedData = await embedRes.json();
                     const queryVec = embedData.embedding.values;
-                    const padded = [...queryVec, ...new Array(1536 - queryVec.length).fill(0)];
-                    const vectorStr = '[' + padded.join(',') + ']';
+                    const vectorStr = '[' + queryVec.join(',') + ']';
 
                     // Semantic similarity search in pgvector
                     const { data: chunks, error: searchErr } = await supabase.rpc('match_kb_chunks', {
@@ -238,44 +239,23 @@ export default async function handler(req, res) {
         let systemPrompt = bot.system_prompt || 'You are a helpful AI assistant.';
 
         // ── Variable substitution ────────────────────────────────────────────
-        // Replace {{variable}} placeholders in the system prompt before sending to LLM
         const now = new Date();
         const padZ = n => String(n).padStart(2, '0');
-        const currentTimestamp = `${now.getFullYear()}-${padZ(now.getMonth()+1)}-${padZ(now.getDate())} ${padZ(now.getHours())}:${padZ(now.getMinutes())}:${padZ(now.getSeconds())}`;
-        const currentDate      = `${now.getFullYear()}-${padZ(now.getMonth()+1)}-${padZ(now.getDate())}`;
-        const currentTime      = `${padZ(now.getHours())}:${padZ(now.getMinutes())}`;
-        const dayNames         = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-        const monthNames       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        const currentDay       = dayNames[now.getDay()];
-        const currentMonth     = monthNames[now.getMonth()];
-        const currentYear      = String(now.getFullYear());
-
-        // Built-in variables always available in any prompt
         const builtInVars = {
-            current_timestamp: currentTimestamp,
-            current_date:      currentDate,
-            current_time:      currentTime,
-            current_day:       currentDay,
-            current_month:     currentMonth,
-            current_year:      currentYear,
+            current_timestamp: `${now.getFullYear()}-${padZ(now.getMonth()+1)}-${padZ(now.getDate())} ${padZ(now.getHours())}:${padZ(now.getMinutes())}:${padZ(now.getSeconds())}`,
+            current_date:      `${now.getFullYear()}-${padZ(now.getMonth()+1)}-${padZ(now.getDate())}`,
+            current_time:      `${padZ(now.getHours())}:${padZ(now.getMinutes())}`,
+            current_day:       ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][now.getDay()],
+            current_month:     ['January','February','March','April','May','June','July','August','September','October','November','December'][now.getMonth()],
+            current_year:      String(now.getFullYear()),
             bot_name:          bot.name || 'Assistant',
         };
-
-        // Load custom bot variables from DB if any exist
-        const { data: botVars } = await supabase
-            .from('bot_variables')
-            .select('name, value')
-            .eq('bot_id', bot_id);
-
+        const { data: botVars } = await supabase.from('bot_variables').select('name, value').eq('bot_id', bot_id);
         const allVars = { ...builtInVars };
-        if (botVars) {
-            botVars.forEach(v => { allVars[v.name] = v.value; });
-        }
-
-        // Replace {{variable_name}} — unknown variables are left as-is so agent can see them
+        if (botVars) botVars.forEach(v => { allVars[v.name] = v.value; });
         systemPrompt = systemPrompt.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
-            const trimmed = key.trim();
-            return allVars.hasOwnProperty(trimmed) ? allVars[trimmed] : match;
+            const k = key.trim();
+            return allVars.hasOwnProperty(k) ? allVars[k] : match;
         });
 
         // FIX: inject anti-hallucination rules when enabled
@@ -414,11 +394,11 @@ export default async function handler(req, res) {
 
         // ── Step 7: Save bot response and update conversation ───────────────
         if (conversation_id && responseText) {
-            const { error: saveBotErr } = await supabase.from('messages').insert({
-                conversation_id,
-                role:    'bot',
-                content: responseText
-            });
+            const { data: savedMsg, error: saveBotErr } = await supabase
+                .from('messages')
+                .insert({ conversation_id, role: 'bot', content: responseText })
+                .select('id, created_at')
+                .single();
             if (saveBotErr) {
                 log.warn('Failed to save bot response', { error: saveBotErr.message });
             }
@@ -432,7 +412,7 @@ export default async function handler(req, res) {
         }
 
         log.info('Request complete', { bot_id, model: botModel, responseLength: responseText.length });
-        return res.status(200).json({ response: responseText });
+        return res.status(200).json({ response: responseText, bot_msg_ts: savedMsg?.created_at || null });
 
     } catch (error) {
         log.error('Request failed', {
