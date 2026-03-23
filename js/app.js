@@ -1456,7 +1456,7 @@ function subscribeToConversation(conversationId) {
       const existing = [...msgsEl.querySelectorAll('.message.bot')];
       if (existing.some(el => el.querySelector('.msg-bubble')?.textContent === msg.content && el.innerHTML.includes('10b981'))) return;
       div.className = 'message bot';
-      div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;">👤</div><div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div><div class="msg-bubble" style="border-left:3px solid #10b981;">${msg.content}</div><div class="msg-time">${time}</div></div>`;
+      div.innerHTML = `<div class="msg-avatar" style="background:#10b98133;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div><div><div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div><div class="msg-bubble" style="border-left:3px solid #10b981;">${msg.content}</div><div class="msg-time">${time}</div></div>`;
     }
 
     msgsEl.appendChild(div);
@@ -3383,8 +3383,9 @@ async function renderBotConfig(extra = {}) {
     btnFullpageView.classList.remove('btn-primary');
   }
 
-  // Reset to Overview tab (preview is in Appearance tab)
-  showConfigSection('overview');
+  // Restore the last visited tab (or default to overview)
+  const lastTab = localStorage.getItem('iam_last_config_tab') || 'overview';
+  showConfigSection(lastTab);
 }
 
 function fillBotForm(bot) {
@@ -3411,7 +3412,7 @@ function fillBotForm(bot) {
 
   // AI settings (prioritizes missing-column fallback stored in theme)
   const tempEl = document.getElementById('cfg-temperature');
-  if (tempEl) tempEl.value = String(bot.temperature ?? theme._temperature ?? 0.5);
+  if (tempEl) tempEl.value = Number(bot.temperature ?? theme._temperature ?? 0.5).toFixed(1);
 
   const maxResEl = document.getElementById('cfg-max-response');
   if (maxResEl) maxResEl.value = bot.max_response_length ?? theme._max_response_length ?? 'medium';
@@ -3431,6 +3432,8 @@ function fillBotForm(bot) {
 }
 
 function showConfigSection(section) {
+  localStorage.setItem('iam_last_config_tab', section);
+  
   // If there are unsaved changes, show an inline warning instead of silently switching
   if (_configDirty) {
     const proceed = confirm('You have unsaved changes. Save before switching tabs?');
