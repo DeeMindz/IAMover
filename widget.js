@@ -367,6 +367,12 @@
 
   // ── Create / resume conversation ──────────────────────────────────────
   function createConversation(cb) {
+    if (convId) { if(cb) cb(); return; }
+
+    // Eagerly show the pre-chat form before the network request to prevent missing/delayed rendering
+    safeClear();
+    if (!_preChatDone) showPreChat();
+
     fetch(API_BASE+'/api/conversation/create', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -385,6 +391,7 @@
       if (_preChatDone && (_preChatName || _preChatEmail)) savePrechatLead(_preChatName, _preChatEmail);
 
       if (data.returning) {
+        hidePreChatForm();
         fetch(API_BASE+'/api/conversation/messages?conversation_id='+convId)
           .then(function(r){ return r.json(); })
           .then(function(d) {
@@ -406,14 +413,12 @@
           }).catch(function(){ startStatusCheck(convId); unlockInput(); if(cb) cb(); });
 
       } else {
-        // New visitor — safe clear (keeps #iam-prechat), then show form
-        safeClear();
+        // New visitor — prechat is already being shown
         _shownMsgIds={}; _shownSysMsgs={};
         _lastMsgAt = new Date().toISOString();
         startStatusCheck(convId);
-        if (!_preChatDone) {
-          showPreChat(); // greeting appears inside skipPreChat / submitPreChat
-        } else {
+        // If they bypass prechat, append greeting. Otherwise wait for submitPreChat
+        if (_preChatDone && !document.querySelector('.iam-msg.bot')) {
           appendBot(botConfig.greeting);
         }
         if(cb) cb();
