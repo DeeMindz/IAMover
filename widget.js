@@ -75,6 +75,7 @@
     '.iam-agent-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:2px;}',
     '.iam-agent-label{font-size:10px;color:#10b981;margin-left:4px;font-weight:600;}',
     '.iam-agent-bubble{background:#fff;border:1px solid #eee;border-left:3px solid #10b981;border-radius:16px;border-bottom-left-radius:4px;max-width:82%;padding:9px 13px;font-size:13px;line-height:1.5;color:#333;}',
+    '.iam-agent-bubble a{color:#10b981;text-decoration:underline;}',
     '.iam-system{display:flex;justify-content:center;margin:4px 0;}',
     '.iam-system span{font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;}',
     '.iam-typing{display:flex;align-items:center;gap:3px;padding:6px 2px;align-self:flex-start;}',
@@ -218,18 +219,50 @@
       .catch(function(){ if(cb) cb(); });
   }
 
-  // ── Markdown ──────────────────────────────────────────────────────────
+  // ── Markdown + URL + Citation renderer ─────────────────────────────────
   function md(text) {
     if (!text) return '';
+    // Step 1: HTML-escape before any processing
     var h = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // Step 2: Parse source citations like [Source 1: document.pdf]\n or [Source 1: https://...]
+    // Must run BEFORE URL auto-link so we can pull the link out cleanly.
+    var citationsHtml = '';
+    var citations = [];
+    h = h.replace(/\[Source (\d+): ([^\]]+)\]/g, function(_, num, ref) {
+      var isUrl = /^https?:\/\//i.test(ref.trim());
+      var isPdf = /\.pdf$/i.test(ref.trim());
+      var icon  = isPdf ? '📄' : (isUrl ? '🔗' : '📋');
+      var href  = isUrl ? ref.trim() : (isPdf ? (API_BASE + '/api/kb/file?path=' + encodeURIComponent(ref.trim())) : null);
+      var pill  = href
+        ? '<a href="' + href + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:rgba(108,99,255,.1);color:' + COLOR + ';border:1px solid rgba(108,99,255,.25);border-radius:20px;padding:2px 8px;text-decoration:none;margin:2px 2px 0;">' + icon + ' Source ' + num + '</a>'
+        : '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#f0f0f0;color:#666;border-radius:20px;padding:2px 8px;margin:2px 2px 0;">' + icon + ' ' + ref.trim() + '</span>';
+      citations.push(pill);
+      return ''; // remove from body text, collect to append below
+    });
+    if (citations.length) {
+      citationsHtml = '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;border-top:1px solid #eee;padding-top:6px;">' + citations.join('') + '</div>';
+    }
+
+    // Step 3: Markdown links [text](url) → <a>
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+    // Step 4: Auto-link raw URLs that are NOT already inside an href
+    h = h.replace(/(https?:\/\/[^\s&lt;&gt;"'<>\]\[)]+)/g, function(url) {
+      // Don't double-link if already in an href
+      return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
+    });
+
+    // Step 5: Basic markdown formatting
     h = h.replace(/^#{1,3} (.+)$/gm,'<strong>$1</strong>');
     h = h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
     h = h.replace(/\*(.+?)\*/g,'<em>$1</em>');
+    h = h.replace(/`([^`]+)`/g,'<code style="background:#f4f4f4;padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>');
     h = h.replace(/^[ ]*[-*] (.+)$/gm,'<li>$1</li>');
     h = h.replace(/(<li>[\s\S]*?<\/li>)/g,'<ul style="margin:4px 0;padding-left:16px;">$1</ul>');
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
     h = h.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
-    return h;
+
+    return h + citationsHtml;
   }
 
   // ── Message helpers ───────────────────────────────────────────────────
@@ -238,7 +271,7 @@
   function appendAgent(c) {
     var w=document.createElement('div'); w.className='iam-agent-wrap';
     var l=document.createElement('div'); l.className='iam-agent-label'; l.textContent='Support Agent';
-    var b=document.createElement('div'); b.className='iam-agent-bubble'; b.textContent=c;
+    var b=document.createElement('div'); b.className='iam-agent-bubble'; b.innerHTML=md(c); // use md() so links are clickable
     w.appendChild(l); w.appendChild(b); msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
   }
   function appendSystem(c) {

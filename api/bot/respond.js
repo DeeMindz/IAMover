@@ -307,10 +307,19 @@ export default async function handler(req, res) {
                         }
                     } else if (chunks && chunks.length > 0) {
                         log.info('Semantic search results', { chunks: chunks.length });
+                        // Build source citations with the actual URL or filename so the frontend
+                        // can render them as clickable links in the chat bubble.
                         knowledgeContext = '\n\n--- RELEVANT KNOWLEDGE BASE CONTENT ---\n' +
-                            chunks.map((c, i) => `[Source ${i+1}: ${c.metadata?.file_name || 'document'}]\n${c.content}`).join('\n\n') +
+                            chunks.map((c, i) => {
+                                const sourceUrl = c.metadata?.source_url;
+                                const fileName  = c.metadata?.file_name || 'document';
+                                // Use the URL as the source ref if available, otherwise the file name
+                                const sourceRef = sourceUrl || fileName;
+                                return `[Source ${i+1}: ${sourceRef}]\n${c.content}`;
+                            }).join('\n\n') +
                             '\n--- END KNOWLEDGE BASE CONTENT ---';
                         log.info('RAG context built', { chars: knowledgeContext.length, chunks: chunks.length });
+
                     } else {
                         log.info('No relevant KB chunks found for this query', {});
                     }
