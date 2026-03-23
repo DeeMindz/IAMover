@@ -157,8 +157,12 @@ async function initApp() {
     const wsEl = document.getElementById('sidebar-workspace-name');
     if (wsEl && cachedUser.profile) wsEl.textContent = cachedUser.profile.workspace_name || 'My Workspace';
     updateSidebarUsage(AppState.bots);
-    // Render immediately from cache
-    navigate('home');
+    let lastPage = 'home', lastExtra = {};
+    try {
+      const saved = JSON.parse(localStorage.getItem('iam_last_page'));
+      if (saved && saved.page) { lastPage = saved.page; lastExtra = saved.extra || {}; }
+    } catch(e) {}
+    navigate(lastPage, lastExtra);
     // Then verify session is still valid in background
     verifySessionInBackground();
     return;
@@ -178,7 +182,14 @@ async function initApp() {
 
   // Load profile then render
   await loadUserProfile();
-  navigate('home');
+  
+  let lastPage = 'home', lastExtra = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem('iam_last_page'));
+    if (saved && saved.page) { lastPage = saved.page; lastExtra = saved.extra || {}; }
+  } catch(e) {}
+  navigate(lastPage, lastExtra);
+  
   syncInBackground();
 }
 
@@ -823,6 +834,9 @@ function initials(name) {
 /* ─── Navigation ─────────────────────────────────────────────────── */
 function navigate(page, extra = {}) {
   AppState.currentPage = page;
+  try {
+    localStorage.setItem('iam_last_page', JSON.stringify({ page, extra }));
+  } catch (e) {}
 
   if (page === 'home') {
     AppState.currentBot = null;
@@ -3394,17 +3408,17 @@ function fillBotForm(bot) {
   const bubble = document.getElementById('cfg-preview-bubble');
   if (bubble) bubble.style.background = color;
 
-  // AI settings
+  // AI settings (prioritizes missing-column fallback stored in theme)
   const tempEl = document.getElementById('cfg-temperature');
-  if (tempEl) tempEl.value = String(bot.temperature || 0.5);
+  if (tempEl) tempEl.value = String(bot.temperature ?? theme._temperature ?? 0.5);
 
   const maxResEl = document.getElementById('cfg-max-response');
-  if (maxResEl) maxResEl.value = bot.max_response_length || 'medium';
+  if (maxResEl) maxResEl.value = bot.max_response_length ?? theme._max_response_length ?? 'medium';
 
   const fallbackEl = document.getElementById('cfg-fallback-message');
-  if (fallbackEl) fallbackEl.value = bot.fallback_message || "I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?";
+  if (fallbackEl) fallbackEl.value = bot.fallback_message ?? theme._fallback_message ?? "I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?";
 
-  setChk('cfg-anti-hall', bot.anti_hallucination !== false);
+  setChk('cfg-anti-hall', (bot.anti_hallucination ?? theme._anti_hallucination) !== false);
 
   // Render variables
   renderVariablesTable(bot.bot_variables || []);

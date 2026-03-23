@@ -929,55 +929,6 @@
                 </div>
                 <button class="btn btn-secondary" onclick="openAttachKBModal()">+ Attach Knowledge Base</button>
               </div>
-
-              <div class="divider"></div>
-
-              <div>
-                <div class="form-label" style="margin-bottom:12px;">Quick Add Content</div>
-                <div class="tabs mb-4">
-                  <div class="tab-btn active" onclick="switchKBTab(this,'files')">📎 Files</div>
-                  <div class="tab-btn" onclick="switchKBTab(this,'text')">📝 Rich Text</div>
-                  <div class="tab-btn" onclick="switchKBTab(this,'sitemap')">🗺 Sitemap</div>
-                </div>
-
-                <div id="kb-tab-files">
-                  <div class="upload-zone" onclick="document.getElementById('file-upload').click()">
-                    <div class="upload-icon">📎</div>
-                    <div class="upload-title">Drop files here or click to upload</div>
-                    <div class="upload-sub">PDF, DOCX, TXT, CSV, XLSX up to 50MB each</div>
-                  </div>
-                  <input type="file" id="file-upload" multiple style="display:none;"
-                    onchange="handleFileUpload(this)" />
-                </div>
-
-                <div id="kb-tab-text" style="display:none;">
-                  <div class="form-group">
-                    <label class="form-label">Content Title</label>
-                    <input class="form-control" placeholder="e.g. Pricing FAQ" />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Content</label>
-                    <textarea class="form-control" rows="8" placeholder="Paste or type your content here…"></textarea>
-                  </div>
-                  <button class="btn btn-primary" onclick="showToast('Content added to knowledge base','success')">Add
-                    Content</button>
-                </div>
-
-                <div id="kb-tab-sitemap" style="display:none;">
-                  <div class="form-group">
-                    <label class="form-label">Website URL or Sitemap URL</label>
-                    <input class="form-control"
-                      placeholder="https://yoursite.com or https://yoursite.com/sitemap.xml" />
-                    <div class="form-hint">We'll crawl your website and add pages to the knowledge base</div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Max Pages</label>
-                      <select class="form-control">
-                        <option>25</option>
-                        <option selected>50</option>
-                        <option>100</option>
-                        <option>250</option>
                       </select>
                     </div>
                     <div class="form-group">
