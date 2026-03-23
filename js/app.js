@@ -3359,6 +3359,17 @@ function attachConfigDirtyListeners() {
     if (e.target.closest('.config-section')) markConfigDirty();
   });
   _configListenerAttached = true;
+
+  // Warn before tab close / URL navigation if there are unsaved config changes
+  if (!window._configBeforeUnloadAttached) {
+    window.addEventListener('beforeunload', function(e) {
+      if (_configDirty) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved bot configuration changes. Are you sure you want to leave?';
+      }
+    });
+    window._configBeforeUnloadAttached = true;
+  }
 }
 
 function confirmDeleteBot(id, name) {

@@ -887,27 +887,27 @@
 
               <div class="form-group">
                 <label class="form-label">Fallback Message</label>
-                <input class="form-control"
-                  value="I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?" />
+                <input class="form-control" id="cfg-fallback-message"
+                  placeholder="I'm sorry, I don't have information about that. Would you like me to connect you with a human agent?" />
                 <div class="form-hint">Shown when the bot cannot answer confidently</div>
               </div>
 
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Max Response Length</label>
-                  <select class="form-control">
-                    <option>Short (1-2 sentences)</option>
-                    <option selected>Medium (1 paragraph)</option>
-                    <option>Long (multiple paragraphs)</option>
+                  <select class="form-control" id="cfg-max-response">
+                    <option value="short">Short (1-2 sentences)</option>
+                    <option value="medium">Medium (1 paragraph)</option>
+                    <option value="long">Long (multiple paragraphs)</option>
                   </select>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Response Temperature</label>
-                  <select class="form-control">
-                    <option>0.1 — Very precise</option>
-                    <option selected>0.5 — Balanced</option>
-                    <option>0.8 — Creative</option>
-                    <option>1.0 — Very creative</option>
+                  <select class="form-control" id="cfg-temperature">
+                    <option value="0.1">0.1 — Very precise</option>
+                    <option value="0.5">0.5 — Balanced</option>
+                    <option value="0.8">0.8 — Creative</option>
+                    <option value="1.0">1.0 — Very creative</option>
                   </select>
                 </div>
               </div>
