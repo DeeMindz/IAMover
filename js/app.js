@@ -1367,7 +1367,12 @@ async function loadConversationMessages(convId) {
       const lastMsg = conv.messages[conv.messages.length - 1];
       const previewEl = document.getElementById(`conv-preview-${convId}`);
       if (previewEl && lastMsg) {
-        previewEl.textContent = lastMsg.text.slice(0, 60) + (lastMsg.text.length > 60 ? '…' : '');
+        let preview = lastMsg.role === 'system'
+          ? (lastMsg.text === 'agent_joined'
+          ? 'A live agent has joined the conversation'
+          : 'Live agent ended')
+          : lastMsg.text;
+        previewEl.textContent = preview.slice(0, 60) + (preview.length > 60 ? '…' : '');
       }
     }
 
@@ -1404,7 +1409,14 @@ function subscribeToConversation(conversationId) {
 
     // Update sidebar preview
     const previewEl = document.getElementById(`conv-preview-${conversationId}`);
-    if (previewEl && msg.content) previewEl.textContent = msg.content.slice(0,60) + (msg.content.length > 60 ? '…' : '');
+    if (previewEl && msg.content) {
+      let preview = msg.role === 'system'
+        ? (msg.content === 'agent_joined'
+        ? 'A live agent has joined the conversation'
+        : 'Live agent ended')
+        : msg.content;
+      previewEl.textContent = preview.slice(0,60) + (preview.length > 60 ? '…' : '');
+    }
 
     const div = document.createElement('div');
 
@@ -1450,6 +1462,7 @@ function unsubscribeAll() {
 // messages live without depending on Supabase Realtime.
 let _dashPollInterval = null;
 let _dashLastMsgAt    = null;
+let _shownBotTexts    = new Set(); // To prevent duplicate bot messages from poll
 
 function startDashboardPoll(convId) {
   stopDashboardPoll();
@@ -2441,15 +2454,28 @@ function renderLivePreview(bot) {
       <div class="chat-header-avatar">${avatarContent}</div>
       <div class="chat-header-info">
         <div class="name">${botName}</div>
-        <div class="status">⬤ Online · Ready to help</div>
+        <div class="status"><span style="color:#10b981;">&#9679;</span> Online · Ready to help</div>
       </div>
       <button class="close-btn" onclick="showNewConvConfirm()" title="New conversation" style="margin-right:4px;font-size:14px;">&#8635;</button>
       <button class="close-btn" onclick="closeChat()">✕</button>
     </div>
     <div class="chat-messages" id="chat-messages">
-      <div class="msg bot">${greeting}</div>
+      <div id="iam-prechat" style="margin:4px 2px 6px;background:#fff;border:1.5px solid #e8e8f0;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(108,99,255,.08);">
+        <div style="background:${primaryColor}18;padding:12px 16px 10px;border-bottom:1px solid #eee;">
+          <div style="font-weight:700;font-size:13px;color:#333;">Quick intro</div>
+          <div style="font-size:12px;color:#888;margin-top:2px;">Completely optional — feel free to skip.</div>
+        </div>
+        <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
+          <input id="iam-pc-name" placeholder="Your name" autocomplete="name" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />
+          <input id="iam-pc-email" type="email" placeholder="Email address" autocomplete="email" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />
+          <div style="display:flex;gap:8px;">
+            <button onclick="skipPreChat()" style="background:transparent;border:1.5px solid #e0e0e0;color:#999;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:inherit;">Skip</button>
+            <button onclick="submitPreChat()" style="flex:1;background:${primaryColor};color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Start Chat →</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="chat-input-area">
+    <div class="chat-input-area" style="display:none;">
       <input class="chat-input" id="chat-input" placeholder="Type a message…" onkeydown="handleKey(event)" />
       <button class="send-btn" onclick="sendMsg()">↑</button>
     </div>
@@ -2504,6 +2530,31 @@ function renderLivePreview(bot) {
     h = h.replace(/(<[/]li>)(?![\s\S]*?<li)/g, '$1</ul>');
     var nl = String.fromCharCode(10); h = h.split(nl+nl).join('<br><br>'); h = h.split(nl).join('<br>');
     return h;
+  }
+
+  let preChatDone = false;
+  function skipPreChat() {
+    var pc = document.getElementById('iam-prechat'); if (pc) pc.style.display = 'none';
+    document.querySelector('.chat-input-area').style.display = 'flex';
+    preChatDone = true;
+    var msgs = document.getElementById('chat-messages');
+    var b = document.createElement('div'); b.className = 'msg bot'; b.innerHTML = formatMarkdown(\`${greeting}\`);
+    msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
+  }
+  function submitPreChat() {
+    var n = document.getElementById('iam-pc-name').value.trim();
+    var pc = document.getElementById('iam-prechat'); if (pc) pc.style.display = 'none';
+    document.querySelector('.chat-input-area').style.display = 'flex';
+    preChatDone = true;
+    var greet = \`${greeting}\`;
+    if (n) {
+      var base = greet;
+      greet = base.replace(/^(hi|hello|hey)[\\s!,]*/i, 'Hi ' + n + ', ');
+      if (greet === base) greet = 'Hi ' + n + '! ' + base;
+    }
+    var msgs = document.getElementById('chat-messages');
+    var b = document.createElement('div'); b.className = 'msg bot'; b.innerHTML = formatMarkdown(greet);
+    msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
   }
 
   function sendMsg() {
@@ -2561,6 +2612,8 @@ window.addEventListener('message', function (e) {
   if (e.data.type === 'IAM_LOAD_HISTORY' && e.data.messages && e.data.messages.length) {
     var msgs = document.getElementById('chat-messages');
     msgs.innerHTML = '';
+    document.querySelector('.chat-input-area').style.display = 'flex';
+    preChatDone = true;
     window._shownMsgIds  = {};
     window._shownSysMsgs = {};
     e.data.messages.forEach(function(m) {
@@ -2568,6 +2621,9 @@ window.addEventListener('message', function (e) {
       if (m.role === 'system') { window._shownSysMsgs[m.content] = true; addSystemMsg(m.content); }
       else if (m.role === 'human-agent') { showAgentMsg(m.content); }
       else {
+        window._shownBotTexts = window._shownBotTexts || {};
+        if (m.role === 'bot') window._shownBotTexts[m.content.trim()] = true;
+        
         var d = document.createElement('div');
         d.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
         if (m.role === 'bot') d.innerHTML = formatMarkdown(m.content);
@@ -2585,6 +2641,8 @@ window.addEventListener('message', function (e) {
     var t = document.getElementById('typing-indicator');
     if (t) t.remove();
     if (e.data.response) {
+      window._shownBotTexts = window._shownBotTexts || {};
+      window._shownBotTexts[e.data.response.trim()] = true;
       var b = document.createElement('div');
       b.className = 'msg bot';
       b.setAttribute('data-rawcontent', e.data.response);
@@ -2674,6 +2732,8 @@ function startHITLPolling(cId) {
           if (m.role === 'bot') {
             if (window._shownMsgIds[m.id]) return;
             window._shownMsgIds[m.id] = true;
+            window._shownBotTexts = window._shownBotTexts || {};
+            if (window._shownBotTexts[m.content.trim()]) return;
             var t2 = document.getElementById('typing-indicator'); if (t2) t2.remove();
             var d = document.createElement('div'); d.className = 'msg bot';
             d.innerHTML = formatMarkdown(m.content);
@@ -2711,7 +2771,7 @@ function showAgentMsg(content) {
 function addSystemMsg(content) {
   var msgs = document.getElementById('chat-messages');
   if (!msgs) return;
-  var label = content === 'agent_joined' ? '&#128100; A live agent has joined' : '${botName} has resumed';
+  var label = content === 'agent_joined' ? 'A live agent has joined' : 'Live agent ended';
   var div = document.createElement('div');
   div.style.cssText = 'display:flex;justify-content:center;margin:8px 0;';
   div.innerHTML = '<span style="font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;">' + label + '</span>';
@@ -2820,13 +2880,26 @@ function confirmNewConv() {
           <div class="chat-header-avatar">${avatarContent}</div>
           <div class="chat-header-info">
             <div class="name">${botName}</div>
-            <div class="status">⬤ Online · Ready to help</div>
+            <div class="status"><span style="color:#10b981;">&#9679;</span> Online · Ready to help</div>
           </div>
         </div>
         <div class="chat-messages">
-          <div class="msg bot">${greeting}</div>
+          <div id="iam-fp-prechat" style="margin:4px 2px 6px;background:#fff;border:1.5px solid #e8e8f0;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(108,99,255,.08);">
+            <div style="background:${primaryColor}18;padding:12px 16px 10px;border-bottom:1px solid #eee;">
+              <div style="font-weight:700;font-size:13px;color:#333;">Quick intro</div>
+              <div style="font-size:12px;color:#888;margin-top:2px;">Completely optional — feel free to skip.</div>
+            </div>
+            <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
+              <input id="fp-pc-name" placeholder="Your name" autocomplete="name" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />
+              <input id="fp-pc-email" type="email" placeholder="Email address" autocomplete="email" style="background:#f7f7f9;border:1.5px solid #e8e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#333;outline:none;width:100%;box-sizing:border-box;font-family:inherit;" />
+              <div style="display:flex;gap:8px;">
+                <button onclick="fpSkipPreChat()" style="background:transparent;border:1.5px solid #e0e0e0;color:#999;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:inherit;">Skip</button>
+                <button onclick="fpSubmitPreChat()" style="flex:1;background:${primaryColor};color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Start Chat →</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="chat-input-area">
+        <div class="chat-input-area" style="display:none;">
           <input class="chat-input" id="fp-chat-input" placeholder="Type a message…"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fpSendMsg()}" />
           <button class="send-btn" onclick="fpSendMsg()">↑</button>
@@ -2862,6 +2935,30 @@ function confirmNewConv() {
         h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
         var nl = String.fromCharCode(10); h = h.split(nl+nl).join('<br><br>'); h = h.split(nl).join('<br>');
         return h;
+      }
+      let fpPreChatDone = false;
+      function fpSkipPreChat() {
+        var pc = document.getElementById('iam-fp-prechat'); if (pc) pc.style.display = 'none';
+        document.querySelector('.chat-input-area').style.display = 'flex';
+        fpPreChatDone = true;
+        var msgs = document.querySelector('.chat-messages');
+        var b = document.createElement('div'); b.className = 'msg bot'; b.innerHTML = formatMarkdown(\`${greeting}\`);
+        msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
+      }
+      function fpSubmitPreChat() {
+        var n = document.getElementById('fp-pc-name').value.trim();
+        var pc = document.getElementById('iam-fp-prechat'); if (pc) pc.style.display = 'none';
+        document.querySelector('.chat-input-area').style.display = 'flex';
+        fpPreChatDone = true;
+        var greet = \`${greeting}\`;
+        if (n) {
+          var base = greet;
+          greet = base.replace(/^(hi|hello|hey)[\\s!,]*/i, 'Hi ' + n + ', ');
+          if (greet === base) greet = 'Hi ' + n + '! ' + base;
+        }
+        var msgs = document.querySelector('.chat-messages');
+        var b = document.createElement('div'); b.className = 'msg bot'; b.innerHTML = formatMarkdown(greet);
+        msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
       }
       function fpSendMsg() {
   const input = document.getElementById('fp-chat-input');
@@ -2906,7 +3003,11 @@ window.addEventListener('message', function (e) {
     const msgs = document.querySelector('.chat-messages');
     // Clear any greeting message and rebuild from history
     msgs.innerHTML = '';
+    document.querySelector('.chat-input-area').style.display = 'flex';
+    fpPreChatDone = true;
     e.data.messages.forEach(m => {
+      window._shownBotTexts = window._shownBotTexts || {};
+      if (m.role === 'bot') window._shownBotTexts[m.content.trim()] = true;
       const div = document.createElement('div');
       div.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
       div.textContent = m.content;
@@ -2919,6 +3020,8 @@ window.addEventListener('message', function (e) {
     const msgs = document.querySelector('.chat-messages');
     const t = document.getElementById('fp-typing');
     if (t) t.remove();
+    window._shownBotTexts = window._shownBotTexts || {};
+    window._shownBotTexts[e.data.response.trim()] = true;
     const botMsg = document.createElement('div');
     botMsg.className = 'msg bot';
     botMsg.innerHTML = formatMarkdown(e.data.response) || 'Sorry, no response received.';
@@ -3368,9 +3471,9 @@ function renderEmbedCode(bot) {
 </script>
 <script src="${base}/widget.js" async></script>`;
 
-  // Inline embed — position:relative and overflow:hidden required to contain the widget
+  // Inline embed — full width and height with min-height fallback so it fills the parent div perfectly
   const inpageSnippet =
-`<div id="iam-chat-inline" style="width:100%;max-width:420px;height:600px;border-radius:18px;overflow:hidden;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.12);"></div>
+`<div id="iam-chat-inline" style="width:100%;height:100%;min-height:600px;border-radius:18px;overflow:hidden;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.12);"></div>
 <script>
   window.IAMConfig = { botId: "${bot.id}", color: "${color}", position: "inline", containerId: "iam-chat-inline" };
 </script>

@@ -83,7 +83,7 @@
     '.iam-typing span:nth-child(2){background:#808080;animation-delay:.18s;}',
     '.iam-typing span:nth-child(3){background:#303030;animation-delay:.36s;}',
     '@keyframes iamWave{0%,60%,100%{transform:translateY(0);opacity:.6}30%{transform:translateY(-4px);opacity:1}}',
-    '#iam-input-area{padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;align-items:center;background:#fff;flex-shrink:0;}',
+    '#iam-input-area{padding:10px 12px;border-top:1px solid #eee;display:none;gap:8px;align-items:center;background:#fff;flex-shrink:0;}',
     '#iam-input{flex:1;border:1px solid #e5e5e5;border-radius:20px;padding:8px 14px;font-size:13px;outline:none;color:#333;background:#f8f8f8;font-family:inherit;}',
     '#iam-input:focus{border-color:'+COLOR+';}',
     '#iam-input:disabled{opacity:.5;cursor:not-allowed;}',
@@ -130,7 +130,7 @@
     '  <div id="iam-bot-avatar">A</div>',
     '  <div id="iam-header-info">',
     '    <div id="iam-bot-name">Assistant</div>',
-    '    <div id="iam-bot-status">&#9899; Online &middot; Ready to help</div>',
+    '    <div id="iam-bot-status"><span style="color:#10b981;">&#9679;</span> Online &middot; Ready to help</div>',
     '  </div>',
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">&#10005;</button>',
@@ -243,7 +243,7 @@
   }
   function appendSystem(c) {
     var n = botConfig.displayName||botConfig.name||'Bot';
-    var lbl = c==='agent_joined' ? 'A live agent has joined' : n+' has resumed';
+    var lbl = c==='agent_joined' ? 'A live agent has joined' : 'Live agent ended';
     var d=document.createElement('div'); d.className='iam-system';
     d.innerHTML='<span>'+lbl+'</span>'; msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight;
   }
@@ -263,11 +263,12 @@
 
   // ── Input lock/unlock ─────────────────────────────────────────────────
   function lockInput() {
-    input.disabled = true;
-    input.placeholder = 'Please introduce yourself first\u2026';
-    sendBtn.disabled = true;
+    var area = document.getElementById('iam-input-area');
+    if (area) area.style.display = 'none';
   }
   function unlockInput() {
+    var area = document.getElementById('iam-input-area');
+    if (area) area.style.display = 'flex';
     input.disabled = false;
     input.placeholder = 'Type a message\u2026';
     sendBtn.disabled = false;
@@ -400,8 +401,9 @@
               });
             }
             d.hitl_active ? startPolling(convId) : startStatusCheck(convId);
+            unlockInput();
             if(cb) cb();
-          }).catch(function(){ startStatusCheck(convId); if(cb) cb(); });
+          }).catch(function(){ startStatusCheck(convId); unlockInput(); if(cb) cb(); });
 
       } else {
         // New visitor — safe clear (keeps #iam-prechat), then show form
