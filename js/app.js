@@ -2250,9 +2250,10 @@ function renderLivePreview(bot) {
   const position = (positionInput?.value) || bot.theme?.position || 'bottom-right';
   const isWidgetMode = currentPreviewMode === 'widget';
 
+  const avInitial = (bot.theme?.displayName || bot.name || 'A').charAt(0).toUpperCase();
   const avatarContent = avatarUrl
-    ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.style.display='none';this.parentElement.textContent='🤖'" />`
-    : '🤖';
+    ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="this.style.display='none';this.parentElement.textContent='${avInitial}'" />`
+    : avInitial;
 
   // Widget mode: starts as bubble, click opens chat, X closes back to bubble
   const widgetPreviewHTML = `<!DOCTYPE html>
@@ -2458,7 +2459,7 @@ function renderLivePreview(bot) {
 
   <!-- Launcher bubble -->
   <div class="launcher" id="launcher" onclick="openChat()">
-    💬
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     <div class="launcher-badge">1</div>
   </div>
 
