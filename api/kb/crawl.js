@@ -210,7 +210,10 @@ export default async function handler(req, res) {
             log.info('Parsing sitemap', { url: targetUrl });
             urlsToCrawl = await parseSitemap(targetUrl);
             log.info('Sitemap parsed', { urlCount: urlsToCrawl.length });
-            urlsToCrawl = urlsToCrawl.slice(0, 20); // cap at 20 for Vercel timeout
+            // Cap configurable: default 50, max 200. Pass max_pages in request body to override.
+            const cap = Math.min(parseInt(req.body.max_pages) || 50, 200);
+            urlsToCrawl = urlsToCrawl.slice(0, cap);
+            log.info('Crawling pages', { count: urlsToCrawl.length, cap });
         }
 
         await supabase.from('kb_chunks').delete().eq('kb_file_id', kb_file_id);

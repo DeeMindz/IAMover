@@ -252,25 +252,25 @@ export const KnowledgeBases = {
       .upload(path, file)
     if (uploadError) throw uploadError
 
-    // Extract text content immediately for plain text files
+    // Extract text content immediately for plain text files so it’s inline-available
     let content = null
     const ext = file.name.split('.').pop().toLowerCase()
     if (['txt', 'md', 'csv'].includes(ext)) {
       content = await file.text()
     }
 
-    // Save file record
+    // Save file record — always as 'pending' so processing is consistently triggered
     const fileRecord = await this.addFile(kbId, {
       name: file.name,
       type: ext,
       size_bytes: file.size,
       storage_path: path,
       content,
-      status: content ? 'processed' : 'pending',
+      status: 'pending',
     })
 
-    // Trigger background processing for DOCX and PDF
-    if (['docx', 'doc', 'pdf'].includes(ext)) {
+    // Trigger background processing for all indexable file types
+    if (['docx', 'doc', 'pdf', 'txt', 'md', 'csv'].includes(ext)) {
       fetch('/api/kb/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

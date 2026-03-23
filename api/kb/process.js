@@ -191,23 +191,33 @@ export default async function handler(req, res) {
         // ── Delete old chunks for this file (re-processing) ──────────────────
         await supabase.from('kb_chunks').delete().eq('kb_file_id', kb_file_id);
 
-        // ── Embed and save each chunk ─────────────────────────────────────────
+        // ── Embed and save chunks in parallel batches of 10 ─────────────────
         let savedCount = 0;
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            try {
-                const embedding = await embedText(chunk);
-
-                // Format as pgvector string: [0.1,0.2,...] — truncated to 1536 dims via outputDimensionality
+        const BATCH = 10;
+        for (let b = 0; b < chunks.length; b += BATCH) {
+            const batch = chunks.slice(b, b + BATCH);
+            const results = await Promise.allSettled(batch.map(async (chunk, localIdx) => {
+                const idx = b + localIdx;
+                // Retry once on rate-limit
+                let embedding;
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        embedding = await embedText(chunk);
+                        break;
+                    } catch (e) {
+                        if (attempt === 0 && e.message.includes('429')) {
+                            await new Promise(r => setTimeout(r, 2000)); // back-off
+                        } else throw e;
+                    }
+                }
                 const padded = [...embedding, ...new Array(1536 - embedding.length).fill(0)];
                 const vectorStr = '[' + padded.join(',') + ']';
-
                 await supabase.from('kb_chunks').insert({
                     kb_file_id,
                     kb_id,
                     content:              chunk,
                     embedding:            vectorStr,
-                    chunk_index:          i,
+                    chunk_index:          idx,
                     token_count:          Math.round(chunk.length / 4),
                     embedding_model:      'gemini-embedding-001',
                     embedding_dimensions: 1536,
@@ -217,16 +227,17 @@ export default async function handler(req, res) {
                         chunk_of:   chunks.length,
                     }
                 });
+                return idx;
+            }));
 
-                savedCount++;
-                log.info('Chunk embedded and saved', { chunk: i + 1, of: chunks.length });
+            savedCount += results.filter(r => r.status === 'fulfilled').length;
+            results.filter(r => r.status === 'rejected').forEach((r, i) =>
+                log.warn('Chunk embedding failed', { chunk: b + i, error: r.reason?.message })
+            );
 
-                // Small delay to avoid rate limiting
-                if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 100));
-
-            } catch (embErr) {
-                log.warn('Chunk embedding failed', { chunk: i, error: embErr.message });
-            }
+            log.info('Batch embedded', { batch: Math.floor(b / BATCH) + 1, saved: savedCount, total: chunks.length });
+            // Small inter-batch delay to stay within API rate limits
+            if (b + BATCH < chunks.length) await new Promise(r => setTimeout(r, 300));
         }
 
         // ── Mark file as processed ────────────────────────────────────────────

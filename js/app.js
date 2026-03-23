@@ -1849,14 +1849,14 @@ async function loadKBDetailFiles() {
         : '';
 
       return `
-        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;">
+        <div data-kb-file-id="${f.id}" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
             <span style="font-size:22px;flex-shrink:0;">${icon}</span>
             <div style="flex:1;min-width:0;">
               <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.name}</div>
               <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap;">
-                ${statusBadge}
-                <span style="font-size:11px;color:var(--text-muted);">${[chunkStr, sizeStr, date].filter(Boolean).join(' · ')}</span>
+                <span class="kb-status-badge" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${s.color};background:${s.bg};border-radius:20px;padding:2px 9px;">${s.icon} ${s.label}</span>
+                <span class="kb-meta-text" style="font-size:11px;color:var(--text-muted);">${[chunkStr, sizeStr, date].filter(Boolean).join(' · ')}</span>
               </div>
               ${errorHint}
             </div>
@@ -1889,15 +1889,19 @@ async function uploadKBDetailFiles(input) {
   const kbId = AppState.currentKBId;
   if (!kbId) return;
   showToast(`Uploading ${files.length} file(s)...`, 'info');
+  const uploadedIds = [];
   try {
     for (const file of files) {
-      await KnowledgeBases.uploadFile(kbId, file);
+      const record = await KnowledgeBases.uploadFile(kbId, file);
+      if (record?.id) uploadedIds.push(record.id);
     }
-    showToast(`${files.length} file(s) uploaded!`, 'success');
+    showToast(`${files.length} file(s) uploaded — indexing in background…`, 'info');
     LocalDB.clear('knowledge_bases');
     await loadKBDetailFiles();
     const freshKBs = await KnowledgeBases.getAll();
     Store.set('knowledge_bases', freshKBs);
+    // Start live polling for each uploaded file
+    uploadedIds.forEach(id => pollKBFileStatus(id));
   } catch (e) {
     console.error(e);
     showToast('Upload failed', 'error');
@@ -1931,16 +1935,68 @@ async function startKBCrawl() {
   const kbId = AppState.currentKBId;
   if (!kbId) return;
   try {
-    await KnowledgeBases.addFile(kbId, { name: url, type: 'url', url, size_bytes: 0 });
-    showToast('URL added! Crawling will begin shortly.', 'success');
+    // Use processUrl() which both saves the record AND triggers /api/kb/crawl
+    const fileRecord = await KnowledgeBases.processUrl(kbId, url);
+    showToast('URL added — crawling in background…', 'info');
     document.getElementById('kb-sitemap-url').value = '';
     LocalDB.clear('knowledge_bases');
     await loadKBDetailFiles();
     const freshKBs = await KnowledgeBases.getAll();
     Store.set('knowledge_bases', freshKBs);
+    // Start polling status for this file so badge updates live
+    pollKBFileStatus(fileRecord.id);
   } catch (e) { showToast('Failed to add URL', 'error'); }
 }
 window.startKBCrawl = startKBCrawl;
+
+// ── Live status polling for a KB file ──────────────────────────────────────────
+// Updates the badge in the list every 3s until the file reaches a terminal state.
+const _kbPollingIds = {};
+function pollKBFileStatus(fileId) {
+  if (_kbPollingIds[fileId]) return; // already polling
+  _kbPollingIds[fileId] = setInterval(async () => {
+    try {
+      const { data: file } = await supabase
+        .from('kb_files')
+        .select('id, status, chunk_count, error_message')
+        .eq('id', fileId)
+        .single();
+
+      if (!file) return;
+
+      // Update the badge live in the DOM
+      const statusMap = {
+        processed:  { label: 'Indexed',      color: '#10b981', bg: 'rgba(16,185,129,.12)', icon: '✓' },
+        processing: { label: 'Processing\u2026', color: '#f59e0b', bg: 'rgba(245,158,11,.12)', icon: '⟳' },
+        pending:    { label: 'Pending',       color: '#6b7280', bg: 'rgba(107,114,128,.12)', icon: '○' },
+        failed:     { label: 'Failed',        color: '#ef4444', bg: 'rgba(239,68,68,.12)',   icon: '✕' },
+      };
+      const s = statusMap[file.status] || statusMap['pending'];
+      const row = document.querySelector(`[data-kb-file-id="${fileId}"]`);
+      if (row) {
+        const badge = row.querySelector('.kb-status-badge');
+        if (badge) {
+          badge.style.color = s.color;
+          badge.style.background = s.bg;
+          badge.textContent = `${s.icon} ${s.label}`;
+        }
+        const meta = row.querySelector('.kb-meta-text');
+        if (meta && file.chunk_count > 0) {
+          meta.textContent = `${file.chunk_count} chunks indexed`;
+        }
+      }
+
+      // Stop polling at terminal state
+      if (['processed', 'failed', 'unsupported', 'empty'].includes(file.status)) {
+        clearInterval(_kbPollingIds[fileId]);
+        delete _kbPollingIds[fileId];
+        // Fully refresh the list once done to ensure consistent UI
+        await loadKBDetailFiles();
+      }
+    } catch (_) { /* silent — polling isn't critical */ }
+  }, 3000);
+}
+window.pollKBFileStatus = pollKBFileStatus;
 
 function renameCurrentKB() { renameKB(AppState.currentKBId); }
 window.renameCurrentKB = renameCurrentKB;
