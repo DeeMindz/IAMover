@@ -32,6 +32,7 @@
   var _hitlActive    = false;
   var _shownSysMsgs  = {};
   var _shownMsgIds   = {};
+  var _shownBotTexts = {};
   var _preChatDone   = false;
   var _preChatName   = '';
   var _preChatEmail  = '';
@@ -232,7 +233,7 @@
   }
 
   // ── Message helpers ───────────────────────────────────────────────────
-  function appendBot(c)   { var d=document.createElement('div'); d.className='iam-msg bot'; d.innerHTML=md(c); msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight; }
+  function appendBot(c)   { if(c) _shownBotTexts[c.trim()]=true; var d=document.createElement('div'); d.className='iam-msg bot'; d.innerHTML=md(c); msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight; }
   function appendUser(c)  { var d=document.createElement('div'); d.className='iam-msg user'; d.textContent=c; msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight; }
   function appendAgent(c) {
     var w=document.createElement('div'); w.className='iam-agent-wrap';
@@ -242,7 +243,7 @@
   }
   function appendSystem(c) {
     var n = botConfig.displayName||botConfig.name||'Bot';
-    var lbl = c==='agent_joined' ? '\u25cf A live agent has joined' : n+' has resumed';
+    var lbl = c==='agent_joined' ? 'A live agent has joined' : n+' has resumed';
     var d=document.createElement('div'); d.className='iam-system';
     d.innerHTML='<span>'+lbl+'</span>'; msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight;
   }
@@ -342,7 +343,7 @@
           if (!_lastMsgAt || m.created_at > _lastMsgAt) _lastMsgAt = m.created_at;
           if (m.role==='human-agent') { if(_shownMsgIds[m.id]) return; _shownMsgIds[m.id]=true; appendAgent(m.content); isSending=false; }
           if (m.role==='system')      { if(_shownSysMsgs[m.content]) return; _shownSysMsgs[m.content]=true; appendSystem(m.content); if(m.content==='agent_left'){ _hitlActive=false; stopPolling(); startStatusCheck(cId); } }
-          if (m.role==='bot')         { if(_shownMsgIds[m.id]) return; _shownMsgIds[m.id]=true; hideTyping(); appendBot(m.content); isSending=false; }
+          if (m.role==='bot')         { if(_shownMsgIds[m.id]) return; _shownMsgIds[m.id]=true; if(_shownBotTexts[m.content.trim()]) return; hideTyping(); appendBot(m.content); isSending=false; }
         });
         if (data.hitl_active===false && _hitlActive) { _hitlActive=false; stopPolling(); startStatusCheck(cId); }
       }).catch(function(){});
