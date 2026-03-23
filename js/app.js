@@ -2192,14 +2192,6 @@ function createKBFromBot() {
 }
 window.createKBFromBot = createKBFromBot;
 
-// Edit an existing KB from bot config — remembers to return to bot
-function editKBFromBot(kbId) {
-  const bot = AppState.currentBot;
-  if (bot) AppState.returnToBotId = bot.id;
-  navigate('kb-detail', { kbId });
-}
-window.editKBFromBot = editKBFromBot;
-
 async function attachKB(kbId) {
   const bot = AppState.currentBot;
   if (!bot) return;
