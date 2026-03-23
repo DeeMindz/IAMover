@@ -1280,8 +1280,8 @@ function renderConvDetail(id) {
       if (m.role === 'system') {
         const isJoined = m.text === 'agent_joined';
         const label = isJoined
-          ? '👤 A live agent has joined the conversation'
-          : '🤖 AI assistant has resumed';
+          ? 'A live agent has joined'
+          : 'Live agent ended';
         return `<div style="display:flex;align-items:center;justify-content:center;margin:10px 0;">
           <span style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:4px 14px;white-space:nowrap;">${label}</span>
         </div>`;
@@ -1292,7 +1292,7 @@ function renderConvDetail(id) {
       return `
       <div class="message ${isAgent ? 'bot' : m.role}">
         <div class="msg-avatar" style="background:${isBot ? 'var(--accent-dim)' : isAgent ? '#10b98133' : '#333'}">
-          ${isBot ? '🤖' : isAgent ? '👤' : ''}
+          ${isBot ? botName.charAt(0).toUpperCase() : isAgent ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>' : ''}
         </div>
         <div>
           ${isAgent ? '<div style="font-size:10px;color:#10b981;margin-bottom:2px;">Support Agent</div>' : ''}
