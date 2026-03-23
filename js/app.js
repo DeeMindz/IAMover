@@ -2142,6 +2142,15 @@ async function renderAttachedKBs(bot) {
 
 window.renderAttachedKBs = renderAttachedKBs;
 
+// Opens the KB detail page from the bot config KB tab, and wires the breadcrumb
+// so the user can navigate back to this bot's Knowledge tab.
+function editKBFromBot(kbId) {
+  // Remember which bot we came from so the breadcrumb Back link works
+  AppState.returnToBotId = AppState.currentBot?.id || null;
+  openKBDetail(kbId);
+}
+window.editKBFromBot = editKBFromBot;
+
 function openAttachKBModal() {
   const bot = AppState.currentBot;
   const allKBs = Store.get('knowledge_bases') || [];
