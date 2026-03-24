@@ -133,20 +133,20 @@
     '    <div id="iam-bot-name">Assistant</div>',
     '    <div id="iam-bot-status"><span style="color:#10b981;">&#9679;</span> Online &middot; Ready to help</div>',
     '  </div>',
-    '  <select id="iam-language-select" style="background:rgba(0,0,0,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:12px;padding:4px 6px;margin-right:4px;outline:none;cursor:pointer;">',
-    '    <option value="Auto" style="color:#333">Auto / Browser Default</option>',
-    '    <option value="English" style="color:#333">English</option>',
-    '    <option value="Spanish" style="color:#333">Español</option>',
-    '    <option value="French" style="color:#333">Français</option>',
-    '    <option value="German" style="color:#333">Deutsch</option>',
-    '    <option value="Italian" style="color:#333">Italiano</option>',
-    '    <option value="Portuguese" style="color:#333">Português</option>',
-    '    <option value="Dutch" style="color:#333">Nederlands</option>',
-    '    <option value="Russian" style="color:#333">Русский</option>',
-    '    <option value="Arabic" style="color:#333">العربية</option>',
-    '    <option value="Chinese" style="color:#333">中文</option>',
-    '    <option value="Japanese" style="color:#333">日本語</option>',
-    '    <option value="Korean" style="color:#333">한국어</option>',
+    '  <select id="iam-language-select" title="Select your preferred language" style="background:rgba(0,0,0,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:12px;padding:4px 6px;margin-right:4px;outline:none;cursor:pointer;">',
+    '    <option value="Auto" style="color:#333">🌐 Auto</option>',
+    '    <option value="English" style="color:#333">EN</option>',
+    '    <option value="Spanish" style="color:#333">ES</option>',
+    '    <option value="French" style="color:#333">FR</option>',
+    '    <option value="German" style="color:#333">DE</option>',
+    '    <option value="Italian" style="color:#333">IT</option>',
+    '    <option value="Portuguese" style="color:#333">PT</option>',
+    '    <option value="Dutch" style="color:#333">NL</option>',
+    '    <option value="Russian" style="color:#333">RU</option>',
+    '    <option value="Arabic" style="color:#333">AR</option>',
+    '    <option value="Chinese" style="color:#333">ZH</option>',
+    '    <option value="Japanese" style="color:#333">JA</option>',
+    '    <option value="Korean" style="color:#333">KO</option>',
     '  </select>',
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">&#10005;</button>',
@@ -263,9 +263,16 @@
     h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
     // Step 4: Auto-link raw URLs that are NOT already inside an href
-    h = h.replace(/(https?:\/\/[^\s&lt;&gt;"'<>\]\[)]+)/g, function(url) {
-      // Don't double-link if already in an href
-      return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
+    // Uses negative lookahead to prevent matching HTML entities like &lt; and &gt;
+    h = h.replace(/(https?:\/\/(?:(?!&lt;|&gt;|&quot;|\s|["'<>[\])]).)+)/gi, function(url) {
+      var trailing = '';
+      // Exclude trailing punctuation often added at the end of sentences
+      if (/[.,;!?]+$/.test(url)) {
+        var match = url.match(/[.,;!?]+$/);
+        trailing = match[0];
+        url = url.substring(0, url.length - trailing.length);
+      }
+      return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + trailing;
     });
 
     // Step 5: Basic markdown formatting
