@@ -2536,21 +2536,24 @@ function renderLivePreview(bot) {
         <div class="name">${botName}</div>
         <div class="status"><span style="color:#10b981;">&#9679;</span> Online · Ready to help</div>
       </div>
-      <select id="iam-language-select" title="Select your preferred language" style="background:transparent url('data:image/svg+xml;utf8,<svg fill=%22%23ffffff%22 height=%2216%22 viewBox=%220 0 24 24%22 width=%2216%22 xmlns=%22http://www.w3.org/2000/svg%22><path d=%22M7 10l5 5 5-5z%22/></svg>') no-repeat right center;color:#fff;border:none;font-size:13px;font-weight:600;padding:2px 14px 2px 2px;margin-right:2px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center;">
-        <option value="Auto" style="color:#333">🌐 Auto</option>
-        <option value="English" style="color:#333">EN</option>
-        <option value="Spanish" style="color:#333">ES</option>
-        <option value="French" style="color:#333">FR</option>
-        <option value="German" style="color:#333">DE</option>
-        <option value="Italian" style="color:#333">IT</option>
-        <option value="Portuguese" style="color:#333">PT</option>
-        <option value="Dutch" style="color:#333">NL</option>
-        <option value="Russian" style="color:#333">RU</option>
-        <option value="Arabic" style="color:#333">AR</option>
-        <option value="Chinese" style="color:#333">ZH</option>
-        <option value="Japanese" style="color:#333">JA</option>
-        <option value="Korean" style="color:#333">KO</option>
-      </select>
+      <div style="position:relative;display:flex;align-items:center;margin-right:8px;">
+        <div id="iam-lang-disp" style="color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px;pointer-events:none;">auto <svg fill="#ffffff" height="16" viewBox="0 0 24 24" width="16"><path d="M7 10l5 5 5-5z"/></svg></div>
+        <select id="iam-language-select" title="Select your preferred language" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;">
+          <option value="auto">auto</option>
+          <option value="english">english</option>
+          <option value="spanish">spanish</option>
+          <option value="french">french</option>
+          <option value="german">german</option>
+          <option value="italian">italian</option>
+          <option value="portuguese">portuguese</option>
+          <option value="dutch">dutch</option>
+          <option value="russian">russian</option>
+          <option value="arabic">arabic</option>
+          <option value="chinese">chinese</option>
+          <option value="japanese">japanese</option>
+          <option value="korean">korean</option>
+        </select>
+      </div>
       <button class="close-btn" onclick="showNewConvConfirm()" title="New conversation" style="margin-right:4px;font-size:14px;">&#8635;</button>
       <button class="close-btn" onclick="closeChat()">✕</button>
     </div>
@@ -2671,7 +2674,8 @@ function renderLivePreview(bot) {
     var d=document.createElement('div'); d.className='msg bot'; d.style.maxWidth='100%'; d.innerHTML=formatMarkdown(c);
     var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
     var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
-    w.appendChild(d); w.appendChild(fb); w.appendChild(fbF);
+    d.appendChild(fb);
+    w.appendChild(d); w.appendChild(fbF);
     var msgs=document.getElementById('chat-messages');
     msgs.appendChild(w); msgs.scrollTop=msgs.scrollHeight;
 
@@ -2703,7 +2707,7 @@ function renderLivePreview(bot) {
 
   // Show typing indicator
   const typing = document.createElement('div');
-  typing.className = 'typing-dots';
+  typing.className = 'typing';
   typing.id = 'typing-indicator';
   typing.innerHTML = '<span></span><span></span><span></span>';
   msgs.appendChild(typing);

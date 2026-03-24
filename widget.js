@@ -69,29 +69,30 @@
     '#iam-messages{flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;background:#fafafa;}',
     '#iam-messages::-webkit-scrollbar{width:4px;}#iam-messages::-webkit-scrollbar-thumb{background:#ddd;border-radius:4px;}',
     '.iam-msg{max-width:82%;padding:9px 13px;border-radius:16px;font-size:13px;line-height:1.5;word-break:break-word;}',
-    '.iam-msg.bot{background:#fff;border:1px solid #eee;border-bottom-left-radius:4px;align-self:flex-start;color:#333;box-shadow:0 1px 3px rgba(0,0,0,.05);}',
+    '.iam-msg.bot{position:relative;background:#fff;border:1px solid #eee;border-bottom-left-radius:4px;align-self:flex-start;color:#333;box-shadow:0 1px 3px rgba(0,0,0,.05);}',
     '.iam-msg.bot a{color:'+COLOR+';text-decoration:underline;}',
     '.iam-msg.user{background:'+COLOR+';color:#fff;border-bottom-right-radius:4px;align-self:flex-end;}',
     '.iam-msg-status{font-size:10px;color:'+COLOR+';margin-top:2px;text-align:right;}',
-    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:12px;}',
-    '.iam-fb{display:flex;gap:4px;margin-top:-12px;margin-right:-10px;align-self:flex-end;background:#fff;border:1px solid #eee;border-radius:16px;padding:2px 4px;box-shadow:0 1px 3px rgba(0,0,0,.1);z-index:2;transition:opacity .2s;}',
+    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:20px;}',
+    '.iam-fb{position:absolute;bottom:-12px;right:-10px;display:flex;gap:4px;background:#fff;border:1px solid #eee;border-radius:16px;padding:2px 4px;box-shadow:0 1px 3px rgba(0,0,0,.1);z-index:2;transition:opacity .2s;}',
     '.iam-fb-btn{background:transparent;border:none;border-radius:50%;padding:2px;cursor:pointer;font-size:12px;transition:all 0.2s;}',
     '.iam-fb-btn:hover{background:#f0f0f0;}',
     '.iam-fb-form{display:none;flex-direction:column;gap:4px;margin-top:4px;width:100%;}',
     '.iam-fb-form textarea{width:100%;font-size:12px;padding:6px;border:1px solid #ddd;border-radius:6px;resize:none;font-family:inherit;}',
     '.iam-fb-form button{background:'+COLOR+';color:#fff;border:none;border-radius:6px;padding:6px;font-size:11px;font-weight:600;cursor:pointer;}',
-    '.iam-agent-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:2px;}',
+    '.iam-agent-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:8px;}',
     '.iam-agent-label{font-size:10px;color:#10b981;margin-left:4px;font-weight:600;}',
     '.iam-agent-bubble{background:#fff;border:1px solid #eee;border-left:3px solid #10b981;border-radius:16px;border-bottom-left-radius:4px;max-width:82%;padding:9px 13px;font-size:13px;line-height:1.5;color:#333;}',
     '.iam-agent-bubble a{color:#10b981;text-decoration:underline;}',
     '.iam-system{display:flex;justify-content:center;margin:4px 0;}',
     '.iam-system span{font-size:10px;color:#888;background:#f0f0f0;border-radius:20px;padding:3px 12px;}',
-    '.iam-typing{display:flex;align-items:center;gap:3px;padding:6px 2px;align-self:flex-start;}',
-    '.iam-typing span{width:5px;height:5px;border-radius:50%;animation:iamWave 1.3s ease-in-out infinite;}',
-    '.iam-typing span:nth-child(1){background:#c0c0c0;}',
-    '.iam-typing span:nth-child(2){background:#808080;animation-delay:.18s;}',
-    '.iam-typing span:nth-child(3){background:#303030;animation-delay:.36s;}',
-    '@keyframes iamWave{0%,60%,100%{transform:translateY(0);opacity:.6}30%{transform:translateY(-4px);opacity:1}}',
+    '.iam-typing{background:#f0f0f0;padding:12px 16px;border-radius:16px;border-bottom-left-radius:4px;display:inline-flex;align-items:center;gap:4px;margin-bottom:12px;align-self:flex-start;}',
+    '.iam-typing span{width:6px;height:6px;background:#888;border-radius:50%;animation:iamBounce 1.4s infinite ease-in-out both;}',
+    '.iam-typing span:nth-child(1){animation-delay:-0.32s;}',
+    '.iam-typing span:nth-child(2){animation-delay:-0.16s;}',
+    '@keyframes iamBounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}',
+    '.iam-spinner{width:24px;height:24px;border:3px solid #f3f3f3;border-top:3px solid '+COLOR+';border-radius:50%;animation:iamSpin 1s linear infinite;}',
+    '@keyframes iamSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}',
     '#iam-input-area{padding:10px 12px;border-top:1px solid #eee;display:none;gap:8px;align-items:center;background:#fff;flex-shrink:0;}',
     '#iam-input{flex:1;border:1px solid #e5e5e5;border-radius:20px;padding:8px 14px;font-size:13px;outline:none;color:#333;background:#f8f8f8;font-family:inherit;}',
     '#iam-input:focus{border-color:'+COLOR+';}',
@@ -141,21 +142,24 @@
     '    <div id="iam-bot-name">Assistant</div>',
     '    <div id="iam-bot-status"><span style="color:#10b981;">&#9679;</span> Online &middot; Ready to help</div>',
     '  </div>',
-    '  <select id="iam-language-select" title="Select your preferred language" style="background:transparent url(\'data:image/svg+xml;utf8,<svg fill=%22%23ffffff%22 height=%2216%22 viewBox=%220 0 24 24%22 width=%2216%22 xmlns=%22http://www.w3.org/2000/svg%22><path d=%22M7 10l5 5 5-5z%22/></svg>\') no-repeat right center;color:#fff;border:none;font-size:13px;font-weight:600;padding:2px 14px 2px 2px;margin-right:2px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center;">',
-    '    <option value="Auto" style="color:#333">🌐 Auto</option>',
-    '    <option value="English" style="color:#333">EN</option>',
-    '    <option value="Spanish" style="color:#333">ES</option>',
-    '    <option value="French" style="color:#333">FR</option>',
-    '    <option value="German" style="color:#333">DE</option>',
-    '    <option value="Italian" style="color:#333">IT</option>',
-    '    <option value="Portuguese" style="color:#333">PT</option>',
-    '    <option value="Dutch" style="color:#333">NL</option>',
-    '    <option value="Russian" style="color:#333">RU</option>',
-    '    <option value="Arabic" style="color:#333">AR</option>',
-    '    <option value="Chinese" style="color:#333">ZH</option>',
-    '    <option value="Japanese" style="color:#333">JA</option>',
-    '    <option value="Korean" style="color:#333">KO</option>',
-    '  </select>',
+    '  <div style="position:relative;display:flex;align-items:center;margin-right:8px;">',
+    '    <div id="iam-lang-disp" style="color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px;pointer-events:none;">auto <svg fill="#ffffff" height="16" viewBox="0 0 24 24" width="16"><path d="M7 10l5 5 5-5z"/></svg></div>',
+    '    <select id="iam-language-select" title="Select your preferred language" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;">',
+    '      <option value="auto">auto</option>',
+    '      <option value="english">english</option>',
+    '      <option value="spanish">spanish</option>',
+    '      <option value="french">french</option>',
+    '      <option value="german">german</option>',
+    '      <option value="italian">italian</option>',
+    '      <option value="portuguese">portuguese</option>',
+    '      <option value="dutch">dutch</option>',
+    '      <option value="russian">russian</option>',
+    '      <option value="arabic">arabic</option>',
+    '      <option value="chinese">chinese</option>',
+    '      <option value="japanese">japanese</option>',
+    '      <option value="korean">korean</option>',
+    '    </select>',
+    '  </div>',
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">&#10005;</button>',
     '</div>',
@@ -302,7 +306,8 @@
     var d=document.createElement('div'); d.className='iam-msg bot'; d.style.maxWidth='100%'; d.innerHTML=md(c);
     var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
     var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
-    w.appendChild(d); w.appendChild(fb); w.appendChild(fbF);
+    d.appendChild(fb);
+    w.appendChild(d); w.appendChild(fbF);
     msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
 
     var upBtn=fb.querySelector('.iam-fb-up'), downBtn=fb.querySelector('.iam-fb-down'), sBtn=fbF.querySelector('button'), txt=fbF.querySelector('textarea'), fbId=null;
@@ -455,8 +460,8 @@
     safeClear();
     var loader = document.createElement('div');
     loader.id = 'iam-init-loader';
-    loader.style.cssText = 'display:flex;justify-content:center;padding:20px;';
-    loader.innerHTML = '<div class="iam-typing"><span></span><span></span><span></span></div>';
+    loader.style.cssText = 'display:flex;justify-content:center;padding:24px;';
+    loader.innerHTML = '<div class="iam-spinner"></div>';
     msgsEl.appendChild(loader);
 
     fetch(API_BASE+'/api/conversation/create', {
@@ -588,12 +593,22 @@
     var sel = document.getElementById('iam-language-select');
     if (!sel) return;
     var code = (navigator.language || navigator.userLanguage || '').substr(0, 2).toLowerCase();
-    var map = { 'en':'English', 'es':'Spanish', 'fr':'French', 'de':'German', 'it':'Italian', 'pt':'Portuguese', 'nl':'Dutch', 'ru':'Russian', 'ar':'Arabic', 'zh':'Chinese', 'ja':'Japanese', 'ko':'Korean' };
-    if (map[code]) {
+    var langMap = { 'en':'english', 'es':'spanish', 'fr':'french', 'de':'german', 'it':'italian', 'pt':'portuguese', 'nl':'dutch', 'ru':'russian', 'ar':'arabic', 'zh':'chinese', 'ja':'japanese', 'ko':'korean' };
+    var userLangName = langMap[code];
+    if (userLangName && sel) {
       var opts = sel.options;
-      for (var i = 0; i < opts.length; i++) {
-        if (opts[i].value === map[code]) { sel.selectedIndex = i; break; }
-      }
+      for (var i=0; i<opts.length; i++) { if (opts[i].value===userLangName) { sel.selectedIndex=i; break; } }
+    }
+    
+    if (sel) {
+      var updateLangDisp = function() {
+        var v = sel.value;
+        var dispMap = { 'auto':'auto', 'english':'en', 'spanish':'es', 'french':'fr', 'german':'de', 'italian':'it', 'portuguese':'pt', 'dutch':'nl', 'russian':'ru', 'arabic':'ar', 'chinese':'zh', 'japanese':'ja', 'korean':'ko' };
+        var short = dispMap[v] || v;
+        document.getElementById('iam-lang-disp').innerHTML = short + ' <svg fill="#ffffff" height="16" viewBox="0 0 24 24" width="16"><path d="M7 10l5 5 5-5z"/></svg>';
+      };
+      sel.addEventListener('change', updateLangDisp);
+      updateLangDisp(); // init run
     }
   })();
 
