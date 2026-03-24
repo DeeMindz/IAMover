@@ -2529,19 +2529,19 @@ function renderLivePreview(bot) {
       <div style="position:relative;display:flex;align-items:center;margin-right:8px;min-width:36px;">
         <div id="iam-lang-disp" style="color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px;pointer-events:none;">auto <svg fill="#ffffff" height="16" viewBox="0 0 24 24" width="16"><path d="M7 10l5 5 5-5z"/></svg></div>
         <select id="iam-language-select" title="Select your preferred language" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;">
-          <option value="auto">auto</option>
-          <option value="english">english</option>
-          <option value="spanish">spanish</option>
-          <option value="french">french</option>
-          <option value="german">german</option>
-          <option value="italian">italian</option>
-          <option value="portuguese">portuguese</option>
-          <option value="dutch">dutch</option>
-          <option value="russian">russian</option>
-          <option value="arabic">arabic</option>
-          <option value="chinese">chinese</option>
-          <option value="japanese">japanese</option>
-          <option value="korean">korean</option>
+          <option value="auto">&nbsp;&nbsp;auto</option>
+          <option value="english">&nbsp;&nbsp;english</option>
+          <option value="spanish">&nbsp;&nbsp;spanish</option>
+          <option value="french">&nbsp;&nbsp;french</option>
+          <option value="german">&nbsp;&nbsp;german</option>
+          <option value="italian">&nbsp;&nbsp;italian</option>
+          <option value="portuguese">&nbsp;&nbsp;portuguese</option>
+          <option value="dutch">&nbsp;&nbsp;dutch</option>
+          <option value="russian">&nbsp;&nbsp;russian</option>
+          <option value="arabic">&nbsp;&nbsp;arabic</option>
+          <option value="chinese">&nbsp;&nbsp;chinese</option>
+          <option value="japanese">&nbsp;&nbsp;japanese</option>
+          <option value="korean">&nbsp;&nbsp;korean</option>
         </select>
       </div>
       <button class="close-btn" onclick="showNewConvConfirm()" title="New conversation" style="margin-right:4px;font-size:14px;">&#8635;</button>
