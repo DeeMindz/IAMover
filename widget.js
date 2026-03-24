@@ -69,13 +69,13 @@
     '#iam-messages{flex:1;padding:14px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;background:#fafafa;}',
     '#iam-messages::-webkit-scrollbar{width:4px;}#iam-messages::-webkit-scrollbar-thumb{background:#ddd;border-radius:4px;}',
     '.iam-msg{max-width:82%;padding:9px 13px;border-radius:16px;font-size:13px;line-height:1.5;word-break:break-word;}',
-    '.iam-msg.bot{position:relative;background:#fff;border:1px solid #eee;border-bottom-left-radius:4px;align-self:flex-start;color:#333;box-shadow:0 1px 3px rgba(0,0,0,.05);}',
+    '.iam-msg.bot{position:relative;background:#fff;border:1px solid #eee;border-bottom-left-radius:4px;align-self:flex-start;color:#333;box-shadow:0 1px 2px rgba(0,0,0,.05);}',
     '.iam-msg.bot a{color:'+COLOR+';text-decoration:underline;}',
     '.iam-msg.user{background:'+COLOR+';color:#fff;border-bottom-right-radius:4px;align-self:flex-end;}',
     '.iam-msg-status{font-size:10px;color:'+COLOR+';margin-top:2px;text-align:right;}',
-    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:14px;}',
-    '.iam-fb{position:absolute;bottom:-12px;right:-10px;display:flex;gap:4px;background:#fff;border:1px solid #eee;border-radius:16px;padding:2px 4px;box-shadow:0 1px 3px rgba(0,0,0,.1);z-index:2;transition:opacity .2s;}',
-    '.iam-fb-btn{background:transparent;border:none;border-radius:50%;padding:2px;cursor:pointer;font-size:12px;transition:all 0.2s;}',
+    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:2px;}',
+    '.iam-fb{position:absolute;bottom:4px;right:6px;display:flex;gap:4px;background:transparent;border:none;padding:0;box-shadow:none;z-index:2;}',
+    '.iam-fb-btn{background:transparent;border:none;border-radius:50%;padding:2px;cursor:pointer;font-size:13px;transition:all 0.2s;}',
     '.iam-fb-btn:hover{background:#f0f0f0;}',
     '.iam-fb-form{display:none;flex-direction:column;gap:4px;margin-top:4px;width:100%;}',
     '.iam-fb-form textarea{width:100%;font-size:12px;padding:6px;border:1px solid #ddd;border-radius:6px;resize:none;font-family:inherit;}',
@@ -93,9 +93,6 @@
     '@keyframes iamBounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}',
     '.iam-spinner{width:24px;height:24px;border:3px solid #f3f3f3;border-top:3px solid '+COLOR+';border-radius:50%;animation:iamSpin 1s linear infinite;}',
     '@keyframes iamSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}',
-    '.iam-ts{font-size:10px;color:#aaa;margin-top:3px;white-space:nowrap;}',
-    '.iam-ts.bot-ts{align-self:flex-start;}',
-    '.iam-ts.user-ts{align-self:flex-end;}',
     '.iam-date-sep{display:flex;align-items:center;gap:8px;margin:10px 0;color:#aaa;font-size:11px;}',
     '.iam-date-sep::before,.iam-date-sep::after{content:"";flex:1;height:1px;background:#e8e8e8;}',
     '#iam-input-area{padding:10px 12px;border-top:1px solid #eee;display:none;gap:8px;align-items:center;background:#fff;flex-shrink:0;}',
@@ -293,10 +290,6 @@
     });
 
     // Step 5: Basic markdown formatting
-    h = h.replace(/^#{1,3} (.+)$/gm,'<strong>$1</strong>');
-    h = h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-    h = h.replace(/\*(.+?)\*/g,'<em>$1</em>');
-    h = h.replace(/`([^`]+)`/g,'<code style="background:#f4f4f4;padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>');
     h = h.replace(/^[ ]*[-*] (.+)$/gm,'<li>$1</li>');
     h = h.replace(/(<li>[\s\S]*?<\/li>)/g,'<ul style="margin:4px 0;padding-left:16px;">$1</ul>');
     h = h.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
@@ -331,12 +324,12 @@
     if(c) _shownBotTexts[c.trim()]=true;
     maybeShowDateSep(ts);
     var w=document.createElement('div'); w.className='iam-bot-wrap';
-    var d=document.createElement('div'); d.className='iam-msg bot'; d.style.maxWidth='100%'; d.innerHTML=md(c);
+    var d=document.createElement('div'); d.className='iam-msg bot'; d.style.maxWidth='100%';
+    d.innerHTML=md(c) + '<div style="float:right;width:38px;height:18px;margin-top:4px;"></div><div style="clear:both;"></div>';
     var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
     var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
-    var tEl=document.createElement('div'); tEl.className='iam-ts bot-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
     d.appendChild(fb);
-    w.appendChild(d); w.appendChild(tEl); w.appendChild(fbF);
+    w.appendChild(d); w.appendChild(fbF);
     msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
 
     var upBtn=fb.querySelector('.iam-fb-up'), downBtn=fb.querySelector('.iam-fb-down'), sBtn=fbF.querySelector('button'), txt=fbF.querySelector('textarea'), fbId=null;
@@ -344,6 +337,7 @@
     upBtn.onclick=function(){
       upBtn.style.background='#e0f2fe'; downBtn.style.background='transparent';
       fbF.style.display='none'; txt.value='';
+      // Reset feedback form state in case switching from thumbs down
       sBtn.textContent='Send Feedback'; sBtn.disabled=false;
       sb('positive','');
     };
@@ -356,11 +350,10 @@
   }
   function appendUser(c, ts) {
     maybeShowDateSep(ts);
-    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:4px;';
+    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:2px;';
     var d=document.createElement('div'); d.className='iam-msg user'; d.textContent=c;
     var status=document.createElement('div'); status.className='iam-msg-status'; status.innerHTML='&#10003;';
-    var tEl=document.createElement('div'); tEl.className='iam-ts user-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
-    w.appendChild(d); w.appendChild(status); w.appendChild(tEl);
+    w.appendChild(d); w.appendChild(status);
     msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
     return status;
   }

@@ -2387,8 +2387,8 @@ function renderLivePreview(bot) {
     to   { opacity:1; transform:translateY(0) scale(1); }
   }
   .msg-status { font-size:10px; color:#10b981; margin-top:2px; text-align:right; }
-  .bot-wrap { display:flex; flex-direction:column; align-items:flex-start; max-width:82%; margin-bottom:14px; }
-  .iam-fb { position:absolute; bottom:-12px; right:-10px; display:flex; gap:4px; background:#fff; border:1px solid #eee; border-radius:16px; padding:2px 4px; box-shadow:0 1px 3px rgba(0,0,0,.1); z-index:2; transition:opacity .2s; }
+  .bot-wrap { display:flex; flex-direction:column; align-items:flex-start; max-width:82%; margin-bottom:2px; }
+  .iam-fb { position:absolute; bottom:4px; right:6px; display:flex; gap:4px; background:transparent; border:none; padding:0; box-shadow:none; z-index:2; }
   .iam-fb-btn { background:transparent; border:none; border-radius:50%; padding:2px; cursor:pointer; font-size:12px; transition:all 0.2s; }
   .iam-fb-btn:hover { background:#f0f0f0; }
   .iam-fb-form { display:none; flex-direction:column; gap:4px; margin-top:4px; width:100%; }
@@ -2439,7 +2439,7 @@ function renderLivePreview(bot) {
   #chat-messages { flex:1; padding: 14px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; background: #fafafa; }
   #chat-messages::-webkit-scrollbar { width:4px; } #chat-messages::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
   .msg { max-width: 82%; padding: 9px 13px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; }
-  .msg.bot { position: relative; background: white; color: #1a202c; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; align-self: flex-start; }
+  .msg.bot { position: relative; background: white; color: #1a202c; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; align-self: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
   .msg.bot a { color:#6c63ff; text-decoration:underline; }
   .msg.bot a:hover { color:#5a52d9; }
   .msg.user { background: #10b981; color: white; border-bottom-right-radius: 4px; align-self: flex-end; }
@@ -2493,9 +2493,6 @@ function renderLivePreview(bot) {
   }
   .send-btn:hover { opacity:0.85; }
   .hidden { display:none !important; }
-  .iam-ts{font-size:10px;color:#aaa;margin-top:3px;white-space:nowrap;}
-  .iam-ts.bot-ts{align-self:flex-start;}
-  .iam-ts.user-ts{align-self:flex-end;}
   .iam-date-sep{display:flex;align-items:center;gap:8px;margin:10px 0;color:#aaa;font-size:11px;}
   .iam-date-sep::before,.iam-date-sep::after{content:"";flex:1;height:1px;background:#e8e8e8;}
 </style>
@@ -2684,29 +2681,37 @@ function renderLivePreview(bot) {
     if (c) window._shownBotTexts[c.trim()] = true;
     maybeShowDateSep(ts);
     var w=document.createElement('div'); w.className='bot-wrap';
-    var d=document.createElement('div'); d.className='msg bot'; d.style.maxWidth='100%'; d.innerHTML=formatMarkdown(c);
+    var d=document.createElement('div'); d.className='msg bot'; d.style.maxWidth='100%'; 
+    d.innerHTML=formatMarkdown(c) + '<div style="float:right;width:38px;height:18px;margin-top:4px;"></div><div style="clear:both;"></div>';
     var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
     var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
-    var tEl=document.createElement('div'); tEl.className='iam-ts bot-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
     d.appendChild(fb);
-    w.appendChild(d); w.appendChild(tEl); w.appendChild(fbF);
+    w.appendChild(d); w.appendChild(fbF);
     var msgs=document.getElementById('chat-messages');
     msgs.appendChild(w); msgs.scrollTop=msgs.scrollHeight;
 
     var upBtn=fb.querySelector('.iam-fb-up'), downBtn=fb.querySelector('.iam-fb-down'), sBtn=fbF.querySelector('button'), txt=fbF.querySelector('textarea'), fbId=null;
     function sb(r,cm){if(!window._previewConvId)return;fetch('${window.location.origin}/api/bot/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:fbId,bot_id:'${bot.id}',conversation_id:window._previewConvId,message_text:c,rating:r,comment:cm})}).then(function(x){return x.json()}).then(function(d){if(d.id)fbId=d.id;}).catch(function(){});}
-    upBtn.onclick=function(){upBtn.style.background='#e0f2fe';downBtn.style.background='transparent';fbF.style.display='none';sb('positive','');};
-    downBtn.onclick=function(){downBtn.style.background='#fee2e2';upBtn.style.background='transparent';fbF.style.display='flex';sb('negative','');};
+    upBtn.onclick=function(){
+      upBtn.style.background='#e0f2fe'; downBtn.style.background='transparent';
+      fbF.style.display='none'; txt.value='';
+      sBtn.textContent='Send Feedback'; sBtn.disabled=false;
+      sb('positive','');
+    };
+    downBtn.onclick=function(){
+      downBtn.style.background='#fee2e2'; upBtn.style.background='transparent';
+      fbF.style.display='flex';
+      sb('negative','');
+    };
     sBtn.onclick=function(){var v=txt.value.trim();if(!v)return;sBtn.textContent='Saving...';sBtn.disabled=true;sb('negative',v);setTimeout(function(){fbF.innerHTML='<span style="font-size:11px;color:#10b981;font-weight:600;">Thanks for your feedback!</span>';},500);};
   }
 
   function appendUser(c, ts) {
     maybeShowDateSep(ts);
-    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:4px;';
+    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:2px;';
     var d=document.createElement('div'); d.className='msg user'; d.textContent=c;
     var status=document.createElement('div'); status.className='msg-status'; status.innerHTML='&#10003;';
-    var tEl=document.createElement('div'); tEl.className='iam-ts user-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
-    w.appendChild(d); w.appendChild(status); w.appendChild(tEl);
+    w.appendChild(d); w.appendChild(status);
     var msgs=document.getElementById('chat-messages');
     msgs.appendChild(w); msgs.scrollTop=msgs.scrollHeight;
     return status;
@@ -2904,7 +2909,7 @@ function showAgentMsg(content) {
   var msgs = document.getElementById('chat-messages');
   if (!msgs) return;
   var wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;';
+  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:2px;';
   wrap.setAttribute('data-rawcontent', content);
   var lbl = document.createElement('div');
   lbl.textContent = 'Support Agent';
