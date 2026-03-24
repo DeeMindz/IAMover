@@ -290,6 +290,10 @@
     });
 
     // Step 5: Basic markdown formatting
+    h = h.replace(/^#{1,3} (.+)$/gm,'<strong>$1</strong>');
+    h = h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+    h = h.replace(/\*(.+?)\*/g,'<em>$1</em>');
+    h = h.replace(/`([^`]+)`/g,'<code style="background:#f4f4f4;padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>');
     h = h.replace(/^[ ]*[-*] (.+)$/gm,'<li>$1</li>');
     h = h.replace(/(<li>[\s\S]*?<\/li>)/g,'<ul style="margin:4px 0;padding-left:16px;">$1</ul>');
     h = h.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
