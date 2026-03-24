@@ -324,7 +324,7 @@ window.addEventListener('message', async function (e) {
 
   // Handle bot response request
   if (e.data.type === 'IAM_BOT_REQUEST') {
-    const { message, bot_id, conv_id } = e.data;
+    const { message, bot_id, conv_id, user_language } = e.data;
     console.log('[IAM Bridge] Bot request:', { message, bot_id, conv_id });
     // Save user message to PreviewState
     if (message) {
@@ -334,7 +334,7 @@ window.addEventListener('message', async function (e) {
       const res = await fetch('/api/bot/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, bot_id, conversation_id: conv_id })
+        body: JSON.stringify({ message, bot_id, conversation_id: conv_id, user_language })
       });
       console.log('[IAM Bridge] /api/bot/respond response status:', res.status, res.statusText);
       const text = await res.text();
@@ -2528,6 +2528,21 @@ function renderLivePreview(bot) {
         <div class="name">${botName}</div>
         <div class="status"><span style="color:#10b981;">&#9679;</span> Online · Ready to help</div>
       </div>
+      <select id="iam-language-select" style="background:rgba(0,0,0,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:12px;padding:4px 6px;margin-right:4px;outline:none;cursor:pointer;">
+        <option value="Auto" style="color:#333">Auto / Browser Default</option>
+        <option value="English" style="color:#333">English</option>
+        <option value="Spanish" style="color:#333">Español</option>
+        <option value="French" style="color:#333">Français</option>
+        <option value="German" style="color:#333">Deutsch</option>
+        <option value="Italian" style="color:#333">Italiano</option>
+        <option value="Portuguese" style="color:#333">Português</option>
+        <option value="Dutch" style="color:#333">Nederlands</option>
+        <option value="Russian" style="color:#333">Русский</option>
+        <option value="Arabic" style="color:#333">العربية</option>
+        <option value="Chinese" style="color:#333">中文</option>
+        <option value="Japanese" style="color:#333">日本語</option>
+        <option value="Korean" style="color:#333">한국어</option>
+      </select>
       <button class="close-btn" onclick="showNewConvConfirm()" title="New conversation" style="margin-right:4px;font-size:14px;">&#8635;</button>
       <button class="close-btn" onclick="closeChat()">✕</button>
     </div>
@@ -2563,6 +2578,20 @@ function renderLivePreview(bot) {
   </div>
 
 <script>
+  // Auto-detect browser language and map it to the dropdown options
+  (function(){
+    var sel = document.getElementById('iam-language-select');
+    if (!sel) return;
+    var code = (navigator.language || navigator.userLanguage || '').substr(0, 2).toLowerCase();
+    var map = { 'en':'English', 'es':'Spanish', 'fr':'French', 'de':'German', 'it':'Italian', 'pt':'Portuguese', 'nl':'Dutch', 'ru':'Russian', 'ar':'Arabic', 'zh':'Chinese', 'ja':'Japanese', 'ko':'Korean' };
+    if (map[code]) {
+      var opts = sel.options;
+      for (var i = 0; i < opts.length; i++) {
+        if (opts[i].value === map[code]) { sel.selectedIndex = i; break; }
+      }
+    }
+  })();
+
   let isSending = false;
 
   function openChat() {
@@ -2651,12 +2680,16 @@ function renderLivePreview(bot) {
   msgs.appendChild(typing);
   msgs.scrollTop = msgs.scrollHeight;
 
+  const langSel = document.getElementById('iam-language-select');
+  const userLanguage = langSel ? langSel.value : 'Auto';
+
   // Send to parent window to make the API call - avoids CORS
   window.parent.postMessage({
     type: 'IAM_BOT_REQUEST',
     message: text,
     bot_id: '${bot.id}',
-    conv_id: window._previewConvId || null
+    conv_id: window._previewConvId || null,
+    user_language: userLanguage
   }, '*');
 }
 

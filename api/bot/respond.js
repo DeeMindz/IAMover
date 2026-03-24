@@ -204,9 +204,9 @@ export default async function handler(req, res) {
 
     try {
         // FIX 1: conversation_id in first destructure
-        const { message, bot_id, conversation_id, system_vars } = req.body;
+        const { message, bot_id, conversation_id, system_vars, user_language } = req.body;
 
-        log.info('Incoming request', { bot_id, conversation_id: conversation_id || 'none', messageLength: message?.length });
+        log.info('Incoming request', { bot_id, conversation_id: conversation_id || 'none', messageLength: message?.length, user_language });
 
         if (!message || !bot_id) {
             log.warn('Missing required fields', { hasMessage: !!message, hasBotId: !!bot_id });
@@ -403,6 +403,11 @@ export default async function handler(req, res) {
 
         // Tell the LLM never to echo unresolved {{variable}} placeholders in responses.
         systemPrompt += `\n\nIMPORTANT: Never output text like {{variable_name}} in your responses. If you want to reference a user's name or email, use the actual value they provided in the conversation, not a placeholder.`;
+
+        // ── Language Enforcement ─────────────────────────────────────────────
+        if (user_language && user_language !== 'Auto') {
+            systemPrompt += `\n\nCRITICAL INSTRUCTION: You MUST respond to the user EXCLUSIVELY in ${user_language}. No matter what language the user types in, or what language the source material is in, translate and formulate your final response entirely in ${user_language}.`;
+        }
 
         // ── Inject captured lead data so bot never asks again ────────────────
         // Check if name/email was already captured for this conversation.

@@ -133,6 +133,21 @@
     '    <div id="iam-bot-name">Assistant</div>',
     '    <div id="iam-bot-status"><span style="color:#10b981;">&#9679;</span> Online &middot; Ready to help</div>',
     '  </div>',
+    '  <select id="iam-language-select" style="background:rgba(0,0,0,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:12px;padding:4px 6px;margin-right:4px;outline:none;cursor:pointer;">',
+    '    <option value="Auto" style="color:#333">Auto / Browser Default</option>',
+    '    <option value="English" style="color:#333">English</option>',
+    '    <option value="Spanish" style="color:#333">Español</option>',
+    '    <option value="French" style="color:#333">Français</option>',
+    '    <option value="German" style="color:#333">Deutsch</option>',
+    '    <option value="Italian" style="color:#333">Italiano</option>',
+    '    <option value="Portuguese" style="color:#333">Português</option>',
+    '    <option value="Dutch" style="color:#333">Nederlands</option>',
+    '    <option value="Russian" style="color:#333">Русский</option>',
+    '    <option value="Arabic" style="color:#333">العربية</option>',
+    '    <option value="Chinese" style="color:#333">中文</option>',
+    '    <option value="Japanese" style="color:#333">日本語</option>',
+    '    <option value="Korean" style="color:#333">한국어</option>',
+    '  </select>',
     '  <button class="iam-hbtn" id="iam-btn-new" title="New conversation">&#8635;</button>',
     IS_INLINE ? '' : '  <button class="iam-hbtn" id="iam-btn-close" title="Close">&#10005;</button>',
     '</div>',
@@ -465,15 +480,18 @@
     if (!_preChatDone) return; // blocked until form is dismissed
     var text = input.value.trim();
     if (!text || isSending) return;
-    isSending = true;
-    appendUser(text);
+    var message = text;
+    var userLanguage = document.getElementById('iam-language-select').value;
+    appendUser(message);
     input.value = '';
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+
+    isSending = true;
     showTyping();
     fetch(API_BASE+'/api/bot/respond', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ message:text, bot_id:BOT_ID, conversation_id:convId })
-    })
-    .then(function(r){ return r.json(); })
+      body: JSON.stringify({ bot_id:BOT_ID, conversation_id:convId, message:message, user_language:userLanguage })
+    }).then(function(r) { return r.json(); })
     .then(function(data) {
       hideTyping();
       if (data.hitl_active) {
@@ -520,6 +538,20 @@
     hideNewConvConfirm();
     if (greetingPopup) { greetingPopup.textContent = botConfig.greeting; greetingPopup.style.display = 'block'; }
   }
+
+  // Auto-detect browser language and map it to the dropdown options
+  (function(){
+    var sel = document.getElementById('iam-language-select');
+    if (!sel) return;
+    var code = (navigator.language || navigator.userLanguage || '').substr(0, 2).toLowerCase();
+    var map = { 'en':'English', 'es':'Spanish', 'fr':'French', 'de':'German', 'it':'Italian', 'pt':'Portuguese', 'nl':'Dutch', 'ru':'Russian', 'ar':'Arabic', 'zh':'Chinese', 'ja':'Japanese', 'ko':'Korean' };
+    if (map[code]) {
+      var opts = sel.options;
+      for (var i = 0; i < opts.length; i++) {
+        if (opts[i].value === map[code]) { sel.selectedIndex = i; break; }
+      }
+    }
+  })();
 
   // ── Wire events ────────────────────────────────────────────────────────
   if (launcher) launcher.addEventListener('click', openWidget);
