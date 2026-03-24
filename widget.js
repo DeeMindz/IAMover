@@ -73,9 +73,9 @@
     '.iam-msg.bot a{color:'+COLOR+';text-decoration:underline;}',
     '.iam-msg.user{background:'+COLOR+';color:#fff;border-bottom-right-radius:4px;align-self:flex-end;}',
     '.iam-msg-status{font-size:10px;color:'+COLOR+';margin-top:2px;text-align:right;}',
-    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:8px;}',
-    '.iam-fb{display:flex;gap:4px;margin-top:4px;opacity:0.8;}',
-    '.iam-fb-btn{background:transparent;border:1px solid #ddd;border-radius:12px;padding:2px 8px;cursor:pointer;font-size:12px;transition:all 0.2s;}',
+    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:12px;}',
+    '.iam-fb{display:flex;gap:4px;margin-top:-12px;margin-right:-10px;align-self:flex-end;background:#fff;border:1px solid #eee;border-radius:16px;padding:2px 4px;box-shadow:0 1px 3px rgba(0,0,0,.1);z-index:2;transition:opacity .2s;}',
+    '.iam-fb-btn{background:transparent;border:none;border-radius:50%;padding:2px;cursor:pointer;font-size:12px;transition:all 0.2s;}',
     '.iam-fb-btn:hover{background:#f0f0f0;}',
     '.iam-fb-form{display:none;flex-direction:column;gap:4px;margin-top:4px;width:100%;}',
     '.iam-fb-form textarea{width:100%;font-size:12px;padding:6px;border:1px solid #ddd;border-radius:6px;resize:none;font-family:inherit;}',
@@ -141,7 +141,7 @@
     '    <div id="iam-bot-name">Assistant</div>',
     '    <div id="iam-bot-status"><span style="color:#10b981;">&#9679;</span> Online &middot; Ready to help</div>',
     '  </div>',
-    '  <select id="iam-language-select" title="Select your preferred language" style="background:transparent;color:#fff;border:none;font-size:13px;font-weight:600;padding:2px 0;margin-right:2px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center;">',
+    '  <select id="iam-language-select" title="Select your preferred language" style="background:transparent url(\'data:image/svg+xml;utf8,<svg fill=%22%23ffffff%22 height=%2216%22 viewBox=%220 0 24 24%22 width=%2216%22 xmlns=%22http://www.w3.org/2000/svg%22><path d=%22M7 10l5 5 5-5z%22/></svg>\') no-repeat right center;color:#fff;border:none;font-size:13px;font-weight:600;padding:2px 14px 2px 2px;margin-right:2px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center;">',
     '    <option value="Auto" style="color:#333">🌐 Auto</option>',
     '    <option value="English" style="color:#333">EN</option>',
     '    <option value="Spanish" style="color:#333">ES</option>',
@@ -452,9 +452,12 @@
   function createConversation(cb) {
     if (convId) { if(cb) cb(); return; }
 
-    // Eagerly show the pre-chat form before the network request to prevent missing/delayed rendering
     safeClear();
-    if (!_preChatDone) showPreChat();
+    var loader = document.createElement('div');
+    loader.id = 'iam-init-loader';
+    loader.style.cssText = 'display:flex;justify-content:center;padding:20px;';
+    loader.innerHTML = '<div class="iam-typing"><span></span><span></span><span></span></div>';
+    msgsEl.appendChild(loader);
 
     fetch(API_BASE+'/api/conversation/create', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -473,6 +476,8 @@
       // If form was submitted before convId was ready, save lead now
       if (_preChatDone && (_preChatName || _preChatEmail)) savePrechatLead(_preChatName, _preChatEmail);
 
+      var l = document.getElementById('iam-init-loader'); if(l) l.remove();
+      
       if (data.returning) {
         hidePreChatForm();
         fetch(API_BASE+'/api/conversation/messages?conversation_id='+convId)
@@ -496,10 +501,13 @@
           }).catch(function(){ startStatusCheck(convId); unlockInput(); if(cb) cb(); });
 
       } else {
-        // New visitor — prechat is already being shown
+        // New visitor — reveal the prechat form now
         _shownMsgIds={}; _shownSysMsgs={};
         _lastMsgAt = new Date().toISOString();
         startStatusCheck(convId);
+        
+        if (!_preChatDone) showPreChat();
+
         // If they bypass prechat, append greeting. Otherwise wait for submitPreChat
         if (_preChatDone && !document.querySelector('.iam-msg.bot')) {
           appendBot(botConfig.greeting);
