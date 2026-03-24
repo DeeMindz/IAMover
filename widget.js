@@ -93,6 +93,11 @@
     '@keyframes iamBounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}',
     '.iam-spinner{width:24px;height:24px;border:3px solid #f3f3f3;border-top:3px solid '+COLOR+';border-radius:50%;animation:iamSpin 1s linear infinite;}',
     '@keyframes iamSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}',
+    '.iam-ts{font-size:10px;color:#aaa;margin-top:3px;white-space:nowrap;}',
+    '.iam-ts.bot-ts{align-self:flex-start;}',
+    '.iam-ts.user-ts{align-self:flex-end;}',
+    '.iam-date-sep{display:flex;align-items:center;gap:8px;margin:10px 0;color:#aaa;font-size:11px;}',
+    '.iam-date-sep::before,.iam-date-sep::after{content:"";flex:1;height:1px;background:#e8e8e8;}',
     '#iam-input-area{padding:10px 12px;border-top:1px solid #eee;display:none;gap:8px;align-items:center;background:#fff;flex-shrink:0;}',
     '#iam-input{flex:1;border:1px solid #e5e5e5;border-radius:20px;padding:8px 14px;font-size:13px;outline:none;color:#333;background:#f8f8f8;font-family:inherit;}',
     '#iam-input:focus{border-color:'+COLOR+';}',
@@ -142,7 +147,7 @@
     '    <div id="iam-bot-name">Assistant</div>',
     '    <div id="iam-bot-status"><span style="color:#10b981;">&#9679;</span> Online &middot; Ready to help</div>',
     '  </div>',
-    '  <div style="position:relative;display:flex;align-items:center;margin-right:8px;">',
+    '  <div style="position:relative;display:flex;align-items:center;margin-right:8px;min-width:36px;">',
     '    <div id="iam-lang-disp" style="color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px;pointer-events:none;">auto <svg fill="#ffffff" height="16" viewBox="0 0 24 24" width="16"><path d="M7 10l5 5 5-5z"/></svg></div>',
     '    <select id="iam-language-select" title="Select your preferred language" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;">',
     '      <option value="auto">auto</option>',
@@ -299,15 +304,39 @@
     return h + citationsHtml;
   }
 
+  // ── Timestamp & date separator helpers ─────────────────────────────────
+  var _lastShownDate = null;
+  function fmtTime(d) {
+    var h=d.getHours(), m=d.getMinutes(), ampm=h>=12?'pm':'am';
+    h=h%12||12; m=m<10?'0'+m:m;
+    return h+':'+m+ampm;
+  }
+  function fmtDateLabel(d) {
+    var now=new Date(), today=now.toDateString(), yesterday=new Date(now-86400000).toDateString();
+    if(d.toDateString()===today) return 'today';
+    if(d.toDateString()===yesterday) return 'yesterday';
+    return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  }
+  function maybeShowDateSep(ts) {
+    var d=ts?new Date(ts):new Date();
+    var label=fmtDateLabel(d);
+    if(label===_lastShownDate) return;
+    _lastShownDate=label;
+    var sep=document.createElement('div'); sep.className='iam-date-sep'; sep.textContent=label;
+    msgsEl.appendChild(sep);
+  }
+
   // ── Message helpers ───────────────────────────────────────────────────
-  function appendBot(c) {
+  function appendBot(c, ts) {
     if(c) _shownBotTexts[c.trim()]=true;
+    maybeShowDateSep(ts);
     var w=document.createElement('div'); w.className='iam-bot-wrap';
     var d=document.createElement('div'); d.className='iam-msg bot'; d.style.maxWidth='100%'; d.innerHTML=md(c);
     var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
     var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
+    var tEl=document.createElement('div'); tEl.className='iam-ts bot-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
     d.appendChild(fb);
-    w.appendChild(d); w.appendChild(fbF);
+    w.appendChild(d); w.appendChild(tEl); w.appendChild(fbF);
     msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
 
     var upBtn=fb.querySelector('.iam-fb-up'), downBtn=fb.querySelector('.iam-fb-down'), sBtn=fbF.querySelector('button'), txt=fbF.querySelector('textarea'), fbId=null;
@@ -315,7 +344,6 @@
     upBtn.onclick=function(){
       upBtn.style.background='#e0f2fe'; downBtn.style.background='transparent';
       fbF.style.display='none'; txt.value='';
-      // Reset feedback form state in case switching from thumbs down
       sBtn.textContent='Send Feedback'; sBtn.disabled=false;
       sb('positive','');
     };
@@ -326,18 +354,23 @@
     };
     sBtn.onclick=function(){var v=txt.value.trim();if(!v)return;sBtn.textContent='Saving...';sBtn.disabled=true;sb('negative',v);setTimeout(function(){fbF.innerHTML='<span style="font-size:11px;color:#10b981;font-weight:600;">Thanks for your feedback!</span>';},500);};
   }
-  function appendUser(c) {
+  function appendUser(c, ts) {
+    maybeShowDateSep(ts);
     var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:8px;';
     var d=document.createElement('div'); d.className='iam-msg user'; d.textContent=c;
     var status=document.createElement('div'); status.className='iam-msg-status'; status.innerHTML='&#10003;';
-    w.appendChild(d); w.appendChild(status); msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
+    var tEl=document.createElement('div'); tEl.className='iam-ts user-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
+    w.appendChild(d); w.appendChild(status); w.appendChild(tEl);
+    msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
     return status;
   }
-  function appendAgent(c) {
+  function appendAgent(c, ts) {
+    maybeShowDateSep(ts);
     var w=document.createElement('div'); w.className='iam-agent-wrap';
     var l=document.createElement('div'); l.className='iam-agent-label'; l.textContent='Support Agent';
-    var b=document.createElement('div'); b.className='iam-agent-bubble'; b.innerHTML=md(c); // use md() so links are clickable
-    w.appendChild(l); w.appendChild(b); msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
+    var b=document.createElement('div'); b.className='iam-agent-bubble'; b.innerHTML=md(c);
+    var tEl=document.createElement('div'); tEl.className='iam-ts bot-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
+    w.appendChild(l); w.appendChild(b); w.appendChild(tEl); msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
   }
   function appendSystem(c) {
     var n = botConfig.displayName||botConfig.name||'Bot';
@@ -354,6 +387,7 @@
 
   // ── Safe clear — NEVER removes #iam-prechat ───────────────────────────
   function safeClear() {
+    _lastShownDate = null; // reset date separators
     Array.from(msgsEl.children).forEach(function(c) {
       if (c.id !== 'iam-prechat') c.remove();
     });
@@ -505,9 +539,9 @@
               d.messages.forEach(function(m) {
                 if(m.id) _shownMsgIds[m.id]=true;
                 if(m.role==='system'){ _shownSysMsgs[m.content]=true; appendSystem(m.content); }
-                else if(m.role==='human-agent') appendAgent(m.content);
-                else if(m.role==='bot')  appendBot(m.content);
-                else if(m.role==='user') appendUser(m.content);
+                else if(m.role==='human-agent') appendAgent(m.content, m.created_at);
+                else if(m.role==='bot')  appendBot(m.content, m.created_at);
+                else if(m.role==='user') appendUser(m.content, m.created_at);
                 if(!_lastMsgAt||m.created_at>_lastMsgAt) _lastMsgAt=m.created_at;
               });
             }
