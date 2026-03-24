@@ -2387,8 +2387,8 @@ function renderLivePreview(bot) {
     to   { opacity:1; transform:translateY(0) scale(1); }
   }
   .msg-status { font-size:10px; color:#10b981; margin-top:2px; text-align:right; }
-  .bot-wrap { display:flex; flex-direction:column; align-items:flex-start; max-width:82%; margin-bottom:12px; }
-  .iam-fb { display:flex; gap:4px; margin-top:-12px; margin-right:-10px; align-self:flex-end; background:#fff; border:1px solid #eee; border-radius:16px; padding:2px 4px; box-shadow:0 1px 3px rgba(0,0,0,.1); z-index:2; transition:opacity .2s; }
+  .bot-wrap { display:flex; flex-direction:column; align-items:flex-start; max-width:82%; margin-bottom:14px; }
+  .iam-fb { position:absolute; bottom:-12px; right:-10px; display:flex; gap:4px; background:#fff; border:1px solid #eee; border-radius:16px; padding:2px 4px; box-shadow:0 1px 3px rgba(0,0,0,.1); z-index:2; transition:opacity .2s; }
   .iam-fb-btn { background:transparent; border:none; border-radius:50%; padding:2px; cursor:pointer; font-size:12px; transition:all 0.2s; }
   .iam-fb-btn:hover { background:#f0f0f0; }
   .iam-fb-form { display:none; flex-direction:column; gap:4px; margin-top:4px; width:100%; }
@@ -2436,25 +2436,13 @@ function renderLivePreview(bot) {
     transition:background 0.15s;
   }
   .close-btn:hover { background:rgba(255,255,255,0.35); }
-  .chat-messages {
-    flex:1; padding:14px;
-    display:flex; flex-direction:column; gap:10px;
-    overflow-y:auto; background:#fafafa;
-  }
-  .chat-messages::-webkit-scrollbar { width:4px; }
-  .chat-messages::-webkit-scrollbar-thumb { background:#ddd; border-radius:4px; }
-  .msg { max-width:82%; padding:9px 13px; border-radius:16px; font-size:13px; line-height:1.5; }
-  .msg.bot {
-    background:#fff; border:1px solid #eee;
-    border-bottom-left-radius:4px; align-self:flex-start;
-    color:#333; box-shadow:0 1px 3px rgba(0,0,0,0.05);
-  }
+  #chat-messages { flex:1; padding: 14px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; background: #fafafa; }
+  #chat-messages::-webkit-scrollbar { width:4px; } #chat-messages::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+  .msg { max-width: 82%; padding: 9px 13px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+  .msg.bot { position: relative; background: white; color: #1a202c; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; align-self: flex-start; }
   .msg.bot a { color:#6c63ff; text-decoration:underline; }
   .msg.bot a:hover { color:#5a52d9; }
-  .msg.user {
-    background:${primaryColor}; color:#fff;
-    border-bottom-right-radius:4px; align-self:flex-end;
-  }
+  .msg.user { background: #10b981; color: white; border-bottom-right-radius: 4px; align-self: flex-end; }
   .typing-dots {
     display: flex;
     align-items: center;
@@ -2505,6 +2493,11 @@ function renderLivePreview(bot) {
   }
   .send-btn:hover { opacity:0.85; }
   .hidden { display:none !important; }
+  .iam-ts{font-size:10px;color:#aaa;margin-top:3px;white-space:nowrap;}
+  .iam-ts.bot-ts{align-self:flex-start;}
+  .iam-ts.user-ts{align-self:flex-end;}
+  .iam-date-sep{display:flex;align-items:center;gap:8px;margin:10px 0;color:#aaa;font-size:11px;}
+  .iam-date-sep::before,.iam-date-sep::after{content:"";flex:1;height:1px;background:#e8e8e8;}
 </style>
 </head>
 <body>
@@ -2536,7 +2529,7 @@ function renderLivePreview(bot) {
         <div class="name">${botName}</div>
         <div class="status"><span style="color:#10b981;">&#9679;</span> Online · Ready to help</div>
       </div>
-      <div style="position:relative;display:flex;align-items:center;margin-right:8px;">
+      <div style="position:relative;display:flex;align-items:center;margin-right:8px;min-width:36px;">
         <div id="iam-lang-disp" style="color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px;pointer-events:none;">auto <svg fill="#ffffff" height="16" viewBox="0 0 24 24" width="16"><path d="M7 10l5 5 5-5z"/></svg></div>
         <select id="iam-language-select" title="Select your preferred language" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;">
           <option value="auto">auto</option>
@@ -2594,16 +2587,16 @@ function renderLivePreview(bot) {
     var sel = document.getElementById('iam-language-select');
     if (!sel) return;
     var code = (navigator.language || navigator.userLanguage || '').substr(0, 2).toLowerCase();
-    var map = { 'en':'English', 'es':'Spanish', 'fr':'French', 'de':'German', 'it':'Italian', 'pt':'Portuguese', 'nl':'Dutch', 'ru':'Russian', 'ar':'Arabic', 'zh':'Chinese', 'ja':'Japanese', 'ko':'Korean' };
+    var map = { 'en':'english', 'es':'spanish', 'fr':'french', 'de':'german', 'it':'italian', 'pt':'portuguese', 'nl':'dutch', 'ru':'russian', 'ar':'arabic', 'zh':'chinese', 'ja':'japanese', 'ko':'korean' };
     if (map[code]) {
       var opts = sel.options;
       for (var i = 0; i < opts.length; i++) {
-        if (opts[i].value === map[code]) { sel.selectedIndex = i; break; }
+        if (opts[i].value === map[code]) { sel.selectedIndex = i; sel.dispatchEvent(new Event('change')); break; }
       }
     }
   })();
 
-  let isSending = false;
+  var isSending = false;
 
   function openChat() {
     document.getElementById('launcher').classList.add('hidden');
@@ -2626,7 +2619,7 @@ function renderLivePreview(bot) {
   // Markdown renderer
   function formatMarkdown(text) {
     if (!text) return '';
-    let h = text
+    var h = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
@@ -2644,14 +2637,34 @@ function renderLivePreview(bot) {
     return h;
   }
 
-  let preChatDone = false;
+  var _lastShownDate = null;
+  function fmtTime(d) {
+    var h=d.getHours(), m=d.getMinutes(), ampm=h>=12?'pm':'am';
+    h=h%12||12; m=m<10?'0'+m:m;
+    return h+':'+m+ampm;
+  }
+  function fmtDateLabel(d) {
+    var now=new Date(), today=now.toDateString(), yesterday=new Date(now-86400000).toDateString();
+    if(d.toDateString()===today) return 'today';
+    if(d.toDateString()===yesterday) return 'yesterday';
+    return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  }
+  function maybeShowDateSep(ts) {
+    var d=ts?new Date(ts):new Date();
+    var label=fmtDateLabel(d);
+    if(label===_lastShownDate) return;
+    _lastShownDate=label;
+    var sep=document.createElement('div'); sep.className='iam-date-sep'; sep.textContent=label;
+    document.getElementById('chat-messages').appendChild(sep);
+  }
+
+  var preChatDone = false;
   function skipPreChat() {
     var pc = document.getElementById('iam-prechat'); if (pc) pc.style.display = 'none';
     document.querySelector('.chat-input-area').style.display = 'flex';
     preChatDone = true;
     var msgs = document.getElementById('chat-messages');
-    var b = document.createElement('div'); b.className = 'msg bot'; b.innerHTML = formatMarkdown(\`${greeting}\`);
-    msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
+    appendBot(\`${greeting}\`);
   }
   function submitPreChat() {
     var n = document.getElementById('iam-pc-name').value.trim();
@@ -2664,18 +2677,19 @@ function renderLivePreview(bot) {
       greet = base.replace(/^(hi|hello|hey)[\\s!,]*/i, 'Hi ' + n + ', ');
       if (greet === base) greet = 'Hi ' + n + '! ' + base;
     }
-    var msgs = document.getElementById('chat-messages');
-    var b = document.createElement('div'); b.className = 'msg bot'; b.innerHTML = formatMarkdown(greet);
-    msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
-  function appendBot(c) {
+    appendBot(greet);
+  }
+  function appendBot(c, ts) {
     if (c) window._shownBotTexts = window._shownBotTexts || {};
     if (c) window._shownBotTexts[c.trim()] = true;
+    maybeShowDateSep(ts);
     var w=document.createElement('div'); w.className='bot-wrap';
     var d=document.createElement('div'); d.className='msg bot'; d.style.maxWidth='100%'; d.innerHTML=formatMarkdown(c);
     var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
     var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
+    var tEl=document.createElement('div'); tEl.className='iam-ts bot-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
     d.appendChild(fb);
-    w.appendChild(d); w.appendChild(fbF);
+    w.appendChild(d); w.appendChild(tEl); w.appendChild(fbF);
     var msgs=document.getElementById('chat-messages');
     msgs.appendChild(w); msgs.scrollTop=msgs.scrollHeight;
 
@@ -2686,11 +2700,13 @@ function renderLivePreview(bot) {
     sBtn.onclick=function(){var v=txt.value.trim();if(!v)return;sBtn.textContent='Saving...';sBtn.disabled=true;sb('negative',v);setTimeout(function(){fbF.innerHTML='<span style="font-size:11px;color:#10b981;font-weight:600;">Thanks for your feedback!</span>';},500);};
   }
 
-  function appendUser(c) {
-    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:8px;';
+  function appendUser(c, ts) {
+    maybeShowDateSep(ts);
+    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:4px;';
     var d=document.createElement('div'); d.className='msg user'; d.textContent=c;
     var status=document.createElement('div'); status.className='msg-status'; status.innerHTML='&#10003;';
-    w.appendChild(d); w.appendChild(status); 
+    var tEl=document.createElement('div'); tEl.className='iam-ts user-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
+    w.appendChild(d); w.appendChild(status); w.appendChild(tEl);
     var msgs=document.getElementById('chat-messages');
     msgs.appendChild(w); msgs.scrollTop=msgs.scrollHeight;
     return status;
@@ -2710,6 +2726,7 @@ function renderLivePreview(bot) {
   typing.className = 'typing';
   typing.id = 'typing-indicator';
   typing.innerHTML = '<span></span><span></span><span></span>';
+  var msgs = document.getElementById('chat-messages');
   msgs.appendChild(typing);
   msgs.scrollTop = msgs.scrollHeight;
 
@@ -2757,12 +2774,12 @@ window.addEventListener('message', function (e) {
     e.data.messages.forEach(function(m) {
       if (m.id) window._shownMsgIds[m.id] = true;
       if (m.role === 'system') { window._shownSysMsgs[m.content] = true; addSystemMsg(m.content); }
-      else if (m.role === 'human-agent') { showAgentMsg(m.content); }
+      else if (m.role === 'human-agent') { showAgentMsg(m.content, m.created_at); }
       else {
         if (m.role === 'bot') {
-          appendBot(m.content);
+          appendBot(m.content, m.created_at);
         } else {
-          appendUser(m.content);
+          appendUser(m.content, m.created_at);
         }
       }
       if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
@@ -2847,11 +2864,12 @@ function startHITLPolling(cId) {
         if (!data.messages) return;
         data.messages.forEach(function(m) {
           if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
+          if (m.id && window._shownMsgIds[m.id]) return;
+          if (m.id) window._shownMsgIds[m.id] = true;
+
           if (m.role === 'human-agent') {
-            if (window._shownMsgIds[m.id]) return;
-            window._shownMsgIds[m.id] = true;
             var t = document.getElementById('typing-indicator'); if (t) t.remove();
-            showAgentMsg(m.content); isSending = false;
+            showAgentMsg(m.content, m.created_at); isSending = false;
           }
           if (m.role === 'system') {
             if (window._shownSysMsgs[m.content]) return;
