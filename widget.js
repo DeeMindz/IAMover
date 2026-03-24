@@ -73,9 +73,9 @@
     '.iam-msg.bot a{color:'+COLOR+';text-decoration:underline;}',
     '.iam-msg.user{background:'+COLOR+';color:#fff;border-bottom-right-radius:4px;align-self:flex-end;}',
     '.iam-msg-status{font-size:10px;color:'+COLOR+';margin-top:2px;text-align:right;}',
-    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:2px;}',
-    '.iam-fb{position:absolute;bottom:4px;right:6px;display:flex;gap:4px;background:transparent;border:none;padding:0;box-shadow:none;z-index:2;}',
-    '.iam-fb-btn{background:transparent;border:none;border-radius:50%;padding:2px;cursor:pointer;font-size:13px;transition:all 0.2s;}',
+    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:16px;}',
+    '.iam-fb{position:absolute;bottom:-14px;right:12px;display:flex;gap:6px;background:#fff;border:1px solid #e5e5e5;border-radius:18px;padding:3px 6px;box-shadow:0 3px 6px rgba(0,0,0,.06);z-index:2;transition:opacity .2s;}',
+    '.iam-fb-btn{background:transparent;border:none;padding:2px;cursor:pointer;color:#6b7280;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}',
     '.iam-fb-btn:hover{background:#f0f0f0;}',
     '.iam-fb-form{display:none;flex-direction:column;gap:4px;margin-top:4px;width:100%;}',
     '.iam-fb-form textarea{width:100%;font-size:12px;padding:6px;border:1px solid #ddd;border-radius:6px;resize:none;font-family:inherit;}',
@@ -329,8 +329,10 @@
     maybeShowDateSep(ts);
     var w=document.createElement('div'); w.className='iam-bot-wrap';
     var d=document.createElement('div'); d.className='iam-msg bot'; d.style.maxWidth='100%';
-    d.innerHTML=md(c) + '<div style="float:right;width:38px;height:18px;margin-top:4px;"></div><div style="clear:both;"></div>';
-    var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
+    d.innerHTML=md(c);
+    var thu='<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>';
+    var thd='<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path></svg>';
+    var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">'+thu+'</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">'+thd+'</button>';
     var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
     d.appendChild(fb);
     w.appendChild(d); w.appendChild(fbF);
