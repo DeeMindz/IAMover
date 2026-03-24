@@ -66,14 +66,14 @@
     '#iam-bot-status{font-size:11px;opacity:.85;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
     '.iam-hbtn{width:28px;height:28px;background:rgba(255,255,255,.2);border:none;border-radius:50%;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}',
     '.iam-hbtn:hover{background:rgba(255,255,255,.35);}',
-    '#iam-messages{flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;background:#fafafa;}',
+    '#iam-messages{flex:1;padding:14px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;background:#fafafa;}',
     '#iam-messages::-webkit-scrollbar{width:4px;}#iam-messages::-webkit-scrollbar-thumb{background:#ddd;border-radius:4px;}',
     '.iam-msg{max-width:82%;padding:9px 13px;border-radius:16px;font-size:13px;line-height:1.5;word-break:break-word;}',
     '.iam-msg.bot{position:relative;background:#fff;border:1px solid #eee;border-bottom-left-radius:4px;align-self:flex-start;color:#333;box-shadow:0 1px 3px rgba(0,0,0,.05);}',
     '.iam-msg.bot a{color:'+COLOR+';text-decoration:underline;}',
     '.iam-msg.user{background:'+COLOR+';color:#fff;border-bottom-right-radius:4px;align-self:flex-end;}',
     '.iam-msg-status{font-size:10px;color:'+COLOR+';margin-top:2px;text-align:right;}',
-    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:20px;}',
+    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:14px;}',
     '.iam-fb{position:absolute;bottom:-12px;right:-10px;display:flex;gap:4px;background:#fff;border:1px solid #eee;border-radius:16px;padding:2px 4px;box-shadow:0 1px 3px rgba(0,0,0,.1);z-index:2;transition:opacity .2s;}',
     '.iam-fb-btn{background:transparent;border:none;border-radius:50%;padding:2px;cursor:pointer;font-size:12px;transition:all 0.2s;}',
     '.iam-fb-btn:hover{background:#f0f0f0;}',
@@ -356,7 +356,7 @@
   }
   function appendUser(c, ts) {
     maybeShowDateSep(ts);
-    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:8px;';
+    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:4px;';
     var d=document.createElement('div'); d.className='iam-msg user'; d.textContent=c;
     var status=document.createElement('div'); status.className='iam-msg-status'; status.innerHTML='&#10003;';
     var tEl=document.createElement('div'); tEl.className='iam-ts user-ts'; tEl.textContent=fmtTime(ts?new Date(ts):new Date());
