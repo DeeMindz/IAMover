@@ -312,8 +312,18 @@
 
     var upBtn=fb.querySelector('.iam-fb-up'), downBtn=fb.querySelector('.iam-fb-down'), sBtn=fbF.querySelector('button'), txt=fbF.querySelector('textarea'), fbId=null;
     function sb(r,cm){if(!convId)return;fetch(API_BASE+'/api/bot/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:fbId,bot_id:BOT_ID,conversation_id:convId,message_text:c,rating:r,comment:cm})}).then(function(x){return x.json()}).then(function(d){if(d.id)fbId=d.id;}).catch(function(){});}
-    upBtn.onclick=function(){upBtn.style.background='#e0f2fe';downBtn.style.background='transparent';fbF.style.display='none';sb('positive','');};
-    downBtn.onclick=function(){downBtn.style.background='#fee2e2';upBtn.style.background='transparent';fbF.style.display='flex';sb('negative','');};
+    upBtn.onclick=function(){
+      upBtn.style.background='#e0f2fe'; downBtn.style.background='transparent';
+      fbF.style.display='none'; txt.value='';
+      // Reset feedback form state in case switching from thumbs down
+      sBtn.textContent='Send Feedback'; sBtn.disabled=false;
+      sb('positive','');
+    };
+    downBtn.onclick=function(){
+      downBtn.style.background='#fee2e2'; upBtn.style.background='transparent';
+      fbF.style.display='flex';
+      sb('negative','');
+    };
     sBtn.onclick=function(){var v=txt.value.trim();if(!v)return;sBtn.textContent='Saving...';sBtn.disabled=true;sb('negative',v);setTimeout(function(){fbF.innerHTML='<span style="font-size:11px;color:#10b981;font-weight:600;">Thanks for your feedback!</span>';},500);};
   }
   function appendUser(c) {
@@ -484,6 +494,7 @@
       var l = document.getElementById('iam-init-loader'); if(l) l.remove();
       
       if (data.returning) {
+        _preChatDone = true;
         hidePreChatForm();
         fetch(API_BASE+'/api/conversation/messages?conversation_id='+convId)
           .then(function(r){ return r.json(); })
@@ -501,6 +512,7 @@
               });
             }
             d.hitl_active ? startPolling(convId) : startStatusCheck(convId);
+            isSending = false; // ensure send is never stuck for returning users
             unlockInput();
             if(cb) cb();
           }).catch(function(){ startStatusCheck(convId); unlockInput(); if(cb) cb(); });
