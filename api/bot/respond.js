@@ -227,6 +227,13 @@ export default async function handler(req, res) {
 
         log.info('Bot loaded', { botName: bot.name, model: bot.model, antiHallucination: bot.anti_hallucination });
 
+        // ── Load custom Autonomous Actions ─────────────────────────────────────
+        const { data: botActions } = await supabase
+            .from('bot_actions')
+            .select('*')
+            .eq('bot_id', bot_id);
+        const hasActions = botActions && botActions.length > 0;
+
         // ── HITL Check: if human agent is active, do not call LLM ──────────
         if (conversation_id) {
             const { data: convCheck } = await supabase
@@ -497,11 +504,30 @@ export default async function handler(req, res) {
 
                 log.info('Calling Gemini', { resolvedModel });
 
-                // FIX 2: pass systemInstruction so system prompt and KB are actually used
-                const model = genAI.getGenerativeModel({
+                let geminiConfig = {
                     model: resolvedModel,
                     systemInstruction: systemPrompt,
-                });
+                };
+
+                if (hasActions) {
+                    geminiConfig.tools = [{
+                        functionDeclarations: botActions.map(act => {
+                            const props = {};
+                            const required = [];
+                            (act.parameters || []).forEach(p => {
+                                props[p.name] = { type: p.type.toUpperCase(), description: p.description };
+                                required.push(p.name);
+                            });
+                            return {
+                                name: act.name,
+                                description: act.description,
+                                parameters: { type: 'OBJECT', properties: props, required }
+                            };
+                        })
+                    }];
+                }
+
+                const model = genAI.getGenerativeModel(geminiConfig);
 
                 // Ensure history never starts with 'model' role — Gemini requirement
                 const safeHistory = conversationHistory[0]?.role === 'assistant'
@@ -520,6 +546,20 @@ export default async function handler(req, res) {
                 });
 
                 const result = await chat.sendMessage(message);
+                
+                const call = result.response.functionCalls()?.[0];
+                if (call) {
+                    const actionDef = botActions.find(a => a.name === call.name);
+                    if (actionDef) {
+                        let redirectUrl = actionDef.url_template;
+                        Object.entries(call.args).forEach(([k, v]) => {
+                            redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
+                        });
+                        log.info('Gemini invoked action redirect', { action: call.name, url: redirectUrl });
+                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                    }
+                }
+                
                 responseText = result.response.text();
                 log.info('Gemini response received', { chars: responseText.length });
             }
@@ -552,17 +592,54 @@ export default async function handler(req, res) {
                         { role: 'user', content: message }
                       ];
 
+                let openaiTools = [];
+                // Reasoning models rarely support native tool calling yet without strict schemas, so we disable it for `o1/o3` series for now.
+                if (hasActions && !isReasoning) {
+                    openaiTools = botActions.map(act => {
+                        const props = {};
+                        const required = [];
+                        (act.parameters || []).forEach(p => {
+                            props[p.name] = { type: p.type, description: p.description };
+                            required.push(p.name);
+                        });
+                        return {
+                            type: 'function',
+                            function: {
+                                name: act.name,
+                                description: act.description,
+                                parameters: { type: 'object', properties: props, required, additionalProperties: false }
+                            }
+                        };
+                    });
+                }
+
                 log.info('Calling OpenAI', { resolvedModel, isReasoning });
 
                 const response = await client.chat.completions.create({
                     model: resolvedModel,
                     messages,
+                    tools: openaiTools.length > 0 ? openaiTools : undefined,
                     ...(isReasoning
                         ? { max_completion_tokens: 2048 }
                         : { max_tokens: botMaxTokens, temperature: botTemperature })
                 });
 
-                responseText = response.choices[0].message.content;
+                const choice = response.choices[0].message;
+                if (choice.tool_calls && choice.tool_calls.length > 0) {
+                    const call = choice.tool_calls[0].function;
+                    const actionDef = botActions.find(a => a.name === call.name);
+                    if (actionDef) {
+                        const args = JSON.parse(call.arguments);
+                        let redirectUrl = actionDef.url_template;
+                        Object.entries(args).forEach(([k, v]) => {
+                            redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
+                        });
+                        log.info('OpenAI invoked action redirect', { action: call.name, url: redirectUrl });
+                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                    }
+                }
+
+                responseText = choice.content || '';
                 log.info('OpenAI response received', { chars: responseText.length });
             }
 
@@ -576,6 +653,23 @@ export default async function handler(req, res) {
 
                 log.info('Calling Claude', { model: botModel });
 
+                let anthropicTools = [];
+                if (hasActions) {
+                    anthropicTools = botActions.map(act => {
+                        const props = {};
+                        const required = [];
+                        (act.parameters || []).forEach(p => {
+                            props[p.name] = { type: p.type, description: p.description };
+                            required.push(p.name);
+                        });
+                        return {
+                            name: act.name,
+                            description: act.description,
+                            input_schema: { type: 'object', properties: props, required }
+                        };
+                    });
+                }
+
                 const response = await client.messages.create({
                     model:      botModel,
                     max_tokens: botMaxTokens,
@@ -583,10 +677,25 @@ export default async function handler(req, res) {
                     messages:   [
                         ...conversationHistory,
                         { role: 'user', content: message }
-                    ]
+                    ],
+                    tools: anthropicTools.length > 0 ? anthropicTools : undefined
                 });
 
-                responseText = response.content[0].text;
+                const toolBlock = response.content.find(b => b.type === 'tool_use');
+                if (toolBlock) {
+                    const actionDef = botActions.find(a => a.name === toolBlock.name);
+                    if (actionDef) {
+                        const args = toolBlock.input;
+                        let redirectUrl = actionDef.url_template;
+                        Object.entries(args).forEach(([k, v]) => {
+                            redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
+                        });
+                        log.info('Claude invoked action redirect', { action: toolBlock.name, url: redirectUrl });
+                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                    }
+                }
+
+                responseText = response.content.find(b => b.type === 'text')?.text || '';
                 log.info('Claude response received', { chars: responseText.length });
             }
 

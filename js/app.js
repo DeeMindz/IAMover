@@ -2708,6 +2708,24 @@ function renderLivePreview(bot) {
     sBtn.onclick=function(){var v=txt.value.trim();if(!v)return;sBtn.textContent='Saving...';sBtn.disabled=true;sb('negative',v);setTimeout(function(){fbF.innerHTML='<span style="font-size:11px;color:#10b981;font-weight:600;">Thanks for your feedback!</span>';},500);};
   }
 
+  function appendActionCard(url) {
+    var wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin:16px 16px 2px 16px;';
+    var bubble = document.createElement('div');
+    bubble.className = 'msg bot';
+    bubble.style.cssText = 'background:var(--bg-elevated, #fff); color:var(--text, #111827); box-shadow:0 3px 12px rgba(0,0,0,0.06); border:1px solid #e5e7eb; padding:16px; border-radius:16px; border-bottom-left-radius:4px; max-width:100%; font-family:inherit; font-size:14px; line-height:1.5; text-align:center;';
+    bubble.innerHTML = 
+      '<div style="font-weight:600; margin-bottom:8px; color:#111827;">Here are your results!</div>' +
+      '<div style="font-size:13px; color:#6b7280; margin-bottom:12px;">I\\'ve gathered exactly what you are looking for.</div>' +
+      '<a href="' + url + '" target="_blank" style="display:inline-block; #000; color:#fff; text-decoration:none; padding:10px 18px; border-radius:8px; font-weight:600; font-size:13px; transition:opacity 0.2s;">' +
+      '  View Results' +
+      '</a>';
+    wrapper.appendChild(bubble);
+    var msgs = document.getElementById('chat-messages');
+    msgs.appendChild(wrapper);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
   function appendUser(c, ts) {
     maybeShowDateSep(ts);
     var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:2px;';
@@ -2799,7 +2817,9 @@ window.addEventListener('message', function (e) {
     var msgs = document.getElementById('chat-messages');
     var t = document.getElementById('typing-indicator');
     if (t) t.remove();
-    if (e.data.response) {
+    if (e.data.action === 'redirect' && e.data.url) {
+      appendActionCard(e.data.url);
+    } else if (e.data.response) {
       appendBot(e.data.response);
       // Track timestamp so poll cursor advances past this message
       if (!window._lastMsgAt) window._lastMsgAt = new Date().toISOString();
@@ -3515,8 +3535,9 @@ async function renderBotConfig(extra = {}) {
   // Fill the form fields
   fillBotForm(bot);
 
-  // Render attached KBs and embed code
+  // Render attached KBs, actions, and embed code
   renderAttachedKBs(bot);
+  loadActions();
   renderEmbedCode(bot);
 
   // Set default preview mode to widget
@@ -3581,6 +3602,140 @@ function fillBotForm(bot) {
   _configListenerAttached = false; // allow re-attach on new bot
   attachConfigDirtyListeners();
 }
+
+// ── Bot Actions (Function Calling) ──────────────────────────────────────────
+let actionParamsData = [];
+
+async function loadActions() {
+  if (!AppState.currentBot) return;
+  const { data, error } = await supabase.from('bot_actions').select('*').eq('bot_id', AppState.currentBot.id);
+  const list = document.getElementById('actions-list');
+  if (!data || data.length === 0) {
+    list.innerHTML = '<div class="text-sm text-muted">No actions configured yet. Create one to get started.</div>';
+    return;
+  }
+  list.innerHTML = data.map(act => `
+    <div style="border:1px solid var(--border); border-radius:12px; padding:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="font-weight:600; font-size:14px; margin-bottom:4px; color:var(--text-primary);">${escapeHtml(act.name)}</div>
+          <div style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">${escapeHtml(act.description)}</div>
+          <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-family:monospace; font-size:12px; color:#10b981; word-break:break-all;">
+            ${escapeHtml(act.url_template)}
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="editAction('${act.id}')">✏️ Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAction('${act.id}')">🗑 Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function resetActionForm() {
+  document.getElementById('action-id').value = '';
+  document.getElementById('action-name').value = '';
+  document.getElementById('action-desc').value = '';
+  document.getElementById('action-url').value = '';
+  actionParamsData = [];
+  renderActionParams();
+}
+
+function renderActionParams() {
+  const container = document.getElementById('action-params-list');
+  container.innerHTML = actionParamsData.map((p, i) => `
+    <div style="display:flex; gap:8px; align-items:flex-start; background:var(--bg-elevated); border:1px solid var(--border); padding:12px; border-radius:8px;">
+      <div style="display:flex; flex-direction:column; gap:8px; flex:1;">
+        <div style="display:flex; gap:8px;">
+          <input class="form-control" style="width:140px;" placeholder="Param Name" value="${escapeHtml(p.name)}" oninput="actionParamsData[${i}].name=this.value" />
+          <select class="form-control" style="width:100px;" onchange="actionParamsData[${i}].type=this.value">
+            <option value="string" ${p.type === 'string' ? 'selected' : ''}>String</option>
+            <option value="number" ${p.type === 'number' ? 'selected' : ''}>Number</option>
+            <option value="boolean" ${p.type === 'boolean' ? 'selected' : ''}>Boolean</option>
+          </select>
+        </div>
+        <input class="form-control" placeholder="Description for the AI" value="${escapeHtml(p.description)}" oninput="actionParamsData[${i}].description=this.value" />
+      </div>
+      <button class="icon-btn" style="margin-top:4px; color:var(--text-danger);" onclick="removeActionParam(${i})">✕</button>
+    </div>
+  `).join('');
+  if (actionParamsData.length === 0) {
+    container.innerHTML = '<div class="text-sm text-muted" style="text-align:center;">No parameters defined. Action takes zero arguments.</div>';
+  }
+}
+
+function addActionParam() {
+  actionParamsData.push({ name: '', type: 'string', description: '' });
+  renderActionParams();
+}
+
+function removeActionParam(index) {
+  actionParamsData.splice(index, 1);
+  renderActionParams();
+}
+
+window.editAction = async function(id) {
+  const { data } = await supabase.from('bot_actions').select('*').eq('id', id).single();
+  if (data) {
+    document.getElementById('action-id').value = data.id;
+    document.getElementById('action-name').value = data.name;
+    document.getElementById('action-desc').value = data.description;
+    document.getElementById('action-url').value = data.url_template;
+    actionParamsData = data.parameters || [];
+    renderActionParams();
+    openModal('modal-create-action');
+  }
+};
+
+window.saveAction = async function() {
+  if (!AppState.currentBot) return;
+  const id    = document.getElementById('action-id').value;
+  const name  = document.getElementById('action-name').value.trim();
+  const desc  = document.getElementById('action-desc').value.trim();
+  const tmpl  = document.getElementById('action-url').value.trim();
+  
+  if (!name || !desc || !tmpl) return showToast('Please fill out all required fields', 'error');
+  
+  // Clean empty params
+  const cleanParams = actionParamsData.filter(p => p.name.trim() !== '');
+
+  const payload = {
+    bot_id: AppState.currentBot.id,
+    name,
+    description: desc,
+    url_template: tmpl,
+    parameters: cleanParams
+  };
+
+  const btn = document.getElementById('btn-save-action');
+  const oldText = btn.textContent;
+  btn.textContent = 'Saving...'; btn.disabled = true;
+
+  if (id) {
+    const { error } = await supabase.from('bot_actions').update(payload).eq('id', id);
+    if (error) showToast('Error saving action: ' + error.message, 'error');
+    else showToast('Action saved successfully', 'success');
+  } else {
+    const { error } = await supabase.from('bot_actions').insert([payload]);
+    if (error) showToast('Error creating action: ' + error.message, 'error');
+    else showToast('Action created successfully', 'success');
+  }
+  
+  btn.textContent = oldText; btn.disabled = false;
+  closeModal('modal-create-action');
+  loadActions();
+};
+
+window.deleteAction = async function(id) {
+  if (!confirm('Are you sure you want to delete this action? The bot will lose access to it permanently.')) return;
+  const { error } = await supabase.from('bot_actions').delete().eq('id', id);
+  if (error) showToast('Error deleting action: ' + error.message, 'error');
+  else {
+    showToast('Action deleted', 'success');
+    loadActions();
+  }
+};
 
 function showConfigSection(section) {
   localStorage.setItem('iam_last_config_tab', section);
@@ -4045,3 +4200,4 @@ window.markConfigDirty     = markConfigDirty;
 window.markConfigClean     = markConfigClean;
 window.handleConversationsNav = handleConversationsNav;
 window.renderAnalytics     = renderAnalytics;
+

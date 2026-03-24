@@ -592,10 +592,36 @@
         if (!_hitlActive && !_pollInterval) { _shownSysMsgs['agent_joined']=true; startPolling(convId); }
         isSending=false; return;
       }
-      if(data.response) appendBot(data.response);
+      if (data.action === 'redirect' && data.url) {
+        appendActionCard(data.url);
+      } else if (data.response) {
+        appendBot(data.response);
+      }
       isSending=false;
     })
     .catch(function(){ hideTyping(); appendBot('Sorry, something went wrong.'); isSending=false; });
+  }
+
+  // ── Action Redirect Card ───────────────────────────────────────────────
+  function appendActionCard(url) {
+    maybeShowDateSep(new Date().toISOString());
+    var wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin:16px 16px 2px 16px;';
+    
+    var bubble = document.createElement('div');
+    bubble.className = 'iam-msg bot';
+    bubble.style.cssText = 'background:var(--bg-elevated, #fff); color:var(--text, #111827); box-shadow:0 3px 12px rgba(0,0,0,0.06); border:1px solid #e5e7eb; padding:16px; border-radius:16px; border-bottom-left-radius:4px; max-width:88%; font-family:inherit; font-size:14px; line-height:1.5; text-align:center;';
+    
+    bubble.innerHTML = 
+      '<div style="font-weight:600; margin-bottom:8px; color:#111827;">Here are your results!</div>' +
+      '<div style="font-size:13px; color:#6b7280; margin-bottom:12px;">I\'ve gathered exactly what you are looking for.</div>' +
+      '<a href="' + url + '" target="_blank" style="display:inline-block; background:' + (botConfig.color || '#000') + '; color:#fff; text-decoration:none; padding:10px 18px; border-radius:8px; font-weight:600; font-size:13px; transition:opacity 0.2s;">' +
+      '  View Results' +
+      '</a>';
+    
+    wrapper.appendChild(bubble);
+    msgsEl.appendChild(wrapper);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
   }
 
   // ── New conversation ───────────────────────────────────────────────────

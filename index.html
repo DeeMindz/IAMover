@@ -756,6 +756,8 @@
               <div class="config-nav-item" data-section="ai" onclick="showConfigSection('ai')">AI & Prompts</div>
               <div class="config-nav-item" data-section="knowledge" onclick="showConfigSection('knowledge')">Knowledge
               </div>
+              <div class="config-nav-item" data-section="actions" onclick="showConfigSection('actions')">Actions (Beta)
+              </div>
               <div class="config-nav-item" data-section="variables" onclick="showConfigSection('variables')">Variables
               </div>
               <div class="config-nav-item" data-section="design" onclick="showConfigSection('design')">Appearance</div>
@@ -1058,6 +1060,22 @@
             </div>
           </div>
 
+          <!-- Actions -->
+          <div class="config-section card hidden" id="config-actions">
+            <div class="card-header">
+              <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <div class="card-title">Autonomous Actions (Function Calling)</div>
+                <button class="btn btn-primary btn-sm" onclick="openModal('modal-create-action'); resetActionForm();">+ New Action</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="text-sm text-muted mb-4">Define tools the AI can use autonomously to build redirect links or API payloads based on user intents.</div>
+              <div id="actions-list" style="display:flex; flex-direction:column; gap:12px;">
+                <div class="text-sm text-muted">Loading actions...</div>
+              </div>
+            </div>
+          </div>
+
           <!-- Embed -->
           <div class="config-section card hidden" id="config-embed">
             <div class="card-header">
@@ -1108,6 +1126,48 @@
   <!-- ═══════════════════════════════════════════════════════════════
      MODALS
 ═══════════════════════════════════════════════════════════════════ -->
+
+  <!-- Create/Edit Action Modal -->
+  <div class="modal-overlay" id="modal-create-action">
+    <div class="modal" style="max-width:600px;">
+      <div class="modal-header">
+        <div class="modal-title" id="action-modal-title">Create New Action</div>
+        <button class="icon-btn" onclick="closeModal('modal-create-action')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="action-id" />
+        <div class="form-group">
+          <label class="form-label">Action Name</label>
+          <input class="form-control" id="action-name" placeholder="search_directory (no spaces)" />
+          <div class="form-hint">The internal function name the AI uses to trigger this action.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Trigger Prompt / Description</label>
+          <textarea class="form-control" id="action-desc" rows="3" placeholder="Tell the LLM exactly when to trigger this action and how to populate its arguments..."></textarea>
+        </div>
+        
+        <div class="form-group">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label class="form-label">Parameters (Input Schema)</label>
+            <button class="btn btn-ghost btn-sm" onclick="addActionParam()">+ Add Param</button>
+          </div>
+          <div id="action-params-list" style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+            <!-- Param rows injected here -->
+          </div>
+        </div>
+
+        <div class="form-group" style="padding-top:16px; border-top:1px solid var(--border);">
+          <label class="form-label">Redirect URL Template</label>
+          <input class="form-control" id="action-url" placeholder="https://example.com/search?loc={loc}&type={type}" />
+          <div class="form-hint">Use {param_name} brackets to inject the exact JSON variables output by the AI.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-create-action')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveAction()" id="btn-save-action">Save Action</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Create Bot Modal -->
   <div class="modal-overlay" id="modal-create-bot">
