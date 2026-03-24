@@ -3606,6 +3606,14 @@ function fillBotForm(bot) {
 // ── Bot Actions (Function Calling) ──────────────────────────────────────────
 let actionParamsData = [];
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(match) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    return map[match];
+  });
+}
+
 async function loadActions() {
   if (!AppState.currentBot) return;
   const { data, error } = await supabase.from('bot_actions').select('*').eq('bot_id', AppState.currentBot.id);
