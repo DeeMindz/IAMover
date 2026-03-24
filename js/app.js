@@ -3633,7 +3633,7 @@ async function loadActions() {
   `).join('');
 }
 
-function resetActionForm() {
+window.resetActionForm = function() {
   document.getElementById('action-id').value = '';
   document.getElementById('action-name').value = '';
   document.getElementById('action-desc').value = '';
@@ -3665,12 +3665,12 @@ function renderActionParams() {
   }
 }
 
-function addActionParam() {
+window.addActionParam = function() {
   actionParamsData.push({ name: '', type: 'string', description: '' });
   renderActionParams();
 }
 
-function removeActionParam(index) {
+window.removeActionParam = function(index) {
   actionParamsData.splice(index, 1);
   renderActionParams();
 }
