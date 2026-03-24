@@ -2415,9 +2415,9 @@ function renderLivePreview(bot) {
     display:flex; align-items:center; justify-content:center;
     font-size:18px; flex-shrink:0; overflow:hidden;
   }
-  .chat-header-info { flex:1; }
-  .chat-header-info .name { font-weight:700; font-size:14px; }
-  .chat-header-info .status { font-size:11px; opacity:0.85; margin-top:1px; }
+  .chat-header-info { flex:1; min-width:0; }
+  .chat-header-info .name { font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat-header-info .status { font-size:11px; opacity:0.85; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .close-btn {
     width:28px; height:28px;
     background:rgba(255,255,255,0.2);
