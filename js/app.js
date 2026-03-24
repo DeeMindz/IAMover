@@ -2386,6 +2386,14 @@ function renderLivePreview(bot) {
     from { opacity:0; transform:translateY(8px) scale(0.95); }
     to   { opacity:1; transform:translateY(0) scale(1); }
   }
+  .msg-status { font-size:10px; color:#10b981; margin-top:2px; text-align:right; }
+  .bot-wrap { display:flex; flex-direction:column; align-items:flex-start; max-width:82%; margin-bottom:8px; }
+  .iam-fb { display:flex; gap:4px; margin-top:4px; opacity:0.8; }
+  .iam-fb-btn { background:transparent; border:1px solid #ddd; border-radius:12px; padding:2px 8px; cursor:pointer; font-size:12px; transition:all 0.2s; }
+  .iam-fb-btn:hover { background:#f0f0f0; }
+  .iam-fb-form { display:none; flex-direction:column; gap:4px; margin-top:4px; width:100%; }
+  .iam-fb-form textarea { width:100%; font-size:12px; padding:6px; border:1px solid #ddd; border-radius:6px; resize:none; font-family:inherit; }
+  .iam-fb-form button { background:#10b981; color:#fff; border:none; border-radius:6px; padding:6px; font-size:11px; font-weight:600; cursor:pointer; }
   /* Chat window */
   .chat-window {
     position:fixed; bottom:24px; right:24px;
@@ -2528,7 +2536,7 @@ function renderLivePreview(bot) {
         <div class="name">${botName}</div>
         <div class="status"><span style="color:#10b981;">&#9679;</span> Online · Ready to help</div>
       </div>
-      <select id="iam-language-select" title="Select your preferred language" style="background:rgba(0,0,0,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:12px;padding:4px 6px;margin-right:4px;outline:none;cursor:pointer;">
+      <select id="iam-language-select" title="Select your preferred language" style="background:transparent;color:#fff;border:none;font-size:13px;font-weight:600;padding:2px 0;margin-right:2px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center;">
         <option value="Auto" style="color:#333">🌐 Auto</option>
         <option value="English" style="color:#333">EN</option>
         <option value="Spanish" style="color:#333">ES</option>
@@ -2656,6 +2664,32 @@ function renderLivePreview(bot) {
     var msgs = document.getElementById('chat-messages');
     var b = document.createElement('div'); b.className = 'msg bot'; b.innerHTML = formatMarkdown(greet);
     msgs.appendChild(b); msgs.scrollTop = msgs.scrollHeight;
+  function appendBot(c) {
+    if (c) window._shownBotTexts = window._shownBotTexts || {};
+    if (c) window._shownBotTexts[c.trim()] = true;
+    var w=document.createElement('div'); w.className='bot-wrap';
+    var d=document.createElement('div'); d.className='msg bot'; d.style.maxWidth='100%'; d.innerHTML=formatMarkdown(c);
+    var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
+    var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
+    w.appendChild(d); w.appendChild(fb); w.appendChild(fbF);
+    var msgs=document.getElementById('chat-messages');
+    msgs.appendChild(w); msgs.scrollTop=msgs.scrollHeight;
+
+    var upBtn=fb.querySelector('.iam-fb-up'), downBtn=fb.querySelector('.iam-fb-down'), sBtn=fbF.querySelector('button'), txt=fbF.querySelector('textarea'), fbId=null;
+    function sb(r,cm){if(!window._previewConvId)return;fetch('${window.location.origin}/api/bot/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:fbId,bot_id:'${bot.id}',conversation_id:window._previewConvId,message_text:c,rating:r,comment:cm})}).then(function(x){return x.json()}).then(function(d){if(d.id)fbId=d.id;}).catch(function(){});}
+    upBtn.onclick=function(){upBtn.style.background='#e0f2fe';downBtn.style.background='transparent';fbF.style.display='none';sb('positive','');};
+    downBtn.onclick=function(){downBtn.style.background='#fee2e2';upBtn.style.background='transparent';fbF.style.display='flex';sb('negative','');};
+    sBtn.onclick=function(){var v=txt.value.trim();if(!v)return;sBtn.textContent='Saving...';sBtn.disabled=true;sb('negative',v);setTimeout(function(){fbF.innerHTML='<span style="font-size:11px;color:#10b981;font-weight:600;">Thanks for your feedback!</span>';},500);};
+  }
+
+  function appendUser(c) {
+    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:8px;';
+    var d=document.createElement('div'); d.className='msg user'; d.textContent=c;
+    var status=document.createElement('div'); status.className='msg-status'; status.innerHTML='&#10003;';
+    w.appendChild(d); w.appendChild(status); 
+    var msgs=document.getElementById('chat-messages');
+    msgs.appendChild(w); msgs.scrollTop=msgs.scrollHeight;
+    return status;
   }
 
   function sendMsg() {
@@ -2664,13 +2698,8 @@ function renderLivePreview(bot) {
   if (!text || isSending) return;
   isSending = true;
 
-  const msgs = document.getElementById('chat-messages');
-  const userMsg = document.createElement('div');
-  userMsg.className = 'msg user';
-  userMsg.textContent = text;
-  msgs.appendChild(userMsg);
+  window._lastUserStatusEl = appendUser(text);
   input.value = '';
-  msgs.scrollTop = msgs.scrollHeight;
 
   // Show typing indicator
   const typing = document.createElement('div');
@@ -2726,14 +2755,11 @@ window.addEventListener('message', function (e) {
       if (m.role === 'system') { window._shownSysMsgs[m.content] = true; addSystemMsg(m.content); }
       else if (m.role === 'human-agent') { showAgentMsg(m.content); }
       else {
-        window._shownBotTexts = window._shownBotTexts || {};
-        if (m.role === 'bot') window._shownBotTexts[m.content.trim()] = true;
-        
-        var d = document.createElement('div');
-        d.className = 'msg ' + (m.role === 'bot' ? 'bot' : 'user');
-        if (m.role === 'bot') d.innerHTML = formatMarkdown(m.content);
-        else d.textContent = m.content;
-        msgs.appendChild(d);
+        if (m.role === 'bot') {
+          appendBot(m.content);
+        } else {
+          appendUser(m.content);
+        }
       }
       if (!window._lastMsgAt || m.created_at > window._lastMsgAt) window._lastMsgAt = m.created_at;
     });
@@ -2746,17 +2772,11 @@ window.addEventListener('message', function (e) {
     var t = document.getElementById('typing-indicator');
     if (t) t.remove();
     if (e.data.response) {
-      window._shownBotTexts = window._shownBotTexts || {};
-      window._shownBotTexts[e.data.response.trim()] = true;
-      var b = document.createElement('div');
-      b.className = 'msg bot';
-      b.setAttribute('data-rawcontent', e.data.response);
-      b.innerHTML = formatMarkdown(e.data.response);
-      msgs.appendChild(b);
-      msgs.scrollTop = msgs.scrollHeight;
+      appendBot(e.data.response);
       // Track timestamp so poll cursor advances past this message
       if (!window._lastMsgAt) window._lastMsgAt = new Date().toISOString();
     }
+    if (window._lastUserStatusEl) { window._lastUserStatusEl.innerHTML = '&#10003;&#10003;'; window._lastUserStatusEl = null; }
     if (e.data.conv_id) window._previewConvId = e.data.conv_id;
     isSending = false;
   }
@@ -2766,6 +2786,7 @@ window.addEventListener('message', function (e) {
     if (t) t.remove();
     showAgentMsg(e.data.content);
     isSending = false;
+    if (window._lastUserStatusEl) { window._lastUserStatusEl.innerHTML = '&#10003;&#10003;'; window._lastUserStatusEl = null; }
   }
 
   if (e.data.type === 'IAM_SYSTEM_MESSAGE') {

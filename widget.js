@@ -72,6 +72,14 @@
     '.iam-msg.bot{background:#fff;border:1px solid #eee;border-bottom-left-radius:4px;align-self:flex-start;color:#333;box-shadow:0 1px 3px rgba(0,0,0,.05);}',
     '.iam-msg.bot a{color:'+COLOR+';text-decoration:underline;}',
     '.iam-msg.user{background:'+COLOR+';color:#fff;border-bottom-right-radius:4px;align-self:flex-end;}',
+    '.iam-msg-status{font-size:10px;color:'+COLOR+';margin-top:2px;text-align:right;}',
+    '.iam-bot-wrap{display:flex;flex-direction:column;align-items:flex-start;max-width:82%;margin-bottom:8px;}',
+    '.iam-fb{display:flex;gap:4px;margin-top:4px;opacity:0.8;}',
+    '.iam-fb-btn{background:transparent;border:1px solid #ddd;border-radius:12px;padding:2px 8px;cursor:pointer;font-size:12px;transition:all 0.2s;}',
+    '.iam-fb-btn:hover{background:#f0f0f0;}',
+    '.iam-fb-form{display:none;flex-direction:column;gap:4px;margin-top:4px;width:100%;}',
+    '.iam-fb-form textarea{width:100%;font-size:12px;padding:6px;border:1px solid #ddd;border-radius:6px;resize:none;font-family:inherit;}',
+    '.iam-fb-form button{background:'+COLOR+';color:#fff;border:none;border-radius:6px;padding:6px;font-size:11px;font-weight:600;cursor:pointer;}',
     '.iam-agent-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:2px;}',
     '.iam-agent-label{font-size:10px;color:#10b981;margin-left:4px;font-weight:600;}',
     '.iam-agent-bubble{background:#fff;border:1px solid #eee;border-left:3px solid #10b981;border-radius:16px;border-bottom-left-radius:4px;max-width:82%;padding:9px 13px;font-size:13px;line-height:1.5;color:#333;}',
@@ -133,7 +141,7 @@
     '    <div id="iam-bot-name">Assistant</div>',
     '    <div id="iam-bot-status"><span style="color:#10b981;">&#9679;</span> Online &middot; Ready to help</div>',
     '  </div>',
-    '  <select id="iam-language-select" title="Select your preferred language" style="background:rgba(0,0,0,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:12px;padding:4px 6px;margin-right:4px;outline:none;cursor:pointer;">',
+    '  <select id="iam-language-select" title="Select your preferred language" style="background:transparent;color:#fff;border:none;font-size:13px;font-weight:600;padding:2px 0;margin-right:2px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center;">',
     '    <option value="Auto" style="color:#333">🌐 Auto</option>',
     '    <option value="English" style="color:#333">EN</option>',
     '    <option value="Spanish" style="color:#333">ES</option>',
@@ -288,8 +296,28 @@
   }
 
   // ── Message helpers ───────────────────────────────────────────────────
-  function appendBot(c)   { if(c) _shownBotTexts[c.trim()]=true; var d=document.createElement('div'); d.className='iam-msg bot'; d.innerHTML=md(c); msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight; }
-  function appendUser(c)  { var d=document.createElement('div'); d.className='iam-msg user'; d.textContent=c; msgsEl.appendChild(d); msgsEl.scrollTop=msgsEl.scrollHeight; }
+  function appendBot(c) {
+    if(c) _shownBotTexts[c.trim()]=true;
+    var w=document.createElement('div'); w.className='iam-bot-wrap';
+    var d=document.createElement('div'); d.className='iam-msg bot'; d.style.maxWidth='100%'; d.innerHTML=md(c);
+    var fb=document.createElement('div'); fb.className='iam-fb'; fb.innerHTML='<button class="iam-fb-btn iam-fb-up" title="Helpful">&#128077;</button><button class="iam-fb-btn iam-fb-down" title="Needs improvement">&#128078;</button>';
+    var fbF=document.createElement('div'); fbF.className='iam-fb-form'; fbF.innerHTML='<textarea placeholder="Help us improve" rows="2"></textarea><button>Send Feedback</button>';
+    w.appendChild(d); w.appendChild(fb); w.appendChild(fbF);
+    msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
+
+    var upBtn=fb.querySelector('.iam-fb-up'), downBtn=fb.querySelector('.iam-fb-down'), sBtn=fbF.querySelector('button'), txt=fbF.querySelector('textarea'), fbId=null;
+    function sb(r,cm){if(!convId)return;fetch(API_BASE+'/api/bot/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:fbId,bot_id:BOT_ID,conversation_id:convId,message_text:c,rating:r,comment:cm})}).then(function(x){return x.json()}).then(function(d){if(d.id)fbId=d.id;}).catch(function(){});}
+    upBtn.onclick=function(){upBtn.style.background='#e0f2fe';downBtn.style.background='transparent';fbF.style.display='none';sb('positive','');};
+    downBtn.onclick=function(){downBtn.style.background='#fee2e2';upBtn.style.background='transparent';fbF.style.display='flex';sb('negative','');};
+    sBtn.onclick=function(){var v=txt.value.trim();if(!v)return;sBtn.textContent='Saving...';sBtn.disabled=true;sb('negative',v);setTimeout(function(){fbF.innerHTML='<span style="font-size:11px;color:#10b981;font-weight:600;">Thanks for your feedback!</span>';},500);};
+  }
+  function appendUser(c) {
+    var w=document.createElement('div'); w.style.cssText='display:flex;flex-direction:column;align-items:flex-end;margin-bottom:8px;';
+    var d=document.createElement('div'); d.className='iam-msg user'; d.textContent=c;
+    var status=document.createElement('div'); status.className='iam-msg-status'; status.innerHTML='&#10003;';
+    w.appendChild(d); w.appendChild(status); msgsEl.appendChild(w); msgsEl.scrollTop=msgsEl.scrollHeight;
+    return status;
+  }
   function appendAgent(c) {
     var w=document.createElement('div'); w.className='iam-agent-wrap';
     var l=document.createElement('div'); l.className='iam-agent-label'; l.textContent='Support Agent';
@@ -489,7 +517,7 @@
     if (!text || isSending) return;
     var message = text;
     var userLanguage = document.getElementById('iam-language-select').value;
-    appendUser(message);
+    var statusEl = appendUser(message);
     input.value = '';
     msgsEl.scrollTop = msgsEl.scrollHeight;
 
@@ -500,6 +528,7 @@
       body: JSON.stringify({ bot_id:BOT_ID, conversation_id:convId, message:message, user_language:userLanguage })
     }).then(function(r) { return r.json(); })
     .then(function(data) {
+      if(statusEl) statusEl.innerHTML='&#10003;&#10003;';
       hideTyping();
       if (data.hitl_active) {
         if (!_hitlActive && !_pollInterval) { _shownSysMsgs['agent_joined']=true; startPolling(convId); }
