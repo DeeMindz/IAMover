@@ -460,6 +460,16 @@ export default async function handler(req, res) {
             systemPrompt += knowledgeContext;
         }
 
+        // ── Action / Tool Calling Instructions ──────────────────────────────
+        if (hasActions) {
+            systemPrompt += `\n\n[DIRECTORY SEARCH ACTIONS AVAILABLE]
+You have access to directory search tools. When you use one of these tools:
+1. You will receive a Search URL back from the tool.
+2. You MUST present this URL to the user as a standard markdown hyperlink (e.g. "I found some movers for you! [Click here to view your results](https://...)").
+3. DO NOT output raw JSON or ask the user to wait. 
+4. ALWAYS immediately ask a follow-up question (e.g. "Currently searching a 50-mile radius. Would you like me to expand the search radius for more options?").`;
+        }
+
         log.info('System prompt built', {
             promptLength:   systemPrompt.length,
             hasKnowledge:   !!knowledgeContext,
@@ -555,12 +565,20 @@ export default async function handler(req, res) {
                         Object.entries(call.args).forEach(([k, v]) => {
                             redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
                         });
-                        log.info('Gemini invoked action redirect', { action: call.name, url: redirectUrl });
-                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                        log.info('Gemini invoked action -> injecting URL back to model', { action: call.name, url: redirectUrl });
+                        
+                        // Send the result back to Gemini so it can answer conversationally
+                        const secondResult = await chat.sendMessage([{
+                            functionResponse: {
+                                name: call.name,
+                                response: { url: redirectUrl }
+                            }
+                        }]);
+                        responseText = secondResult.response.text();
                     }
+                } else {
+                    responseText = result.response.text();
                 }
-                
-                responseText = result.response.text();
                 log.info('Gemini response received', { chars: responseText.length });
             }
 
@@ -615,7 +633,7 @@ export default async function handler(req, res) {
 
                 log.info('Calling OpenAI', { resolvedModel, isReasoning });
 
-                const response = await client.chat.completions.create({
+                let response = await client.chat.completions.create({
                     model: resolvedModel,
                     messages,
                     tools: openaiTools.length > 0 ? openaiTools : undefined,
@@ -670,7 +688,7 @@ export default async function handler(req, res) {
                     });
                 }
 
-                const response = await client.messages.create({
+                let response = await client.messages.create({
                     model:      botModel,
                     max_tokens: botMaxTokens,
                     system:     systemPrompt,
@@ -690,8 +708,33 @@ export default async function handler(req, res) {
                         Object.entries(args).forEach(([k, v]) => {
                             redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
                         });
-                        log.info('Claude invoked action redirect', { action: toolBlock.name, url: redirectUrl });
-                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                        log.info('Claude invoked action -> injecting URL back to model', { action: toolBlock.name, url: redirectUrl });
+                        
+                        // Push Claude's tool call request
+                        const toolCallMsg = { role: 'assistant', content: response.content };
+                        
+                        // Push our tool execution response containing the URL
+                        const toolResMsg = {
+                            role: 'user',
+                            content: [{
+                                type: 'tool_result',
+                                tool_use_id: toolBlock.id,
+                                content: `Search URL Generated: ${redirectUrl}`
+                            }]
+                        };
+
+                        response = await client.messages.create({
+                            model:      botModel,
+                            max_tokens: botMaxTokens,
+                            system:     systemPrompt,
+                            messages:   [
+                                ...conversationHistory,
+                                { role: 'user', content: message },
+                                toolCallMsg,
+                                toolResMsg
+                            ],
+                            tools: anthropicTools.length > 0 ? anthropicTools : undefined
+                        });
                     }
                 }
 
