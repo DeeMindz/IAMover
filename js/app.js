@@ -2628,7 +2628,7 @@ function renderLivePreview(bot) {
     h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK-$2-$1%%');
 
     // 2. Auto-link floating URLs
-    h = h.replace(/(https?:\\/\\/(?:(?!&lt;|&gt;|&quot;|\\s|["'<>[\])]).)+)/gi, function(url) {
+    h = h.replace(/(https?:\\/\\/[^\\s"'<>\[\]]+)/gi, function(url) {
       var trailing = '';
       if (/[.,;!?]+$/.test(url)) {
         var match = url.match(/[.,;!?]+$/);
@@ -3134,7 +3134,7 @@ function confirmNewConv() {
         // 1. Tokenize markdown links [text](url) before auto-linking  
         h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK-$2-$1%%');
         // 2. Auto-link bare URLs
-        h = h.replace(/(https?:\\/\\/(?:(?!&lt;|&gt;|&quot;|\\s|[\"'<>[\\])]).)+)/gi, function(url) {
+        h = h.replace(/(https?:\\/\\/[^\\s"'<>\[\]]+)/gi, function(url) {
           var tr = '';
           if (/[.,;!?]+$/.test(url)) { var m=url.match(/[.,;!?]+$/); tr=m[0]; url=url.slice(0,-tr.length); }
           return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + tr;
