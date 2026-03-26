@@ -296,9 +296,9 @@ window.addEventListener('message', async function (e) {
   if (e.data.type === 'IAM_NEW_CONV') {
     console.log('[IAM Bridge] New conversation requested for bot:', e.data.bot_id);
     // Stop existing real-time subscription
-    if (_widgetRealtimeSub) {
-      _widgetRealtimeSub.unsubscribe();
-      _widgetRealtimeSub = null;
+    if (PreviewState.realtimeSub) {
+      PreviewState.realtimeSub.unsubscribe();
+      PreviewState.realtimeSub = null;
     }
     PreviewState.convId = null;
     PreviewState.messages = [];
@@ -360,7 +360,10 @@ window.addEventListener('message', async function (e) {
           .forEach(f => f.contentWindow.postMessage({ type: 'IAM_HITL_ACTIVE', conv_id: activeConvId }, '*'));
         return;
       }
-      if (data.response) {
+      if (data.action === 'redirect' && data.url) {
+        // Forward the redirect action to the widget iframe so it renders an Action Card
+        e.source.postMessage({ type: 'IAM_BOT_REDIRECT', url: data.url }, '*');
+      } else if (data.response) {
         e.source.postMessage({
           type: 'IAM_BOT_RESPONSE',
           response: data.response,
@@ -2828,6 +2831,15 @@ window.addEventListener('message', function (e) {
     if (e.data.conv_id) window._previewConvId = e.data.conv_id;
     isSending = false;
   }
+
+  if (e.data.type === 'IAM_BOT_REDIRECT') {
+    var t = document.getElementById('typing-indicator');
+    if (t) t.remove();
+    appendActionCard(e.data.url);
+    if (window._lastUserStatusEl) { window._lastUserStatusEl.innerHTML = '&#10003;&#10003;'; window._lastUserStatusEl = null; }
+    isSending = false;
+  }
+
 
   if (e.data.type === 'IAM_AGENT_MESSAGE') {
     var t = document.getElementById('typing-indicator');
