@@ -3690,7 +3690,10 @@ window.editAction = async function(id) {
     document.getElementById('action-name').value = data.name;
     document.getElementById('action-desc').value = data.description;
     document.getElementById('action-url').value = data.url_template;
-    window.actionParamsData = data.parameters || [];
+    window.actionParamsData = data.parameters
+      ? (typeof data.parameters === 'string' ? JSON.parse(data.parameters) : data.parameters)
+      : [];
+    console.log('[Actions] Loaded params:', JSON.stringify(window.actionParamsData));
     renderActionParams();
     openModal('modal-create-action');
   }
@@ -3707,6 +3710,7 @@ window.saveAction = async function() {
   
   // Clean empty params
   const cleanParams = actionParamsData.filter(p => p.name.trim() !== '');
+  console.log('[Actions] Saving params:', JSON.stringify(cleanParams));
 
   const payload = {
     bot_id: AppState.currentBot.id,
