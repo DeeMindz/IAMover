@@ -273,14 +273,12 @@
       citationsHtml = '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;border-top:1px solid #eee;padding-top:6px;">' + citations.join('') + '</div>';
     }
 
-    // Step 3: Markdown links [text](url) → tokenize so step 4 ignores them.
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '%%LINK::SEP::$2::SEP::$1%%');
+    // Step 3: Markdown links [text](url) → <a> (convert directly, before auto-link)
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 
-    // Step 4: Auto-link raw URLs that are NOT already inside an href
-    // Uses negative lookahead to prevent matching HTML entities like &lt; and &gt;
-    h = h.replace(/(https?:\/\/(?:(?!&lt;|&gt;|&quot;|\s|["'<>[\])]).)+)/gi, function(url) {
+    // Step 4: Auto-link raw URLs not already inside href="..."
+    h = h.replace(/(?<!href=")https?:\/\/[^\s"'<>\[\]]+/gi, function(url) {
       var trailing = '';
-      // Exclude trailing punctuation often added at the end of sentences
       if (/[.,;!?]+$/.test(url)) {
         var match = url.match(/[.,;!?]+$/);
         trailing = match[0];
@@ -288,9 +286,6 @@
       }
       return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + trailing;
     });
-
-    // Step 5: Restore the Markdown links from step 3
-    h = h.replace(/%%LINK::SEP::([^%]+?)::SEP::([^%]+?)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
 
     // Step 6: Basic markdown formatting
     h = h.replace(/^#{1,3} (.+)$/gm,'<strong>$1</strong>');
