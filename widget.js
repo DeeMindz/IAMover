@@ -273,9 +273,8 @@
       citationsHtml = '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;border-top:1px solid #eee;padding-top:6px;">' + citations.join('') + '</div>';
     }
 
-    // Step 3: Markdown links [text](url) → <a>
-    // We replace them and wrap them in a safe token so step 4 ignores them.
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '%%LINK-$2-$1%%');
+    // Step 3: Markdown links [text](url) → tokenize so step 4 ignores them.
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '%%LINK::SEP::$2::SEP::$1%%');
 
     // Step 4: Auto-link raw URLs that are NOT already inside an href
     // Uses negative lookahead to prevent matching HTML entities like &lt; and &gt;
@@ -291,7 +290,7 @@
     });
 
     // Step 5: Restore the Markdown links from step 3
-    h = h.replace(/%%LINK-([^%]+)-([^%]+)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+    h = h.replace(/%%LINK::SEP::([^%]+?)::SEP::([^%]+?)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
 
     // Step 6: Basic markdown formatting
     h = h.replace(/^#{1,3} (.+)$/gm,'<strong>$1</strong>');

@@ -2625,7 +2625,7 @@ function renderLivePreview(bot) {
       .replace(/>/g, '&gt;');
       
     // 1. Markdown links [text](url) -> tokenize so step 2 ignores them
-    h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK-$2-$1%%');
+    h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK::SEP::$2::SEP::$1%%');
 
     // 2. Auto-link floating URLs
     h = h.replace(/(https?:\\/\\/[^\\s"'<>\[\]]+)/gi, function(url) {
@@ -2639,7 +2639,7 @@ function renderLivePreview(bot) {
     });
 
     // 3. Restore URL tokens back to <a> tags
-    h = h.replace(/%%LINK-([^%]+)-([^%]+)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+    h = h.replace(/%%LINK::SEP::([^%]+?)::SEP::([^%]+?)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
     
     // 4. Basic formatting
     h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
@@ -3132,7 +3132,7 @@ function confirmNewConv() {
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
         // 1. Tokenize markdown links [text](url) before auto-linking  
-        h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK-$2-$1%%');
+        h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK::SEP::$2::SEP::$1%%');
         // 2. Auto-link bare URLs
         h = h.replace(/(https?:\\/\\/[^\\s"'<>\[\]]+)/gi, function(url) {
           var tr = '';
@@ -3140,7 +3140,7 @@ function confirmNewConv() {
           return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + tr;
         });
         // 3. Restore tokenized links
-        h = h.replace(/%%LINK-([^%]+)-([^%]+)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+        h = h.replace(/%%LINK::SEP::([^%]+?)::SEP::([^%]+?)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
         h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
         h = h.replace(/^## (.+)$/gm, '<strong>$1</strong>');
         h = h.replace(/^# (.+)$/gm, '<strong>$1</strong>');
