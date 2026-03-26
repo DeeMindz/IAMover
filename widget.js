@@ -615,9 +615,11 @@
     bubble.innerHTML = 
       '<div style="font-weight:600; margin-bottom:8px; color:#111827;">Here are your results!</div>' +
       '<div style="font-size:13px; color:#6b7280; margin-bottom:12px;">I\'ve gathered exactly what you are looking for.</div>' +
-      '<a href="' + url + '" target="_blank" style="display:inline-block; background:' + (botConfig.color || '#000') + '; color:#fff; text-decoration:none; padding:10px 18px; border-radius:8px; font-weight:600; font-size:13px; transition:opacity 0.2s;">' +
-      '  View Results' +
-      '</a>';
+      '<div style="margin-top:10px;">' +
+      '  <a href="' + url + '" target="_blank" style="display:inline-block; background:' + (botConfig.color || '#000') + '; color:#fff; text-decoration:none; padding:10px 20px; border-radius:8px; font-weight:600; font-size:13px; transition:opacity 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.1);">' +
+      '    View Results' +
+      '  </a>' +
+      '</div>';
     
     wrapper.appendChild(bubble);
     msgsEl.appendChild(wrapper);
