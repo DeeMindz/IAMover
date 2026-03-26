@@ -362,7 +362,7 @@ window.addEventListener('message', async function (e) {
       }
       if (data.action === 'redirect' && data.url) {
         // Forward the redirect action to the widget iframe so it renders an Action Card
-        e.source.postMessage({ type: 'IAM_BOT_REDIRECT', url: data.url, bot_msg_ts: data.bot_msg_ts }, '*');
+        e.source.postMessage({ type: 'IAM_BOT_REDIRECT', url: data.url }, '*');
       } else if (data.response) {
         e.source.postMessage({
           type: 'IAM_BOT_RESPONSE',
@@ -2719,12 +2719,10 @@ function renderLivePreview(bot) {
     bubble.style.cssText = 'background:var(--bg-elevated, #fff); color:var(--text, #111827); box-shadow:0 3px 12px rgba(0,0,0,0.06); border:1px solid #e5e7eb; padding:16px; border-radius:16px; border-bottom-left-radius:4px; max-width:100%; font-family:inherit; font-size:14px; line-height:1.5; text-align:center;';
     bubble.innerHTML = 
       '<div style="font-weight:600; margin-bottom:8px; color:#111827;">Here are your results!</div>' +
-      '<div style="font-size:13px; color:#6b7280; margin-bottom:12px;">I\'ve gathered exactly what you are looking for.</div>' +
-      '<div style="margin-top:10px;">' +
-      '  <a href="' + url + '" target="_blank" style="display:inline-block; background:#000; color:#fff; text-decoration:none; padding:10px 20px; border-radius:8px; font-weight:600; font-size:13px; transition:opacity 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.1);">' +
-      '    View Results' +
-      '  </a>' +
-      '</div>';
+      '<div style="font-size:13px; color:#6b7280; margin-bottom:12px;">I\\'ve gathered exactly what you are looking for.</div>' +
+      '<a href="' + url + '" target="_blank" style="display:inline-block; #000; color:#fff; text-decoration:none; padding:10px 18px; border-radius:8px; font-weight:600; font-size:13px; transition:opacity 0.2s;">' +
+      '  View Results' +
+      '</a>';
     wrapper.appendChild(bubble);
     var msgs = document.getElementById('chat-messages');
     msgs.appendChild(wrapper);
