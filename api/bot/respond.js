@@ -491,6 +491,7 @@ export default async function handler(req, res) {
         // ── Step 6: Call the configured LLM ────────────────────────────────
         const botModel = bot.model || 'gemini-2.5-flash';
         let responseText = '';
+        let redirectUrl = null;
 
         if (botModel.startsWith('gemini')) {
             // ── Google Gemini ────────────────────────────────────────────────
@@ -551,12 +552,12 @@ export default async function handler(req, res) {
                 if (call) {
                     const actionDef = botActions.find(a => a.name === call.name);
                     if (actionDef) {
-                        let redirectUrl = actionDef.url_template;
+                        redirectUrl = actionDef.url_template;
                         Object.entries(call.args).forEach(([k, v]) => {
                             redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
                         });
                         log.info('Gemini invoked action redirect', { action: call.name, url: redirectUrl });
-                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                        responseText = "I've gathered exactly what you are looking for.";
                     }
                 }
                 
@@ -630,12 +631,12 @@ export default async function handler(req, res) {
                     const actionDef = botActions.find(a => a.name === call.name);
                     if (actionDef) {
                         const args = JSON.parse(call.arguments);
-                        let redirectUrl = actionDef.url_template;
+                        redirectUrl = actionDef.url_template;
                         Object.entries(args).forEach(([k, v]) => {
                             redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
                         });
                         log.info('OpenAI invoked action redirect', { action: call.name, url: redirectUrl });
-                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                        responseText = "I've gathered exactly what you are looking for.";
                     }
                 }
 
@@ -686,12 +687,12 @@ export default async function handler(req, res) {
                     const actionDef = botActions.find(a => a.name === toolBlock.name);
                     if (actionDef) {
                         const args = toolBlock.input;
-                        let redirectUrl = actionDef.url_template;
+                        redirectUrl = actionDef.url_template;
                         Object.entries(args).forEach(([k, v]) => {
                             redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
                         });
                         log.info('Claude invoked action redirect', { action: toolBlock.name, url: redirectUrl });
-                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
+                        responseText = "I've gathered exactly what you are looking for.";
                     }
                 }
 
@@ -734,6 +735,9 @@ export default async function handler(req, res) {
             extractAndSaveLead({ bot_id, conversation_id, supabase, log }).catch(() => {});
         }
 
+        if (redirectUrl) {
+            return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: savedMsg?.created_at || null });
+        }
         return res.status(200).json({ response: responseText, bot_msg_ts: savedMsg?.created_at || null });
 
     } catch (error) {
