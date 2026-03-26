@@ -3604,7 +3604,7 @@ function fillBotForm(bot) {
 }
 
 // ── Bot Actions (Function Calling) ──────────────────────────────────────────
-let actionParamsData = [];
+window.actionParamsData = [];
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -3646,7 +3646,7 @@ window.resetActionForm = function() {
   document.getElementById('action-name').value = '';
   document.getElementById('action-desc').value = '';
   document.getElementById('action-url').value = '';
-  actionParamsData = [];
+  window.actionParamsData = [];
   renderActionParams();
 }
 
@@ -3690,7 +3690,7 @@ window.editAction = async function(id) {
     document.getElementById('action-name').value = data.name;
     document.getElementById('action-desc').value = data.description;
     document.getElementById('action-url').value = data.url_template;
-    actionParamsData = data.parameters || [];
+    window.actionParamsData = data.parameters || [];
     renderActionParams();
     openModal('modal-create-action');
   }
