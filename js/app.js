@@ -2623,6 +2623,25 @@ function renderLivePreview(bot) {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+      
+    // 1. Markdown links [text](url) -> tokenize so step 2 ignores them
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '%%LINK-$2-$1%%');
+
+    // 2. Auto-link floating URLs
+    h = h.replace(/(https?:\/\/(?:(?!&lt;|&gt;|&quot;|\s|["'<>[\])]).)+)/gi, function(url) {
+      var trailing = '';
+      if (/[.,;!?]+$/.test(url)) {
+        var match = url.match(/[.,;!?]+$/);
+        trailing = match[0];
+        url = url.slice(0, -trailing.length);
+      }
+      return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + trailing;
+    });
+
+    // 3. Restore URL tokens back to <a> tags
+    h = h.replace(/%%LINK-([^%]+)-([^%]+)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+    
+    // 4. Basic formatting
     h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
     h = h.replace(/^## (.+)$/gm, '<strong>$1</strong>');
     h = h.replace(/^# (.+)$/gm, '<strong>$1</strong>');

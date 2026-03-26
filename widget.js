@@ -274,7 +274,8 @@
     }
 
     // Step 3: Markdown links [text](url) → <a>
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // We replace them and wrap them in a safe token so step 4 ignores them.
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '%%LINK-$2-$1%%');
 
     // Step 4: Auto-link raw URLs that are NOT already inside an href
     // Uses negative lookahead to prevent matching HTML entities like &lt; and &gt;
@@ -284,12 +285,15 @@
       if (/[.,;!?]+$/.test(url)) {
         var match = url.match(/[.,;!?]+$/);
         trailing = match[0];
-        url = url.substring(0, url.length - trailing.length);
+        url = url.slice(0, -trailing.length);
       }
       return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + trailing;
     });
 
-    // Step 5: Basic markdown formatting
+    // Step 5: Restore the Markdown links from step 3
+    h = h.replace(/%%LINK-([^%]+)-([^%]+)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
+
+    // Step 6: Basic markdown formatting
     h = h.replace(/^#{1,3} (.+)$/gm,'<strong>$1</strong>');
     h = h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
     h = h.replace(/\*(.+?)\*/g,'<em>$1</em>');
