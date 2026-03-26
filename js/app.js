@@ -2625,10 +2625,10 @@ function renderLivePreview(bot) {
       .replace(/>/g, '&gt;');
       
     // 1. Markdown links [text](url) -> tokenize so step 2 ignores them
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '%%LINK-$2-$1%%');
+    h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK-$2-$1%%');
 
     // 2. Auto-link floating URLs
-    h = h.replace(/(https?:\/\/(?:(?!&lt;|&gt;|&quot;|\s|["'<>[\])]).)+)/gi, function(url) {
+    h = h.replace(/(https?:\\/\\/(?:(?!&lt;|&gt;|&quot;|\\s|["'<>[\])]).)+)/gi, function(url) {
       var trailing = '';
       if (/[.,;!?]+$/.test(url)) {
         var match = url.match(/[.,;!?]+$/);
@@ -2650,8 +2650,8 @@ function renderLivePreview(bot) {
     h = h.replace(/[*](.+?)[*]/g, '<em>$1</em>');
     h = h.replace(/^[ ]*[-][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
     h = h.replace(/^[ ]*[0-9]+[.][ ]+(.+)$/gm, '<li style="margin:2px 0;">$1</li>');
-    h = h.replace(/<li/g, function(m,o,s){ var prev=s.lastIndexOf('<ul',o); var prevEnd=s.lastIndexOf('</ul>',o); if(prev===-1||prevEnd>prev) return '<ul style="margin:6px 0;padding-left:18px;"><li'; return m; });
-    h = h.replace(/(<[/]li>)(?![\s\S]*?<li)/g, '$1</ul>');
+    h = h.replace(/<li/g, function(m,o,s){ var prev=s.lastIndexOf('<ul',o); var prevEnd=s.lastIndexOf('<\\/ul>',o); if(prev===-1||prevEnd>prev) return '<ul style="margin:6px 0;padding-left:18px;"><li'; return m; });
+    h = h.replace(/(<[\\/]li>)(?![\\s\\S]*?<li)/g, '$1<\\/ul>');
     var nl = String.fromCharCode(10); h = h.split(nl+nl).join('<br><br>'); h = h.split(nl).join('<br>');
     return h;
   }
@@ -3131,6 +3131,16 @@ function confirmNewConv() {
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
+        // 1. Tokenize markdown links [text](url) before auto-linking  
+        h = h.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '%%LINK-$2-$1%%');
+        // 2. Auto-link bare URLs
+        h = h.replace(/(https?:\\/\\/(?:(?!&lt;|&gt;|&quot;|\\s|[\"'<>[\\])]).)+)/gi, function(url) {
+          var tr = '';
+          if (/[.,;!?]+$/.test(url)) { var m=url.match(/[.,;!?]+$/); tr=m[0]; url=url.slice(0,-tr.length); }
+          return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>' + tr;
+        });
+        // 3. Restore tokenized links
+        h = h.replace(/%%LINK-([^%]+)-([^%]+)%%/g, '<a href="$1" target="_blank" rel="noopener">$2</a>');
         h = h.replace(/^### (.+)$/gm, '<strong>$1</strong>');
         h = h.replace(/^## (.+)$/gm, '<strong>$1</strong>');
         h = h.replace(/^# (.+)$/gm, '<strong>$1</strong>');
