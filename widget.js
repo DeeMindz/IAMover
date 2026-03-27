@@ -232,7 +232,7 @@
     if (avatar) {
       if (cfg.avatarUrl) {
         avatar.innerHTML = '<img src="'+cfg.avatarUrl+'" alt="" onerror="this.parentNode.textContent=\''+initial+'\'" />';
-        if (launcher) launcher.innerHTML = '<img src="'+cfg.avatarUrl+'" alt="" onerror="this.style.display=\'none\'" />';
+        if (launcher) launcher.innerHTML = '<img src="'+cfg.avatarUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="" onerror="this.style.display=\'none\'" />';
       } else {
         avatar.textContent = initial;
         if (launcher) launcher.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';

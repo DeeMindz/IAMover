@@ -3786,17 +3786,18 @@ window.deleteAction = async function(id) {
 };
 
 function showConfigSection(section) {
-  localStorage.setItem('iam_last_config_tab', section);
-  
-  // If there are unsaved changes, show an inline warning instead of silently switching
+  // If there are unsaved changes, prevent silently switching
   if (_configDirty) {
-    const proceed = confirm('You have unsaved changes. Save before switching tabs?');
-    if (proceed) {
-      saveBotConfig();
-      // saveBotConfig is async but we still switch — the save runs in background
-    }
-    _configDirty = false; // clear either way so we don't loop
+    const proceed = confirm('You have unsaved changes on this tab. Are you sure you want to discard them and leave?');
+    if (!proceed) return; // Abort the tab switch
+    
+    _configDirty = false; // They chose to discard
+    
+    // Force re-render of the config inputs from the pristine AppState so the discarded changes visually disappear
+    if (AppState.currentBot) renderBotConfig(AppState.currentBot, false);
   }
+
+  localStorage.setItem('iam_last_config_tab', section);
 
   const configSections = document.querySelectorAll('.config-section');
   const configNavItems = document.querySelectorAll('.config-nav-item');
