@@ -49,7 +49,8 @@
 
   var css = document.createElement('style');
   css.textContent = [
-    IS_INLINE?'':'#iam-launcher{position:fixed;'+pos+'width:58px;height:58px;background:'+COLOR+';border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s;overflow:hidden;}',
+    IS_INLINE?'':'#iam-launcher{position:fixed;'+pos+'width:58px;height:58px;background:'+COLOR+';border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(0,0,0,.22);cursor:pointer;z-index:2147483647;border:none;transition:transform .2s;overflow:hidden;padding:0;}',
+    IS_INLINE?'':'#iam-launcher img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%;}',
     IS_INLINE?'':'#iam-launcher:hover{transform:scale(1.08);}',
     IS_INLINE?'':(function(){ var r=POSITION.indexOf('right')!==-1,t=POSITION.indexOf('top')!==-1; return '#iam-greeting-popup{position:fixed;'+(t?'top:90px;':'bottom:90px;')+(r?'right:24px;':'left:24px;')+'background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:230px;font-size:13px;color:#333;z-index:2147483646;cursor:pointer;line-height:1.4;animation:iamPopIn .3s ease;}'; })(),
     IS_INLINE?'':(function(){ var r=POSITION.indexOf('right')!==-1,t=POSITION.indexOf('top')!==-1; return '#iam-greeting-popup::after{content:"";position:absolute;'+(t?'top:-6px;border-bottom:6px solid #fff;':'bottom:-6px;border-top:6px solid #fff;')+(r?'right:18px;':'left:18px;')+'width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;}'; })(),
@@ -237,9 +238,9 @@
       }
     }
     if (launcher) {
-      var lUrl = cfg.launcherUrl || cfg.avatarUrl || '';
-      if (lUrl) {
-        launcher.innerHTML = '<img src="'+lUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="" onerror="this.style.display=\'none\'" />';
+      // launcherUrl is INDEPENDENT from avatarUrl — no fallback to avatar
+      if (cfg.launcherUrl) {
+        launcher.innerHTML = '<img src="'+cfg.launcherUrl+'" alt="" onerror="this.style.display=\'none\'" />';
       } else {
         launcher.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
       }

@@ -2307,7 +2307,7 @@ function renderLivePreview(bot) {
   const greeting = (greetingInput?.value?.trim()) || bot.greeting_message || bot.greetingMessage || 'Hi! How can I help you today?';
   const botName = (displayNameInput?.value?.trim()) || bot.theme?.displayName || bot.name || 'Assistant';
   const avatarUrl = (document.getElementById('cfg-avatar-url')?.value?.trim()) || bot.theme?.avatarUrl || '';
-  const launcherUrl = (document.getElementById('cfg-launcher-url')?.value?.trim()) || bot.theme?.launcherUrl || avatarUrl || '';
+  const launcherUrl = (document.getElementById('cfg-launcher-url')?.value?.trim()) || bot.theme?.launcherUrl || '';
   const position = (positionInput?.value) || bot.theme?.position || 'bottom-right';
   const isWidgetMode = currentPreviewMode === 'widget';
 
@@ -2354,8 +2354,10 @@ function renderLivePreview(bot) {
     font-size:26px;
     box-shadow:0 4px 24px rgba(0,0,0,0.22);
     cursor:pointer; z-index:100;
+    padding:0; overflow:hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
+  .launcher img { display:block; width:100%; height:100%; object-fit:cover; border-radius:50%; }
   .launcher:hover { transform:scale(1.08); box-shadow:0 6px 28px rgba(0,0,0,0.28); }
   /* Unread badge on launcher */
   .launcher-badge {
