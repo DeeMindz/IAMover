@@ -2306,7 +2306,8 @@ function renderLivePreview(bot) {
   const primaryColor = (primaryColorInput?.value) || bot.theme?.primaryColor || bot.color || '#6c63ff';
   const greeting = (greetingInput?.value?.trim()) || bot.greeting_message || bot.greetingMessage || 'Hi! How can I help you today?';
   const botName = (displayNameInput?.value?.trim()) || bot.theme?.displayName || bot.name || 'Assistant';
-  const avatarUrl = bot.theme?.avatarUrl || '';
+  const avatarUrl = (document.getElementById('cfg-avatar-url')?.value?.trim()) || bot.theme?.avatarUrl || '';
+  const launcherUrl = (document.getElementById('cfg-launcher-url')?.value?.trim()) || bot.theme?.launcherUrl || avatarUrl || '';
   const position = (positionInput?.value) || bot.theme?.position || 'bottom-right';
   const isWidgetMode = currentPreviewMode === 'widget';
 
@@ -2517,7 +2518,9 @@ function renderLivePreview(bot) {
 
   <!-- Launcher bubble -->
   <div class="launcher" id="launcher" onclick="openChat()">
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    ${launcherUrl 
+        ? \`<img src="\${launcherUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none'" />\` 
+        : \`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>\`}
     <div class="launcher-badge">1</div>
   </div>
 
@@ -3401,6 +3404,7 @@ async function saveBotConfig() {
       position:     document.getElementById('cfg-widget-position')?.value ?? bot.theme?.position ?? 'bottom-right',
       displayName:  (document.getElementById('cfg-display-name')?.value ?? '').trim(),
       avatarUrl:    (document.getElementById('cfg-avatar-url')?.value ?? '').trim(),
+      launcherUrl:  (document.getElementById('cfg-launcher-url')?.value ?? '').trim(),
     },
   };
   try {
@@ -3613,6 +3617,7 @@ function fillBotForm(bot) {
   set('cfg-widget-position', theme.position || 'bottom-right');
   set('cfg-display-name', theme.displayName || '');
   set('cfg-avatar-url', theme.avatarUrl || '');
+  set('cfg-launcher-url', theme.launcherUrl || '');
 
   // Sync the preview bubble color
   const bubble = document.getElementById('cfg-preview-bubble');
