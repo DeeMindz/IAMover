@@ -14,6 +14,49 @@ const log = {
     error: (msg, data) => console.error(JSON.stringify({ level: 'error', message: msg, ...data }))
 };
 
+// ── Geocoding helper ─────────────────────────────────────────────────────────
+// When a URL template still has {lat},{lng},{loc},{ctry} after LLM argument substitution,
+// this helper calls the Google Maps Geocoding API to resolve them from the {city} parameter.
+async function resolveUrl(urlTemplate, llmArgs, req) {
+    let url = urlTemplate;
+    // First substitute all LLM-provided args
+    Object.entries(llmArgs).forEach(([k, v]) => {
+        url = url.replace(new RegExp(`\\{${k}\\}`, 'g'), encodeURIComponent(String(v)));
+    });
+
+    // Default range to 50 if still unresolved
+    url = url.replace(/\{range\}/g, '50');
+
+    // Check if location placeholders remain — geocode if so
+    if (/\{lat\}|\{lng\}|\{loc\}|\{ctry\}/.test(url)) {
+        const cityQuery = llmArgs.city || llmArgs.location || llmArgs.loc || '';
+        if (cityQuery && process.env.GOOGLE_MAPS_API_KEY) {
+            try {
+                const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cityQuery)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+                const geoResp = await fetch(geocodeUrl);
+                const geoData = await geoResp.json();
+                if (geoData.status === 'OK' && geoData.results.length > 0) {
+                    const r = geoData.results[0];
+                    const lat = r.geometry.location.lat;
+                    const lng = r.geometry.location.lng;
+                    const loc = r.formatted_address;
+                    const ctryComp = r.address_components.find(c => c.types.includes('country'));
+                    const ctry = ctryComp ? ctryComp.long_name : '';
+                    url = url
+                        .replace(/\{lat\}/g, encodeURIComponent(lat))
+                        .replace(/\{lng\}/g, encodeURIComponent(lng))
+                        .replace(/\{loc\}/g, encodeURIComponent(loc))
+                        .replace(/\{ctry\}/g, encodeURIComponent(ctry));
+                    log.info('Geocoded location', { cityQuery, lat, lng, loc, ctry });
+                }
+            } catch (geoErr) {
+                log.warn('Geocoding failed', { cityQuery, error: geoErr.message });
+            }
+        }
+    }
+    return url;
+}
+
 // ── Model Maps ──────────────────────────────────────────────────────────────
 // Model-agnostic design: adding a new provider only requires adding it below
 // and adding a new branch in the provider routing section
@@ -561,10 +604,7 @@ You have access to directory search tools. When you use one of these tools:
                 if (call) {
                     const actionDef = botActions.find(a => a.name === call.name);
                     if (actionDef) {
-                        let redirectUrl = actionDef.url_template;
-                        Object.entries(call.args).forEach(([k, v]) => {
-                            redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
-                        });
+                        const redirectUrl = await resolveUrl(actionDef.url_template, call.args, req);
                         log.info('Gemini invoked action -> injecting URL back to model', { action: call.name, url: redirectUrl });
                         
                         // Send the result back to Gemini so it can answer conversationally
@@ -648,16 +688,32 @@ You have access to directory search tools. When you use one of these tools:
                     const actionDef = botActions.find(a => a.name === call.name);
                     if (actionDef) {
                         const args = JSON.parse(call.arguments);
-                        let redirectUrl = actionDef.url_template;
-                        Object.entries(args).forEach(([k, v]) => {
-                            redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
+                        const redirectUrl = await resolveUrl(actionDef.url_template, args, req);
+                        log.info('OpenAI invoked action -> injecting URL back to model', { action: call.name, url: redirectUrl });
+                        
+                        // Push OpenAI's tool call request
+                        messages.push(choice);
+                        
+                        // Push our tool execution response containing the URL
+                        messages.push({
+                            role: 'tool',
+                            tool_call_id: choice.tool_calls[0].id,
+                            content: `Search URL Generated: ${redirectUrl}`
                         });
-                        log.info('OpenAI invoked action redirect', { action: call.name, url: redirectUrl });
-                        return res.status(200).json({ action: 'redirect', url: redirectUrl, bot_msg_ts: null });
-                    }
-                }
 
-                responseText = choice.content || '';
+                        // Make a second call to get the conversational response wrapping the link
+                        response = await client.chat.completions.create({
+                            model: resolvedModel,
+                            messages,
+                            ...(isReasoning
+                                ? { max_completion_tokens: 2048 }
+                                : { max_tokens: botMaxTokens, temperature: botTemperature })
+                        });
+                        responseText = response.choices[0].message.content || '';
+                    }
+                } else {
+                    responseText = choice.content || '';
+                }
                 log.info('OpenAI response received', { chars: responseText.length });
             }
 
@@ -704,10 +760,7 @@ You have access to directory search tools. When you use one of these tools:
                     const actionDef = botActions.find(a => a.name === toolBlock.name);
                     if (actionDef) {
                         const args = toolBlock.input;
-                        let redirectUrl = actionDef.url_template;
-                        Object.entries(args).forEach(([k, v]) => {
-                            redirectUrl = redirectUrl.replace(new RegExp(`{${k}}`, 'g'), encodeURIComponent(v));
-                        });
+                        const redirectUrl = await resolveUrl(actionDef.url_template, args, req);
                         log.info('Claude invoked action -> injecting URL back to model', { action: toolBlock.name, url: redirectUrl });
                         
                         // Push Claude's tool call request
