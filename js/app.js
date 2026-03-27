@@ -3515,22 +3515,23 @@ function discardBotConfig() {
 }
 window.discardBotConfig = discardBotConfig;
 
-// ── Wire up dirty tracking ────────────────────────────────────────────
-// Attach a single delegated listener to the config panel on first render
+// ── Wire up dirty tracking ─────────────────────────────────────────────────
+// Attach a single delegated listener on `document` so every input/change event
+// inside ANY .config-section triggers the dirty guard — regardless of which
+// element ID or class the parent container uses.
 let _configListenerAttached = false;
 function attachConfigDirtyListeners() {
   if (_configListenerAttached) return;
-  const panel = document.getElementById('bot-config-page') || document.querySelector('.config-panel');
-  if (!panel) return;
-  panel.addEventListener('input',  function(e) {
+
+  document.addEventListener('input', function(e) {
     if (e.target.closest('.config-section')) markConfigDirty();
   });
-  panel.addEventListener('change', function(e) {
+  document.addEventListener('change', function(e) {
     if (e.target.closest('.config-section')) markConfigDirty();
   });
   _configListenerAttached = true;
 
-  // Warn before tab close / URL navigation if there are unsaved config changes
+  // Warn before browser tab close / URL navigation if there are unsaved config changes
   if (!window._configBeforeUnloadAttached) {
     window.addEventListener('beforeunload', function(e) {
       if (_configDirty) {
