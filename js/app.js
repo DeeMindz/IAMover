@@ -713,6 +713,32 @@ function setupLivePreviews() {
       }
     });
   }
+
+  // Avatar URL live update
+  const avatarUrlInput = document.getElementById('cfg-avatar-url');
+  if (avatarUrlInput) {
+    avatarUrlInput.addEventListener('input', (e) => {
+      markConfigDirty();
+      if (AppState.currentBot) {
+        if (!AppState.currentBot.theme) AppState.currentBot.theme = {};
+        AppState.currentBot.theme.avatarUrl = e.target.value;
+        renderLivePreview(AppState.currentBot);
+      }
+    });
+  }
+
+  // Launcher icon URL live update
+  const launcherUrlInput = document.getElementById('cfg-launcher-url');
+  if (launcherUrlInput) {
+    launcherUrlInput.addEventListener('input', (e) => {
+      markConfigDirty();
+      if (AppState.currentBot) {
+        if (!AppState.currentBot.theme) AppState.currentBot.theme = {};
+        AppState.currentBot.theme.launcherUrl = e.target.value;
+        renderLivePreview(AppState.currentBot);
+      }
+    });
+  }
 }
 
 function toggleUserMenu() {
